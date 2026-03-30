@@ -29,8 +29,8 @@ temp/
 Thumbs.db
 
 # WebPC VM disk images (large; fetch with pnpm fetch-webpc-disks)
-app/public/webpc-disks/*
-!app/public/webpc-disks/.gitkeep
+com.order332.app/public/webpc-disks/*
+!com.order332.app/public/webpc-disks/.gitkeep
 
 # AI / tooling
 **/CLAUDE.md

@@ -67,6 +67,8 @@ const nextConfig = {
           "default-src 'self'",
           "img-src 'self' cdn.discordapp.com data: blob:",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          // CheerpX creates Web Workers from blob: URLs; without worker-src, CSP falls back to script-src.
+          "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline'",
           "font-src 'self'",
           "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com",

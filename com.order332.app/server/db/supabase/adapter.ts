@@ -506,4 +506,26 @@ export class SupabaseAdapter implements DBAdapter {
     const { error } = await supabase.from('pending_registrations').delete().eq('id', id)
     if (error) dbErr('deletePendingRegistration', error)
   }
+
+  async abortPendingRegistrationAndReleaseInvite(registrationToken: string): Promise<void> {
+    const pending = await this.getPendingRegistration(registrationToken)
+    if (!pending) return
+
+    const invite = await this.getInviteCodeById(pending.inviteCodeId)
+    if (!invite || invite.usedBy != null) return
+
+    await this.deletePendingRegistration(pending.id)
+
+    const { error } = await supabase
+      .from('invite_codes')
+      .update({
+        is_used: false,
+        used_at: null,
+        used_by: null,
+      })
+      .eq('id', pending.inviteCodeId)
+      .is('used_by', null)
+
+    if (error) dbErr('abortPendingRegistrationAndReleaseInvite', error)
+  }
 }

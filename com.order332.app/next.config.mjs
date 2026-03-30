@@ -44,7 +44,20 @@ const withPWAConfig = withPWA({
 const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_DEPLOYMENT_ID
-      ? await import('crypto').then(c => c.createHash('md5').update(process.env.VERCEL_DEPLOYMENT_ID).digest('hex'))
+      ? (() => {
+          // Cheap CRC32 implementation for short string input
+          function crc32(str) {
+            let crc = ~0
+            for (let i = 0; i < str.length; i++) {
+              crc ^= str.charCodeAt(i)
+              for (let j = 0; j < 8; j++) {
+                crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1))
+              }
+            }
+            return ((~crc) >>> 0).toString(16)
+          }
+          return crc32(process.env.VERCEL_DEPLOYMENT_ID)
+        })()
       : (process.env.NEXT_PUBLIC_APP_VERSION || 'dev'),
   },
   turbopack: {},

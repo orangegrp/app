@@ -164,4 +164,6 @@ export interface DBAdapter {
   createPendingRegistration(data: CreatePendingRegistrationData): Promise<PendingRegistration>
   getPendingRegistration(token: string): Promise<PendingRegistration | null>
   deletePendingRegistration(id: string): Promise<void>
+  /** After Discord OAuth deny during signup: remove pending row and un-burn invite if registration never completed. */
+  abortPendingRegistrationAndReleaseInvite(registrationToken: string): Promise<void>
 }

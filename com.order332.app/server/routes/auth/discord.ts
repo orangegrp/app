@@ -54,6 +54,19 @@ function parseSignedOAuthState(raw: string | undefined): { payload: string; sig:
   return null
 }
 
+/** Signup flow only: un-burn invite when OAuth is cancelled (signed state embeds registrationToken). */
+async function releaseInviteIfSignupOAuthAborted(decoded: { payload: string }): Promise<void> {
+  const parts = decoded.payload.split('|')
+  const registrationToken = parts[1] ?? ''
+  const linkUserId = parts[3] ?? ''
+  if (linkUserId || !registrationToken) return
+  try {
+    await db.abortPendingRegistrationAndReleaseInvite(registrationToken)
+  } catch (e) {
+    console.error('[auth/discord] abort pending registration after OAuth error', e)
+  }
+}
+
 // POST /auth/discord/link-start — authenticated; returns { url } for full-page OAuth to link Discord
 discordRoutes.post('/link-start', requireAuth, async (c) => {
   const user = c.get('user')
@@ -156,6 +169,7 @@ discordRoutes.get('/callback', async (c) => {
 
     const decoded = parseSignedOAuthState(stateParam)
     if (decoded) {
+      await releaseInviteIfSignupOAuthAborted(decoded)
       const parts = decoded.payload.split('|')
       const linkUserId = parts[3] ?? ''
       const linkReturnTo = parts[4] === 'home' ? 'home' : 'settings'
@@ -180,6 +194,10 @@ discordRoutes.get('/callback', async (c) => {
   }
 
   if (!code || !stateParam) {
+    if (!code && stateParam) {
+      const decodedMissingCode = parseSignedOAuthState(stateParam)
+      if (decodedMissingCode) await releaseInviteIfSignupOAuthAborted(decodedMissingCode)
+    }
     return c.redirect(`${appUrl}/login?error=oauth_denied`)
   }
 

@@ -69,7 +69,7 @@ const nextConfig = {
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
           "font-src 'self'",
-          "connect-src 'self'",
+          "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com",
           "frame-ancestors 'none'",
         ].join('; '),
       },

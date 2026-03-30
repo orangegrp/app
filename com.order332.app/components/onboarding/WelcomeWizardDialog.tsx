@@ -261,7 +261,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
                 maxLength={DISPLAY_NAME_MAX_LENGTH}
                 value={displayNameDraft}
                 onChange={(e) => setDisplayNameDraft(e.target.value)}
-                placeholder="e.g. Alex"
+                placeholder="e.g. alexei bogodanov"
                 className="glass-card rounded-xl px-4 py-3 text-sm tracking-wider text-foreground placeholder:text-muted-foreground/40 bg-transparent border-0 outline-none focus:ring-1 focus:ring-white/10 min-h-[44px]"
                 autoComplete="nickname"
               />

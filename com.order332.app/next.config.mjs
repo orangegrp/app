@@ -44,7 +44,7 @@ const withPWAConfig = withPWA({
 const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_DEPLOYMENT_ID
-      ? require('crypto').createHash('md5').update(process.env.VERCEL_DEPLOYMENT_ID).digest('hex')
+      ? await import('crypto').then(c => c.createHash('md5').update(process.env.VERCEL_DEPLOYMENT_ID).digest('hex'))
       : (process.env.NEXT_PUBLIC_APP_VERSION || 'dev'),
   },
   turbopack: {},

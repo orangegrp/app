@@ -22,7 +22,6 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode
 }) {
-  const store = useAuthStore()
   const accessToken = useAuthStore((s) => s.accessToken)
   const router = useRouter()
   const pathname = usePathname()
@@ -56,8 +55,9 @@ export default function AuthLayout({
     })
       .then(async (res) => {
         if (cancelled) return
+        const { setAuth, clearAuth } = useAuthStore.getState()
         if (!res.ok) {
-          store.clearAuth()
+          clearAuth()
           setProbeSettled(true)
           return
         }
@@ -68,20 +68,20 @@ export default function AuthLayout({
           permissions: string
           isPwa: boolean
         }
-        store.setAuth(token, { id: payload.sub, permissions: payload.permissions, isPwa: payload.isPwa })
+        setAuth(token, { id: payload.sub, permissions: payload.permissions, isPwa: payload.isPwa })
         await fetchAndMergeUserProfile(token)
         router.replace('/home')
       })
       .catch(() => {
         if (!cancelled) {
-          store.clearAuth()
+          useAuthStore.getState().clearAuth()
           setProbeSettled(true)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [needsProbe, store, router])
+  }, [needsProbe, router])
 
   if (accessToken && !qrHandoff) return null
 

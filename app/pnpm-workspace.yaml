@@ -1,0 +1,2 @@
+patchedDependencies:
+  html5-qrcode@2.3.8: patches/html5-qrcode@2.3.8.patch

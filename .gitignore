@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+pnpm-debug.log*
+
+# Build / output
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Env (keep example templates)
+.env
+.env.*
+!.env*.example
+
+# Logs & temp
+*.log
+logs/
+tmp/
+temp/
+.cache/
+.turbo/
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# WebPC VM disk images (large; fetch with pnpm fetch-webpc-disks)
+app/public/webpc-disks/*
+!app/public/webpc-disks/.gitkeep
+
+# AI / tooling
+**/CLAUDE.md
+**/.agent/
+**/.skills
+**/.mcp.json
+.mcp.json

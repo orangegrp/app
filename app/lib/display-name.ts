@@ -1,0 +1,10 @@
+/** Max length for `users.display_name` (app-enforced). */
+export const DISPLAY_NAME_MAX_LENGTH = 64
+
+/** Trim, empty → null, cap length (for API + DB). */
+export function normalizeDisplayName(input: string | null | undefined): string | null {
+  if (input === null || input === undefined) return null
+  const t = input.trim()
+  if (!t) return null
+  return t.length > DISPLAY_NAME_MAX_LENGTH ? t.slice(0, DISPLAY_NAME_MAX_LENGTH) : t
+}

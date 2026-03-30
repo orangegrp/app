@@ -1,0 +1,144 @@
+diff --git a/cjs/html5-qrcode.js b/cjs/html5-qrcode.js
+index 27601fba3fb0ca1363ca154f5cfe6c81b554ee66..f4a25057c28d651a561b27bf1150c9706c724b47 100644
+--- a/cjs/html5-qrcode.js
++++ b/cjs/html5-qrcode.js
+@@ -562,21 +562,36 @@ var Html5Qrcode = (function () {
+             return;
+         }
+         var videoElement = this.renderedCamera.getSurface();
+-        var widthRatio = videoElement.videoWidth / videoElement.clientWidth;
+-        var heightRatio = videoElement.videoHeight / videoElement.clientHeight;
+         if (!this.qrRegion) {
+             throw "qrRegion undefined when localMediaStream is ready.";
+         }
+-        var sWidthOffset = this.qrRegion.width * widthRatio;
+-        var sHeightOffset = this.qrRegion.height * heightRatio;
+-        var sxOffset = this.qrRegion.x * widthRatio;
+-        var syOffset = this.qrRegion.y * heightRatio;
+-        this.context.drawImage(videoElement, sxOffset, syOffset, sWidthOffset, sHeightOffset, 0, 0, this.qrRegion.width, this.qrRegion.height);
+         var triggerNextScan = function () {
+             _this.foreverScanTimeout = setTimeout(function () {
+                 _this.foreverScan(internalConfig, qrCodeSuccessCallback, qrCodeErrorCallback);
+             }, _this.getTimeoutFps(internalConfig.fps));
+         };
++        // Avoid decoding empty frames before HAVE_METADATA (readyState >= 1).
++        if (videoElement.readyState < 1) {
++            triggerNextScan();
++            return;
++        }
++        var cw = videoElement.clientWidth > 0 ? videoElement.clientWidth : 1;
++        var ch = videoElement.clientHeight > 0 ? videoElement.clientHeight : 1;
++        var vw = videoElement.videoWidth;
++        var vh = videoElement.videoHeight;
++        var widthRatio = vw / cw;
++        var heightRatio = vh / ch;
++        // iOS standalone PWA: videoWidth/videoHeight can stay 0 while the preview still
++        // renders; the default ratio would zero-out the crop and decode nothing.
++        if (vw === 0 || vh === 0 || widthRatio === 0 || heightRatio === 0) {
++            widthRatio = 1;
++            heightRatio = 1;
++        }
++        var sWidthOffset = this.qrRegion.width * widthRatio;
++        var sHeightOffset = this.qrRegion.height * heightRatio;
++        var sxOffset = this.qrRegion.x * widthRatio;
++        var syOffset = this.qrRegion.y * heightRatio;
++        this.context.drawImage(videoElement, sxOffset, syOffset, sWidthOffset, sHeightOffset, 0, 0, this.qrRegion.width, this.qrRegion.height);
+         this.scanContext(qrCodeSuccessCallback, qrCodeErrorCallback)
+             .then(function (isSuccessfull) {
+             if (!isSuccessfull && internalConfig.disableFlip !== true) {
+diff --git a/es2015/html5-qrcode.js b/es2015/html5-qrcode.js
+index 1c4ff8dd69b9d3f4c33708d3d5db431289a7302b..4d7ea750f9411cddd3bf008219f8572f63eceb40 100644
+--- a/es2015/html5-qrcode.js
++++ b/es2015/html5-qrcode.js
+@@ -531,21 +531,36 @@ export class Html5Qrcode {
+             return;
+         }
+         const videoElement = this.renderedCamera.getSurface();
+-        const widthRatio = videoElement.videoWidth / videoElement.clientWidth;
+-        const heightRatio = videoElement.videoHeight / videoElement.clientHeight;
+         if (!this.qrRegion) {
+             throw "qrRegion undefined when localMediaStream is ready.";
+         }
+-        const sWidthOffset = this.qrRegion.width * widthRatio;
+-        const sHeightOffset = this.qrRegion.height * heightRatio;
+-        const sxOffset = this.qrRegion.x * widthRatio;
+-        const syOffset = this.qrRegion.y * heightRatio;
+-        this.context.drawImage(videoElement, sxOffset, syOffset, sWidthOffset, sHeightOffset, 0, 0, this.qrRegion.width, this.qrRegion.height);
+         const triggerNextScan = () => {
+             this.foreverScanTimeout = setTimeout(() => {
+                 this.foreverScan(internalConfig, qrCodeSuccessCallback, qrCodeErrorCallback);
+             }, this.getTimeoutFps(internalConfig.fps));
+         };
++        // Avoid decoding empty frames before HAVE_METADATA (readyState >= 1).
++        if (videoElement.readyState < 1) {
++            triggerNextScan();
++            return;
++        }
++        const cw = videoElement.clientWidth > 0 ? videoElement.clientWidth : 1;
++        const ch = videoElement.clientHeight > 0 ? videoElement.clientHeight : 1;
++        const vw = videoElement.videoWidth;
++        const vh = videoElement.videoHeight;
++        let widthRatio = vw / cw;
++        let heightRatio = vh / ch;
++        // iOS standalone PWA: videoWidth/videoHeight can stay 0 while the preview still
++        // renders; the default ratio would zero-out the crop and decode nothing.
++        if (vw === 0 || vh === 0 || widthRatio === 0 || heightRatio === 0) {
++            widthRatio = 1;
++            heightRatio = 1;
++        }
++        const sWidthOffset = this.qrRegion.width * widthRatio;
++        const sHeightOffset = this.qrRegion.height * heightRatio;
++        const sxOffset = this.qrRegion.x * widthRatio;
++        const syOffset = this.qrRegion.y * heightRatio;
++        this.context.drawImage(videoElement, sxOffset, syOffset, sWidthOffset, sHeightOffset, 0, 0, this.qrRegion.width, this.qrRegion.height);
+         this.scanContext(qrCodeSuccessCallback, qrCodeErrorCallback)
+             .then((isSuccessfull) => {
+             if (!isSuccessfull && internalConfig.disableFlip !== true) {
+diff --git a/esm/html5-qrcode.js b/esm/html5-qrcode.js
+index b8bc86940ce90fceb8b0b6bb7fc71e4542dbdbcc..7c08b0f0a0a6a6d21282eb800a074808932618b3 100644
+--- a/esm/html5-qrcode.js
++++ b/esm/html5-qrcode.js
+@@ -559,21 +559,36 @@ var Html5Qrcode = (function () {
+             return;
+         }
+         var videoElement = this.renderedCamera.getSurface();
+-        var widthRatio = videoElement.videoWidth / videoElement.clientWidth;
+-        var heightRatio = videoElement.videoHeight / videoElement.clientHeight;
+         if (!this.qrRegion) {
+             throw "qrRegion undefined when localMediaStream is ready.";
+         }
+-        var sWidthOffset = this.qrRegion.width * widthRatio;
+-        var sHeightOffset = this.qrRegion.height * heightRatio;
+-        var sxOffset = this.qrRegion.x * widthRatio;
+-        var syOffset = this.qrRegion.y * heightRatio;
+-        this.context.drawImage(videoElement, sxOffset, syOffset, sWidthOffset, sHeightOffset, 0, 0, this.qrRegion.width, this.qrRegion.height);
+         var triggerNextScan = function () {
+             _this.foreverScanTimeout = setTimeout(function () {
+                 _this.foreverScan(internalConfig, qrCodeSuccessCallback, qrCodeErrorCallback);
+             }, _this.getTimeoutFps(internalConfig.fps));
+         };
++        // Avoid decoding empty frames before HAVE_METADATA (readyState >= 1).
++        if (videoElement.readyState < 1) {
++            triggerNextScan();
++            return;
++        }
++        var cw = videoElement.clientWidth > 0 ? videoElement.clientWidth : 1;
++        var ch = videoElement.clientHeight > 0 ? videoElement.clientHeight : 1;
++        var vw = videoElement.videoWidth;
++        var vh = videoElement.videoHeight;
++        var widthRatio = vw / cw;
++        var heightRatio = vh / ch;
++        // iOS standalone PWA: videoWidth/videoHeight can stay 0 while the preview still
++        // renders; the default ratio would zero-out the crop and decode nothing.
++        if (vw === 0 || vh === 0 || widthRatio === 0 || heightRatio === 0) {
++            widthRatio = 1;
++            heightRatio = 1;
++        }
++        var sWidthOffset = this.qrRegion.width * widthRatio;
++        var sHeightOffset = this.qrRegion.height * heightRatio;
++        var sxOffset = this.qrRegion.x * widthRatio;
++        var syOffset = this.qrRegion.y * heightRatio;
++        this.context.drawImage(videoElement, sxOffset, syOffset, sWidthOffset, sHeightOffset, 0, 0, this.qrRegion.width, this.qrRegion.height);
+         this.scanContext(qrCodeSuccessCallback, qrCodeErrorCallback)
+             .then(function (isSuccessfull) {
+             if (!isSuccessfull && internalConfig.disableFlip !== true) {

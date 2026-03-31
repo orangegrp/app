@@ -65,7 +65,7 @@ magicLinkRoutes.post('/generate', rateLimit(MAGIC_LINK_RATE_LIMIT.max, MAGIC_LIN
   })
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const url = `${appUrl}/auth/magic?token=${encodeURIComponent(rawToken)}`
+  const url = `${appUrl}/auth/magic#token=${encodeURIComponent(rawToken)}`
 
   return c.json({ url })
 })
@@ -85,19 +85,10 @@ magicLinkRoutes.post('/verify', rateLimit(10, 60_000), async (c) => {
   const { token, isPwa } = parsed.data
   const tokenHash = sha256(token)
 
-  const magicToken = await db.getMagicToken(tokenHash)
-
-  // Always return 401 for any failure to prevent enumeration
-  if (
-    !magicToken ||
-    magicToken.isUsed ||
-    magicToken.expiresAt < new Date()
-  ) {
+  const magicToken = await db.consumeMagicToken(tokenHash)
+  if (!magicToken) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
-
-  // Mark token as used FIRST (prevents race conditions)
-  await db.markMagicTokenUsed(magicToken.id)
 
   // Get or find user by Discord ID
   let user = magicToken.userId ? await db.getUserById(magicToken.userId) : null
@@ -126,7 +117,7 @@ magicLinkRoutes.post('/verify', rateLimit(10, 60_000), async (c) => {
 
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
   const refreshToken = await signRefreshToken(user.id, session.id, isPwa)
-  await db.rotateSession(session.id, sha256(refreshToken), expiresAt)
+  await db.rotateSession(session.id, '', sha256(refreshToken), expiresAt)
 
   setCookie(c, 'refresh_token', refreshToken, {
     httpOnly: true,

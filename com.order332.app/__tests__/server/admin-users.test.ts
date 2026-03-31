@@ -82,6 +82,9 @@ describe('admin users routes', () => {
   it('PATCH returns 403 when changing own permissions', async () => {
     const token = await adminToken(SELF_ID)
     mockGetSessionById.mockResolvedValue(validSession(SELF_ID))
+    // RBAC re-fetch for admin.permissions.manage check
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: SELF_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch of target user
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: SELF_ID, permissions: PERMISSIONS.ADMIN_INVITES_MANAGE }),
     )
@@ -103,6 +106,9 @@ describe('admin users routes', () => {
   it('PATCH returns 403 when non-superuser changes a superuser target permissions', async () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'su', permissions: SUPERUSER_PERMISSION }),
     )
@@ -126,6 +132,9 @@ describe('admin users routes', () => {
     mockGetSessionById.mockResolvedValue(validSession(SU_ID))
     const newCsv = `${PERMISSIONS.ADMIN_PERMISSIONS_MANAGE},${PERMISSIONS.APP_LABS}`
     const updated = baseUser({ id: 'other-su', permissions: newCsv })
+    // RBAC re-fetch for * permission check
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: SU_ID, permissions: SUPERUSER_PERMISSION }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'other-su', permissions: SUPERUSER_PERMISSION }),
     )
@@ -148,6 +157,9 @@ describe('admin users routes', () => {
   it('PATCH returns 403 when demoting another admin', async () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'other-admin', permissions: PERMISSIONS.ADMIN_INVITES_MANAGE }),
     )
@@ -170,6 +182,9 @@ describe('admin users routes', () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
     const updated = baseUser({ id: 'other-admin', permissions: PERMISSIONS.ADMIN_SYSTEM_CLEANUP })
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'other-admin', permissions: PERMISSIONS.ADMIN_INVITES_MANAGE }),
     )
@@ -190,6 +205,9 @@ describe('admin users routes', () => {
   it('PATCH returns 403 when freezing own account', async () => {
     const token = await adminToken(SELF_ID)
     mockGetSessionById.mockResolvedValue(validSession(SELF_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: SELF_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(baseUser({ id: SELF_ID }))
     const { adminUserRoutes } = await import('../../server/routes/admin/users')
     const res = await adminUserRoutes.request(`/${SELF_ID}`, {
@@ -210,6 +228,9 @@ describe('admin users routes', () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
     const frozen = baseUser({ id: 'victim', permissions: PERMISSIONS.APP_LABS, isActive: false })
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(baseUser({ id: 'victim' }))
     mockUpdateUser.mockResolvedValueOnce(frozen)
     const { adminUserRoutes } = await import('../../server/routes/admin/users')
@@ -229,6 +250,9 @@ describe('admin users routes', () => {
   it('PATCH returns 403 when disabling login for the only admin', async () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'sole-admin', permissions: PERMISSIONS.ADMIN_INVITES_MANAGE }),
     )
@@ -253,19 +277,23 @@ describe('admin users routes', () => {
   it('DELETE returns 403 for self', async () => {
     const token = await adminToken(SELF_ID)
     mockGetSessionById.mockResolvedValue(validSession(SELF_ID))
+    // RBAC re-fetch (admin permission DB check)
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: SELF_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
     const { adminUserRoutes } = await import('../../server/routes/admin/users')
     const res = await adminUserRoutes.request(`/${SELF_ID}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(res.status).toBe(403)
-    expect(mockGetUserById).not.toHaveBeenCalled()
     expect(mockDeleteUser).not.toHaveBeenCalled()
   })
 
   it('DELETE returns 403 when target is the last admin', async () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'sole-admin', permissions: PERMISSIONS.ADMIN_SYSTEM_CLEANUP }),
     )
@@ -286,6 +314,9 @@ describe('admin users routes', () => {
   it('DELETE removes a non-admin user', async () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'member', permissions: PERMISSIONS.APP_LABS }),
     )
@@ -301,6 +332,9 @@ describe('admin users routes', () => {
   it('DELETE removes an admin when another admin exists', async () => {
     const token = await adminToken(ADMIN_ID)
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_ID))
+    // RBAC re-fetch
+    mockGetUserById.mockResolvedValueOnce(baseUser({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE }))
+    // Route handler fetch
     mockGetUserById.mockResolvedValueOnce(
       baseUser({ id: 'admin-a', permissions: PERMISSIONS.ADMIN_INVITES_MANAGE }),
     )

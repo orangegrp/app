@@ -1,6 +1,6 @@
 'use client'
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { isPWAContext } from '@/lib/pwa'
 import { Spinner } from '@/components/ui/spinner'
@@ -21,12 +21,24 @@ function MagicLoading() {
 
 function MagicPageInner() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [error, setError] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = searchParams.get('token')
+    // Read token from fragment (never sent to server — doesn't appear in logs)
+    const hash = window.location.hash
+    const match = hash.match(/[#&]token=([^&]*)/)
+    const extracted = match ? decodeURIComponent(match[1]) : null
+    // Clear the fragment immediately so it doesn't persist in browser history
+    if (extracted) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    setToken(extracted)
+  }, [])
+
+  useEffect(() => {
+    if (token === null) return  // still waiting for fragment read
     if (!token) {
       router.replace('/login?error=missing_token')
       return
@@ -57,7 +69,7 @@ function MagicPageInner() {
       .catch(() => {
         setError('Something went wrong. Please try again.')
       })
-  }, [searchParams, router, setAuth])
+  }, [token, router, setAuth])
 
   if (error) {
     return (

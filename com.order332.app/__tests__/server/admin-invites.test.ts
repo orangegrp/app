@@ -7,6 +7,7 @@ const ADMIN_ID   = '00000000-0000-0000-0000-000000000001'
 const SESSION_ID = '00000000-0000-0000-0000-000000000099'
 
 const mockGetSessionById  = vi.fn()
+const mockGetUserById     = vi.fn()
 const mockListInviteCodes = vi.fn()
 const mockGetUsersByIds   = vi.fn()
 const mockCreateInviteCode = vi.fn()
@@ -14,6 +15,7 @@ const mockCreateInviteCode = vi.fn()
 vi.mock('@/server/db', () => ({
   db: {
     getSessionById: (...args: unknown[]) => mockGetSessionById(...args),
+    getUserById: (...args: unknown[]) => mockGetUserById(...args),
     listInviteCodes: (...args: unknown[]) => mockListInviteCodes(...args),
     getUsersByIds: (...args: unknown[]) => mockGetUsersByIds(...args),
     createInviteCode: (...args: unknown[]) => mockCreateInviteCode(...args),
@@ -42,6 +44,7 @@ describe('GET /admin/invites', () => {
     const { signAccessToken } = await import('../../server/lib/jwt')
     const token = await signAccessToken(ADMIN_ID, SESSION_ID, PERMISSIONS.ADMIN_INVITES_MANAGE, false)
     mockGetSessionById.mockResolvedValue(validSession())
+    mockGetUserById.mockResolvedValueOnce({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_INVITES_MANAGE })
 
     const usedAt = new Date('2026-01-15T12:00:00Z')
     const createdAt = new Date('2026-01-01T00:00:00Z')
@@ -101,6 +104,7 @@ describe('GET /admin/invites', () => {
     const { signAccessToken } = await import('../../server/lib/jwt')
     const token = await signAccessToken(ADMIN_ID, SESSION_ID, PERMISSIONS.ADMIN_INVITES_MANAGE, false)
     mockGetSessionById.mockResolvedValue(validSession())
+    mockGetUserById.mockResolvedValueOnce({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_INVITES_MANAGE })
 
     mockListInviteCodes.mockResolvedValueOnce([
       {
@@ -138,8 +142,9 @@ describe('POST /admin/invites', () => {
 
   it('creates invite with validated permissions CSV', async () => {
     const { signAccessToken } = await import('../../server/lib/jwt')
-    const token = await signAccessToken(ADMIN_ID, SESSION_ID, PERMISSIONS.ADMIN_INVITES_MANAGE, false)
+    const token = await signAccessToken(ADMIN_ID, SESSION_ID, `${PERMISSIONS.ADMIN_INVITES_MANAGE},${PERMISSIONS.APP_BLOG},${PERMISSIONS.APP_MUSIC}`, false)
     mockGetSessionById.mockResolvedValue(validSession())
+    mockGetUserById.mockResolvedValueOnce({ id: ADMIN_ID, permissions: `${PERMISSIONS.ADMIN_INVITES_MANAGE},${PERMISSIONS.APP_BLOG},${PERMISSIONS.APP_MUSIC}` })
 
     const createdAt = new Date('2026-01-01T00:00:00Z')
     mockCreateInviteCode.mockResolvedValueOnce({
@@ -171,6 +176,7 @@ describe('POST /admin/invites', () => {
     const { signAccessToken } = await import('../../server/lib/jwt')
     const token = await signAccessToken(ADMIN_ID, SESSION_ID, PERMISSIONS.ADMIN_INVITES_MANAGE, false)
     mockGetSessionById.mockResolvedValue(validSession())
+    mockGetUserById.mockResolvedValueOnce({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_INVITES_MANAGE })
 
     const { adminInviteRoutes } = await import('../../server/routes/admin/invites')
     const res = await adminInviteRoutes.request('/', {
@@ -183,6 +189,24 @@ describe('POST /admin/invites', () => {
     expect(res.status).toBe(400)
     const body = (await res.json()) as { error: string }
     expect(body.error).toBe('Invalid permission')
+    expect(mockCreateInviteCode).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when non-superuser tries to create a superuser invite', async () => {
+    const { signAccessToken } = await import('../../server/lib/jwt')
+    const token = await signAccessToken(ADMIN_ID, SESSION_ID, PERMISSIONS.ADMIN_INVITES_MANAGE, false)
+    mockGetSessionById.mockResolvedValue(validSession())
+    mockGetUserById.mockResolvedValueOnce({ id: ADMIN_ID, permissions: PERMISSIONS.ADMIN_INVITES_MANAGE })
+
+    const { adminInviteRoutes } = await import('../../server/routes/admin/invites')
+    const res = await adminInviteRoutes.request('/', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        permissions: ['*'],
+      }),
+    })
+    expect(res.status).toBe(403)
     expect(mockCreateInviteCode).not.toHaveBeenCalled()
   })
 })

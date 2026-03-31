@@ -47,7 +47,7 @@ devLoginRoutes.post('/dev-login', async (c) => {
   })
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
   const refreshToken = await signRefreshToken(user.id, session.id, isPwa)
-  await db.rotateSession(session.id, sha256(refreshToken), expiresAt)
+  await db.rotateSession(session.id, '', sha256(refreshToken), expiresAt)
 
   setCookie(c, 'refresh_token', refreshToken, {
     httpOnly: true,

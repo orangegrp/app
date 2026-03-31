@@ -4,13 +4,14 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { db } from '@/server/db'
 import { signAccessToken, signRefreshToken, verifyRefreshToken, getRefreshTokenExpiry } from '@/server/lib/jwt'
 import { sha256 } from '@/server/lib/crypto'
+import { rateLimit } from '@/server/middleware/rate-limit'
 import type { HonoEnv } from '@/server/lib/types'
 
 export const refreshRoutes = new Hono<HonoEnv>()
 
 // POST /auth/refresh
 // Issues a new access token using the refresh cookie. Rotates the refresh token.
-refreshRoutes.post('/refresh', async (c) => {
+refreshRoutes.post('/refresh', rateLimit(30, 60_000), async (c) => {
   const refreshToken = getCookie(c, 'refresh_token')
   if (!refreshToken) return c.json({ error: 'Unauthorized' }, 401)
 
@@ -42,7 +43,11 @@ refreshRoutes.post('/refresh', async (c) => {
   // Rotate: new refresh token, new expiry
   const newExpiresAt = getRefreshTokenExpiry(isPwa)
   const newRefreshToken = await signRefreshToken(user.id, session.id, isPwa)
-  await db.rotateSession(session.id, sha256(newRefreshToken), newExpiresAt)
+  const rotated = await db.rotateSession(session.id, tokenHash, sha256(newRefreshToken), newExpiresAt)
+  if (!rotated) {
+    deleteCookie(c, 'refresh_token', { path: '/' })
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
 
   setCookie(c, 'refresh_token', newRefreshToken, {
     httpOnly: true,

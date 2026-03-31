@@ -5,7 +5,7 @@ import { db } from '@/server/db'
 import { requireAuth } from '@/server/middleware/auth'
 import { requirePermission } from '@/server/middleware/rbac'
 import { randomHex } from '@/server/lib/crypto'
-import { parseAndValidatePermissionsInput, PERMISSIONS } from '@/lib/permissions'
+import { parseAndValidatePermissionsInput, PERMISSIONS, isSuperuserPermissionsCsv, hasPermission } from '@/lib/permissions'
 import type { HonoEnv } from '@/server/lib/types'
 
 export const adminInviteRoutes = new Hono<HonoEnv>()
@@ -62,6 +62,22 @@ adminInviteRoutes.post('/', async (c) => {
   }
 
   const user = c.get('user')
+
+  // Ceiling check: creator cannot grant permissions they don't have
+  if (permissionsCsv) {
+    if (isSuperuserPermissionsCsv(permissionsCsv)) {
+      if (!isSuperuserPermissionsCsv(user.permissions)) {
+        return c.json({ error: 'Forbidden' }, 403)
+      }
+    } else {
+      for (const token of permissionsCsv.split(',').filter(Boolean)) {
+        if (!hasPermission(user.permissions, token)) {
+          return c.json({ error: 'Forbidden' }, 403)
+        }
+      }
+    }
+  }
+
   const code = randomHex(6).toUpperCase()  // 12-char hex invite code
   const expiresAt = parsed.data.expiresInDays
     ? new Date(Date.now() + parsed.data.expiresInDays * 24 * 60 * 60 * 1000)

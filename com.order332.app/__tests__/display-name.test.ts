@@ -15,4 +15,9 @@ describe('normalizeDisplayName', () => {
     const long = 'a'.repeat(DISPLAY_NAME_MAX_LENGTH + 10)
     expect(normalizeDisplayName(long)?.length).toBe(DISPLAY_NAME_MAX_LENGTH)
   })
+
+  it('strips HTML characters', () => {
+    expect(normalizeDisplayName('<script>alert(1)</script>')).toBe('scriptalert(1)/script')
+    expect(normalizeDisplayName('&amp;')).toBe('amp;')
+  })
 })

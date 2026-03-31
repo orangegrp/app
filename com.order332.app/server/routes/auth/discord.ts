@@ -26,7 +26,7 @@ const OAUTH_LINK_RETURN_COOKIE = 'oauth_link_return'
  */
 function parseSignedOAuthState(raw: string | undefined): { payload: string; sig: string } | null {
   if (!raw) return null
-  const secret = process.env.BOT_SECRET
+  const secret = process.env.DISCORD_STATE_SECRET ?? process.env.BOT_SECRET
   if (!secret) return null
   const trimmed = raw.trim()
   const attempts: string[] = [trimmed]
@@ -123,9 +123,9 @@ discordRoutes.get('/', async (c) => {
     ? `${nonce}|${reg}|${isPwa ? '1' : '0'}|${linkUserId}|${returnTo}`
     : `${nonce}|${reg}|${isPwa ? '1' : '0'}|${linkUserId}`
 
-  const secret = process.env.BOT_SECRET
+  const secret = process.env.DISCORD_STATE_SECRET ?? process.env.BOT_SECRET
   if (!secret) {
-    console.error('[auth/discord] BOT_SECRET is not configured')
+    console.error('[auth/discord] DISCORD_STATE_SECRET (or BOT_SECRET fallback) is not configured')
     return c.json({ error: 'Server configuration error' }, 500)
   }
   const sig = hmacSign(secret, statePayload)
@@ -274,6 +274,11 @@ discordRoutes.get('/callback', async (c) => {
         return c.redirect(`${appUrl}/login?error=expired_registration`)
       }
 
+      const consumed = await db.consumePendingRegistration(pending.id)
+      if (!consumed) {
+        return c.redirect(`${appUrl}/login?error=expired_registration`)
+      }
+
       user = await db.createUser({
         discordId: discordUser.id,
         discordUsername: discordUser.username,
@@ -282,8 +287,6 @@ discordRoutes.get('/callback', async (c) => {
       })
 
       await db.setInviteCodeUsedByUser(pending.inviteCodeId, user.id)
-
-      await db.deletePendingRegistration(pending.id)
     } else {
       await db.updateUser(user.id, {
         discordUsername: discordUser.username,
@@ -313,7 +316,7 @@ discordRoutes.get('/callback', async (c) => {
 
     const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
     const refreshToken = await signRefreshToken(user.id, session.id, isPwa)
-    await db.rotateSession(session.id, sha256(refreshToken), expiresAt)
+    await db.rotateSession(session.id, '', sha256(refreshToken), expiresAt)
 
     setCookie(c, 'refresh_token', refreshToken, {
       httpOnly: true,

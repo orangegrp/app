@@ -9,10 +9,12 @@ const MEMBER_USER_ID = '00000000-0000-0000-0000-000000000011'
 const TEST_SESSION_ID = '00000000-0000-0000-0000-000000000002'
 
 const mockGetSessionById = vi.fn()
+const mockGetUserById = vi.fn()
 
 vi.mock('@/server/db', () => ({
   db: {
     getSessionById: (...args: unknown[]) => mockGetSessionById(...args),
+    getUserById: (...args: unknown[]) => mockGetUserById(...args),
   },
 }))
 
@@ -26,6 +28,7 @@ describe('requirePermission middleware', () => {
     process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-that-is-long-enough-testing'
     process.env.DISCORD_LINK_SECRET = 'test-discord-link-secret-long-enough-for-testing-ok'
     mockGetSessionById.mockReset()
+    mockGetUserById.mockReset()
     vi.resetModules()
   })
 
@@ -44,6 +47,7 @@ describe('requirePermission middleware', () => {
     const token = await signAccessToken(ADMIN_USER_ID, TEST_SESSION_ID, 'home.view,admin.users.manage,admin.settings', false)
     vi.resetModules()
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_USER_ID))
+    mockGetUserById.mockResolvedValue({ id: ADMIN_USER_ID, permissions: 'home.view,admin.users.manage,admin.settings' })
     const app = await makeApp()
     const res = await app.request('/admin', { headers: { Authorization: `Bearer ${token}` } })
     expect(res.status).toBe(200)
@@ -54,6 +58,7 @@ describe('requirePermission middleware', () => {
     const token = await signAccessToken(MEMBER_USER_ID, TEST_SESSION_ID, 'home.view', false)
     vi.resetModules()
     mockGetSessionById.mockResolvedValue(validSession(MEMBER_USER_ID))
+    mockGetUserById.mockResolvedValue({ id: MEMBER_USER_ID, permissions: 'home.view' })
     const app = await makeApp()
     const res = await app.request('/admin', { headers: { Authorization: `Bearer ${token}` } })
     expect(res.status).toBe(403)
@@ -76,6 +81,7 @@ describe('requirePermission middleware', () => {
     const token = await signAccessToken(ADMIN_USER_ID, TEST_SESSION_ID, '*', false)
     vi.resetModules()
     mockGetSessionById.mockResolvedValue(validSession(ADMIN_USER_ID))
+    mockGetUserById.mockResolvedValue({ id: ADMIN_USER_ID, permissions: '*' })
     const app = await makeApp()
     const [r1, r2, r3] = await Promise.all([
       app.request('/admin', { headers: { Authorization: `Bearer ${token}` } }),
@@ -99,6 +105,7 @@ describe('requirePermission middleware', () => {
     const token = await signAccessToken(MEMBER_USER_ID, TEST_SESSION_ID, 'home.view', false)
     vi.resetModules()
     mockGetSessionById.mockResolvedValue(validSession(MEMBER_USER_ID))
+    mockGetUserById.mockResolvedValue({ id: MEMBER_USER_ID, permissions: 'home.view' })
     const app = await makeApp()
     const res = await app.request('/admin', { headers: { Authorization: `Bearer ${token}` } })
     expect(res.status).toBe(403)

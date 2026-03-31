@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '@/server/db'
 import { requireAuth } from '@/server/middleware/auth'
+import { rateLimit } from '@/server/middleware/rate-limit'
 import {
   createRegistrationOptions,
   verifyRegistration,
@@ -22,7 +23,7 @@ export const passkeyRoutes = new Hono<HonoEnv>()
 
 // POST /auth/register/passkey/start
 // Begins passkey registration ceremony. Requires registration_token from invite claim.
-passkeyRoutes.post('/register/start', async (c) => {
+passkeyRoutes.post('/register/start', rateLimit(10, 60_000), async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = z.object({ registrationToken: z.string().min(1) }).safeParse(body)
   if (!parsed.success) return c.json({ error: 'Invalid request' }, 400)
@@ -45,6 +46,7 @@ passkeyRoutes.post('/register/start', async (c) => {
   const expiresAt = new Date(Date.now() + WEBAUTHN_CHALLENGE_LIFETIME * 1000)
   await db.createChallenge({
     challenge,
+    userId: tempUserId,
     type: 'registration',
     expiresAt,
   })
@@ -92,6 +94,13 @@ passkeyRoutes.post('/register/finish', async (c) => {
     return c.json({ error: 'Invalid or expired challenge' }, 400)
   }
 
+  // Verify challenge was issued for this specific pending registration
+  const tempUserId = `pending:${pending.id}`
+  if (challengeRecord.userId !== tempUserId) {
+    await db.deleteChallenge(challengeRecord.id)
+    return c.json({ error: 'Invalid or expired challenge' }, 400)
+  }
+
   let verification
   try {
     verification = await verifyRegistration({
@@ -116,6 +125,12 @@ passkeyRoutes.post('/register/finish', async (c) => {
     return c.json({ error: 'Invalid or expired registration session' }, 400)
   }
 
+  // Atomically consume the pending registration to prevent concurrent registrations
+  const consumed = await db.consumePendingRegistration(pending.id)
+  if (!consumed) {
+    return c.json({ error: 'Invalid or expired registration session' }, 400)
+  }
+
   const user = await db.createUser({ permissions: inviteForReg.permissions })
 
   await db.setInviteCodeUsedByUser(pending.inviteCodeId, user.id)
@@ -132,9 +147,6 @@ passkeyRoutes.post('/register/finish', async (c) => {
     name: credentialName,
   })
 
-  // Delete pending registration
-  await db.deletePendingRegistration(pending.id)
-
   // Issue tokens
   const expiresAt = getRefreshTokenExpiry(isPwa)
   const session = await db.createSession({
@@ -148,7 +160,7 @@ passkeyRoutes.post('/register/finish', async (c) => {
 
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
   const finalRefreshToken = await signRefreshToken(user.id, session.id, isPwa)
-  await db.rotateSession(session.id, sha256(finalRefreshToken), expiresAt)
+  await db.rotateSession(session.id, '', sha256(finalRefreshToken), expiresAt)
 
   setCookie(c, 'refresh_token', finalRefreshToken, {
     httpOnly: true,
@@ -176,7 +188,7 @@ passkeyRoutes.post('/challenge', async (c) => {
 
 // POST /auth/verify
 // Verifies WebAuthn authentication response, issues tokens.
-passkeyRoutes.post('/verify', async (c) => {
+passkeyRoutes.post('/verify', rateLimit(10, 60_000), async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = z
     .object({
@@ -258,7 +270,7 @@ passkeyRoutes.post('/verify', async (c) => {
 
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
   const refreshToken = await signRefreshToken(user.id, session.id, isPwa)
-  await db.rotateSession(session.id, sha256(refreshToken), expiresAt)
+  await db.rotateSession(session.id, '', sha256(refreshToken), expiresAt)
 
   setCookie(c, 'refresh_token', refreshToken, {
     httpOnly: true,

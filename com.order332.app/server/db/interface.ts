@@ -121,6 +121,8 @@ export interface DBAdapter {
   /** Set after registration completes (claim has no user id yet). */
   setInviteCodeUsedByUser(inviteCodeId: string, userId: string): Promise<void>
   deleteInviteCode(id: string): Promise<void>
+  /** Atomically claims an invite: marks used WHERE is_used=false AND not expired. Returns the invite if claimed, null if already used/expired/not found. */
+  atomicClaimInviteCode(code: string): Promise<InviteCode | null>
 
   // Passkey credentials
   getPasskeyByCredentialId(credentialId: string): Promise<PasskeyCredential | null>
@@ -133,7 +135,7 @@ export interface DBAdapter {
   createSession(data: CreateSessionData): Promise<Session>
   getSessionById(id: string): Promise<Session | null>
   getSessionByTokenHash(hash: string): Promise<Session | null>
-  rotateSession(id: string, newHash: string, newExpiresAt: Date): Promise<Session>
+  rotateSession(id: string, oldHash: string, newHash: string, newExpiresAt: Date): Promise<Session | null>
   deleteSession(id: string): Promise<void>
   deleteUserSessions(userId: string): Promise<void>
 
@@ -141,6 +143,8 @@ export interface DBAdapter {
   getMagicToken(tokenHash: string): Promise<MagicToken | null>
   createMagicToken(data: CreateMagicTokenData): Promise<MagicToken>
   markMagicTokenUsed(id: string): Promise<void>
+  /** Atomically consumes a magic token: marks used WHERE is_used=false AND expires_at > now(). Returns the token if consumed, null if already used/expired/not found. */
+  consumeMagicToken(tokenHash: string): Promise<MagicToken | null>
 
   // QR login sessions
   createQRSession(data: CreateQRSessionData): Promise<QRLoginSession>
@@ -154,6 +158,8 @@ export interface DBAdapter {
       resolvedAt?: Date
     }
   ): Promise<void>
+  /** Atomically transitions QR session from 'approved' to 'expired'. Returns the session if transitioned, null if not in approved state (race or invalid). */
+  finalizeQRSession(sessionId: string): Promise<QRLoginSession | null>
 
   // WebAuthn challenges (temporary, ~2 min TTL)
   createChallenge(data: CreateChallengeData): Promise<WebAuthnChallenge>
@@ -164,6 +170,8 @@ export interface DBAdapter {
   createPendingRegistration(data: CreatePendingRegistrationData): Promise<PendingRegistration>
   getPendingRegistration(token: string): Promise<PendingRegistration | null>
   deletePendingRegistration(id: string): Promise<void>
+  /** Atomically deletes a pending registration if it exists and hasn't expired. Returns the record if deleted, null if already consumed or expired. */
+  consumePendingRegistration(id: string): Promise<PendingRegistration | null>
   /** After Discord OAuth deny during signup: remove pending row and un-burn invite if registration never completed. */
   abortPendingRegistrationAndReleaseInvite(registrationToken: string): Promise<void>
 }

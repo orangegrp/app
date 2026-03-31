@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { setCookie } from 'hono/cookie'
 import { db } from '@/server/db'
 import { requireAuth } from '@/server/middleware/auth'
+import { rateLimit } from '@/server/middleware/rate-limit'
 import { encrypt, decrypt, sha256 } from '@/server/lib/crypto'
 import { generateTotpSecret, generateQrRollingToken, verifyQrRollingToken, getQrRollingStepRemainingMs } from '@/server/lib/totp'
 import { signAccessToken, signRefreshToken, getRefreshTokenExpiry } from '@/server/lib/jwt'
@@ -42,7 +43,7 @@ function desktopPayloadFromSession(session: QRLoginSession): {
 // POST /auth/qr/init
 // Desktop initiates a QR login session. Returns sessionId.
 // Opportunistically cleans up old expired sessions.
-qrRoutes.post('/init', async (c) => {
+qrRoutes.post('/init', rateLimit(10, 60_000), async (c) => {
   // Clean up expired QR sessions opportunistically
   db.cleanupExpiredRecords().catch(() => {})
 
@@ -204,7 +205,7 @@ qrRoutes.post('/reject', requireAuth, async (c) => {
 // POST /auth/qr/finalize
 // Desktop calls this after seeing 'approved' status.
 // Issues access token and sets refresh cookie for the desktop session.
-qrRoutes.post('/finalize', async (c) => {
+qrRoutes.post('/finalize', rateLimit(10, 60_000), async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = z
     .object({
@@ -216,13 +217,10 @@ qrRoutes.post('/finalize', async (c) => {
 
   const { sessionId, isPwa } = parsed.data
 
-  const qrSession = await db.getQRSession(sessionId)
-  if (!qrSession || qrSession.status !== 'approved' || !qrSession.mobileUserId) {
+  const qrSession = await db.finalizeQRSession(sessionId)
+  if (!qrSession || !qrSession.mobileUserId) {
     return c.json({ error: 'Invalid QR session' }, 400)
   }
-
-  // Prevent replay: mark as expired immediately
-  await db.updateQRSessionStatus(sessionId, 'expired', { resolvedAt: new Date() })
 
   const user = await db.getUserById(qrSession.mobileUserId)
   if (!user || !user.isActive) return c.json({ error: 'Unauthorized' }, 401)
@@ -244,7 +242,7 @@ qrRoutes.post('/finalize', async (c) => {
 
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
   const refreshToken = await signRefreshToken(user.id, session.id, isPwa)
-  await db.rotateSession(session.id, sha256(refreshToken), expiresAt)
+  await db.rotateSession(session.id, '', sha256(refreshToken), expiresAt)
 
   setCookie(c, 'refresh_token', refreshToken, {
     httpOnly: true,

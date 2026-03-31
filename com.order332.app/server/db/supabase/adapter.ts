@@ -311,6 +311,23 @@ export class SupabaseAdapter implements DBAdapter {
     if (error) dbErr('deleteInviteCode', error)
   }
 
+  async atomicClaimInviteCode(code: string): Promise<InviteCode | null> {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from('invite_codes')
+      .update({ is_used: true, used_at: now })
+      .eq('code', code)
+      .eq('is_used', false)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .select()
+      .single()
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      dbErr('atomicClaimInviteCode', error)
+    }
+    return mapInviteCode(data as Record<string, unknown>)
+  }
+
   // ── Passkeys ───────────────────────────────────────────────────────────────
 
   async getPasskeyByCredentialId(credentialId: string): Promise<PasskeyCredential | null> {
@@ -380,13 +397,16 @@ export class SupabaseAdapter implements DBAdapter {
     return mapSession(data as Record<string, unknown>)
   }
 
-  async rotateSession(id: string, newHash: string, newExpiresAt: Date): Promise<Session> {
+  async rotateSession(id: string, oldHash: string, newHash: string, newExpiresAt: Date): Promise<Session | null> {
     const { data: row, error } = await supabase.from('sessions').update({
       refresh_token_hash: newHash,
       expires_at: newExpiresAt.toISOString(),
       last_used_at: new Date().toISOString(),
-    }).eq('id', id).select().single()
-    if (error) dbErr('rotateSession', error)
+    }).eq('id', id).eq('refresh_token_hash', oldHash).select().single()
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      dbErr('rotateSession', error)
+    }
     return mapSession(row as Record<string, unknown>)
   }
 
@@ -427,6 +447,23 @@ export class SupabaseAdapter implements DBAdapter {
     if (error) dbErr('markMagicTokenUsed', error)
   }
 
+  async consumeMagicToken(tokenHash: string): Promise<MagicToken | null> {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from('magic_tokens')
+      .update({ is_used: true, used_at: now })
+      .eq('token_hash', tokenHash)
+      .eq('is_used', false)
+      .gt('expires_at', now)
+      .select()
+      .single()
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      dbErr('consumeMagicToken', error)
+    }
+    return mapMagicToken(data as Record<string, unknown>)
+  }
+
   // ── QR sessions ────────────────────────────────────────────────────────────
 
   async createQRSession(data: CreateQRSessionData): Promise<QRLoginSession> {
@@ -444,6 +481,22 @@ export class SupabaseAdapter implements DBAdapter {
   async getQRSession(id: string): Promise<QRLoginSession | null> {
     const { data, error } = await supabase.from('qr_login_sessions').select('*').eq('id', id).single()
     if (error) { if (error.code === 'PGRST116') return null; dbErr('getQRSession', error) }
+    return mapQRSession(data as Record<string, unknown>)
+  }
+
+  async finalizeQRSession(sessionId: string): Promise<QRLoginSession | null> {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from('qr_login_sessions')
+      .update({ status: 'expired', resolved_at: now })
+      .eq('id', sessionId)
+      .eq('status', 'approved')
+      .select()
+      .single()
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      dbErr('finalizeQRSession', error)
+    }
     return mapQRSession(data as Record<string, unknown>)
   }
 
@@ -505,6 +558,22 @@ export class SupabaseAdapter implements DBAdapter {
   async deletePendingRegistration(id: string): Promise<void> {
     const { error } = await supabase.from('pending_registrations').delete().eq('id', id)
     if (error) dbErr('deletePendingRegistration', error)
+  }
+
+  async consumePendingRegistration(id: string): Promise<PendingRegistration | null> {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from('pending_registrations')
+      .delete()
+      .eq('id', id)
+      .gt('expires_at', now)
+      .select()
+      .single()
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      dbErr('consumePendingRegistration', error)
+    }
+    return mapPendingReg(data as Record<string, unknown>)
   }
 
   async abortPendingRegistrationAndReleaseInvite(registrationToken: string): Promise<void> {

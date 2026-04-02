@@ -11,6 +11,14 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { Spinner } from '@/components/ui/spinner'
 import { FrontmatterPanel, type FrontmatterData } from '@/components/blog/FrontmatterPanel'
 import { BlogPreview } from '@/components/blog/BlogPreview'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+} from '@/components/ui/alert-dialog'
 import { useAuthStore } from '@/lib/auth-store'
 import { isSuperuserPermissionsCsv } from '@/lib/permissions'
 import {
@@ -61,6 +69,7 @@ export function BlogEditor({ author, slug }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [mobileTab, setMobileTab] = useState<'attributes' | 'edit' | 'preview'>('edit')
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   // Warn on unsaved changes
   useEffect(() => {
@@ -142,7 +151,6 @@ export function BlogEditor({ author, slug }: Props) {
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('Permanently delete this post from GitHub? This cannot be undone.')) return
     setDeleting(true)
     try {
       await deleteBlogPost(author, slug, blobSha)
@@ -266,7 +274,7 @@ export function BlogEditor({ author, slug }: Props) {
           {isSuperuser && (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleting}
               title="Delete post (superuser only)"
               className="rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
@@ -276,6 +284,34 @@ export function BlogEditor({ author, slug }: Props) {
           )}
         </div>
       </header>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <span className="text-foreground font-medium">{frontmatter.title || slug}</span> from GitHub. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => { setDeleteConfirmOpen(false); void handleDelete() }}
+              className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium tracking-wide text-red-400 hover:bg-red-500/20 transition-colors"
+            >
+              Delete
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Body */}
       <div className="flex-1 overflow-hidden flex flex-col">

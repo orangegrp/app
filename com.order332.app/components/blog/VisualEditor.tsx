@@ -10,6 +10,10 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import Table from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableHeader from '@tiptap/extension-table-header'
+import TableCell from '@tiptap/extension-table-cell'
 import { createLowlight, common } from 'lowlight'
 import { Markdown } from 'tiptap-markdown'
 import { toast } from 'sonner'
@@ -28,6 +32,7 @@ import {
   Link as LinkIcon,
   Image as ImageIcon,
   Code2,
+  Table as TableIcon,
   AlertCircle,
 } from 'lucide-react'
 import {
@@ -40,7 +45,7 @@ import {
 
 const lowlight = createLowlight(common)
 
-// ── Ensures there's always a paragraph after the last code block ──────────
+// ── Trailing paragraph after code blocks ─────────────────────────────────
 const TrailingNode = Extension.create({
   name: 'trailingNode',
   addProseMirrorPlugins() {
@@ -59,7 +64,7 @@ const TrailingNode = Extension.create({
   },
 })
 
-// ── Resizable image NodeView ───────────────────────────────────────────────
+// ── Resizable image NodeView ──────────────────────────────────────────────
 function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
   const imgRef = useRef<HTMLImageElement>(null)
 
@@ -70,8 +75,7 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
     const startWidth = imgRef.current?.offsetWidth ?? (node.attrs.width as number | null) ?? 400
 
     const onMouseMove = (ev: MouseEvent) => {
-      const newWidth = Math.max(40, Math.round(startWidth + ev.clientX - startX))
-      updateAttributes({ width: newWidth })
+      updateAttributes({ width: Math.max(40, Math.round(startWidth + ev.clientX - startX)) })
     }
     const onMouseUp = () => {
       window.removeEventListener('mousemove', onMouseMove)
@@ -102,8 +106,7 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
   )
 }
 
-// When a width is set, serialize as <img> HTML so the size is preserved in MDX.
-// Plain markdown images (![alt](src)) cannot carry a width attribute.
+// Serializes as <img> HTML when width is set (markdown can't carry width).
 const ResizableImage = Image.extend({
   addAttributes() {
     return {
@@ -124,7 +127,6 @@ const ResizableImage = Image.extend({
           if (node.attrs.width) {
             state.write(`<img src="${src}" alt="${alt}" width="${node.attrs.width as number}" />`)
           } else {
-            // Standard markdown image
             const escapedAlt = alt.replace(/[[\]]/g, '\\$&')
             const title = node.attrs.title
               ? ` "${(node.attrs.title as string).replace(/"/g, '\\"')}"`
@@ -140,7 +142,7 @@ const ResizableImage = Image.extend({
   },
 })
 
-// ── Component ──────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────
 interface Props {
   value: string
   onChange: (md: string) => void
@@ -156,9 +158,16 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
   const prevValueRef = useRef(value)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Link dialog state
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
-  const [linkInputValue, setLinkInputValue] = useState('')
+  // Link dialog
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+  const [linkText, setLinkText] = useState('')
+  const [linkHasSelection, setLinkHasSelection] = useState(false)
+
+  // Table dialog
+  const [tableOpen, setTableOpen] = useState(false)
+  const [tableRows, setTableRows] = useState(3)
+  const [tableCols, setTableCols] = useState(3)
 
   onChangeRef.current = onChange
   onImageUploadRef.current = onImageUpload
@@ -172,6 +181,10 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
       ResizableImage,
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'underline' } }),
       Placeholder.configure({ placeholder: 'Start writing your post...' }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: value,
     onUpdate: ({ editor: e }) => {
@@ -207,19 +220,51 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
   }
 
   const openLinkDialog = () => {
-    const current = editor?.getAttributes('link').href as string | undefined
-    setLinkInputValue(current ?? 'https://')
-    setLinkDialogOpen(true)
+    if (!editor) return
+    const { from, to } = editor.state.selection
+    const sel = from !== to
+    const selectedText = sel ? editor.state.doc.textBetween(from, to, ' ') : ''
+    const currentHref = editor.getAttributes('link').href as string | undefined
+    setLinkHasSelection(sel)
+    setLinkText(sel ? selectedText : '')
+    setLinkUrl(currentHref ?? 'https://')
+    setLinkOpen(true)
   }
 
   const confirmLink = () => {
     if (!editor) return
-    if (linkInputValue === '') {
+    if (!linkUrl || linkUrl === 'https://') {
+      // Remove link
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    } else if (linkHasSelection) {
+      // Wrap selection with link
+      editor.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run()
     } else {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: linkInputValue }).run()
+      // Insert new linked text at caret
+      const text = linkText.trim() || linkUrl
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href: linkUrl } }] })
+        .run()
     }
-    setLinkDialogOpen(false)
+    setLinkOpen(false)
+  }
+
+  const openTableDialog = () => {
+    setTableRows(3)
+    setTableCols(3)
+    setTableOpen(true)
+  }
+
+  const confirmTable = () => {
+    if (!editor) return
+    editor
+      .chain()
+      .focus()
+      .insertTable({ rows: tableRows, cols: tableCols, withHeaderRow: true })
+      .run()
+    setTableOpen(false)
   }
 
   const ToolbarButton = ({
@@ -352,6 +397,9 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
         <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Upload image">
           <ImageIcon size={14} />
         </ToolbarButton>
+        <ToolbarButton onClick={openTableDialog} active={editor?.isActive('table')} title="Insert table">
+          <TableIcon size={14} />
+        </ToolbarButton>
         <input
           ref={fileInputRef}
           type="file"
@@ -378,30 +426,49 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
         <EditorContent editor={editor} className="h-full" />
       </div>
 
-      {/* Link dialog */}
-      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+      {/* ── Link dialog ── */}
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
         <DialogContent showCloseButton={false} className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Insert Link</DialogTitle>
           </DialogHeader>
-          <input
-            type="url"
-            value={linkInputValue}
-            onChange={(e) => setLinkInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                confirmLink()
-              }
-            }}
-            placeholder="https://"
-            autoFocus
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/20"
-          />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground tracking-wide">URL</label>
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !linkHasSelection && (e.preventDefault(), setLinkUrl(linkUrl))}
+                placeholder="https://"
+                autoFocus
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/20"
+              />
+            </div>
+            {linkHasSelection ? (
+              <p className="text-xs text-muted-foreground">
+                Linking selected text: <span className="text-foreground font-medium">"{linkText}"</span>
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground tracking-wide">
+                  Link text <span className="text-muted-foreground/60">(defaults to URL if empty)</span>
+                </label>
+                <input
+                  type="text"
+                  value={linkText}
+                  onChange={(e) => setLinkText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), confirmLink())}
+                  placeholder="Display text"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/20"
+                />
+              </div>
+            )}
+          </div>
           <DialogFooter>
             <button
               type="button"
-              onClick={() => setLinkDialogOpen(false)}
+              onClick={() => setLinkOpen(false)}
               className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
@@ -411,7 +478,61 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
               onClick={confirmLink}
               className="rounded-lg bg-white/90 px-4 py-2 text-xs font-medium tracking-wide text-black hover:bg-white transition-colors"
             >
-              {linkInputValue ? 'Set Link' : 'Remove Link'}
+              {!linkUrl || linkUrl === 'https://' ? 'Remove Link' : 'Set Link'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Table dialog ── */}
+      <Dialog open={tableOpen} onOpenChange={setTableOpen}>
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Insert Table</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs text-muted-foreground tracking-wide">Rows</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={tableRows}
+                  onChange={(e) => setTableRows(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-white/20"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs text-muted-foreground tracking-wide">Columns</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={tableCols}
+                  onChange={(e) => setTableCols(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-white/20"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground/60 leading-relaxed">
+              Table dimensions cannot be changed in the visual editor after creation. Use the raw editor to add or remove rows and columns.
+            </p>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setTableOpen(false)}
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmTable}
+              className="rounded-lg bg-white/90 px-4 py-2 text-xs font-medium tracking-wide text-black hover:bg-white transition-colors"
+            >
+              Insert Table
             </button>
           </DialogFooter>
         </DialogContent>

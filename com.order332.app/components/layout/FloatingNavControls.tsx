@@ -59,6 +59,7 @@ export function FloatingNavControls({ sidebarWidth }: { sidebarWidth: number }) 
   }, [])
 
   if (!hasNavigated) return null
+  if (pathname.startsWith('/blog/edit/')) return null
 
   // Horizontally center over the main content area (viewport minus sidebar)
   const left = `calc(${sidebarWidth}px + (100vw - ${sidebarWidth}px) / 2)`

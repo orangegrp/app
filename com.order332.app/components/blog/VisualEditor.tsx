@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -30,11 +30,17 @@ import {
   Code2,
   AlertCircle,
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 const lowlight = createLowlight(common)
 
-// ── Ensures there's always a paragraph after the last code block so the
-//    cursor can escape to a new line by pressing ↓ or clicking below.
+// ── Ensures there's always a paragraph after the last code block ──────────
 const TrailingNode = Extension.create({
   name: 'trailingNode',
   addProseMirrorPlugins() {
@@ -96,6 +102,8 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
   )
 }
 
+// When a width is set, serialize as <img> HTML so the size is preserved in MDX.
+// Plain markdown images (![alt](src)) cannot carry a width attribute.
 const ResizableImage = Image.extend({
   addAttributes() {
     return {
@@ -104,6 +112,26 @@ const ResizableImage = Image.extend({
         default: null,
         parseHTML: (el) => el.getAttribute('width'),
         renderHTML: (attrs) => (attrs.width ? { width: attrs.width } : {}),
+      },
+    }
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: any, node: any) {
+          const src = (node.attrs.src as string) ?? ''
+          const alt = ((node.attrs.alt as string) ?? '').replace(/"/g, '&quot;')
+          if (node.attrs.width) {
+            state.write(`<img src="${src}" alt="${alt}" width="${node.attrs.width as number}" />`)
+          } else {
+            // Standard markdown image
+            const escapedAlt = alt.replace(/[[\]]/g, '\\$&')
+            const title = node.attrs.title
+              ? ` "${(node.attrs.title as string).replace(/"/g, '\\"')}"`
+              : ''
+            state.write(`![${escapedAlt}](${src}${title})`)
+          }
+        },
       },
     }
   },
@@ -127,6 +155,10 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
   const isExternalUpdateRef = useRef(false)
   const prevValueRef = useRef(value)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Link dialog state
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [linkInputValue, setLinkInputValue] = useState('')
 
   onChangeRef.current = onChange
   onImageUploadRef.current = onImageUpload
@@ -174,16 +206,20 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
     }
   }
 
-  const setLink = () => {
+  const openLinkDialog = () => {
+    const current = editor?.getAttributes('link').href as string | undefined
+    setLinkInputValue(current ?? 'https://')
+    setLinkDialogOpen(true)
+  }
+
+  const confirmLink = () => {
     if (!editor) return
-    const prev = editor.getAttributes('link').href as string | undefined
-    const url = window.prompt('Enter link URL', prev ?? 'https://')
-    if (url === null) return
-    if (url === '') {
+    if (linkInputValue === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
     } else {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+      editor.chain().focus().extendMarkRange('link').setLink({ href: linkInputValue }).run()
     }
+    setLinkDialogOpen(false)
   }
 
   const ToolbarButton = ({
@@ -310,7 +346,7 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
 
         <span className="mx-1 h-4 w-px bg-white/10" />
 
-        <ToolbarButton onClick={setLink} active={editor?.isActive('link')} title="Link">
+        <ToolbarButton onClick={openLinkDialog} active={editor?.isActive('link')} title="Link">
           <LinkIcon size={14} />
         </ToolbarButton>
         <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Upload image">
@@ -341,6 +377,45 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <EditorContent editor={editor} className="h-full" />
       </div>
+
+      {/* Link dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Insert Link</DialogTitle>
+          </DialogHeader>
+          <input
+            type="url"
+            value={linkInputValue}
+            onChange={(e) => setLinkInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                confirmLink()
+              }
+            }}
+            placeholder="https://"
+            autoFocus
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-white/20"
+          />
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setLinkDialogOpen(false)}
+              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmLink}
+              className="rounded-lg bg-white/90 px-4 py-2 text-xs font-medium tracking-wide text-black hover:bg-white transition-colors"
+            >
+              {linkInputValue ? 'Set Link' : 'Remove Link'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -60,6 +60,7 @@ export function BlogEditor({ author, slug }: Props) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'attributes' | 'edit' | 'preview'>('edit')
 
   // Warn on unsaved changes
   useEffect(() => {
@@ -276,44 +277,80 @@ export function BlogEditor({ author, slug }: Props) {
         </div>
       </header>
 
-      {/* Body: frontmatter panel | editor | preview */}
-      <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal" className="h-full">
-          {/* Frontmatter sidebar */}
-          <Panel defaultSize={24} minSize={20} maxSize={40} className="border-r border-white/10">
+      {/* Body */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Mobile tab bar */}
+        <div className="sm:hidden flex shrink-0 border-b border-white/10">
+          {(['attributes', 'edit', 'preview'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setMobileTab(tab)}
+              className={`flex-1 py-2 text-xs tracking-wide capitalize transition-colors ${
+                mobileTab === tab
+                  ? 'border-b-2 border-white/60 text-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {tab === 'attributes' ? 'Attributes' : tab === 'edit' ? 'Edit' : 'Preview'}
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile: single active panel */}
+        <div className="sm:hidden flex-1 overflow-hidden">
+          {mobileTab === 'attributes' && (
             <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} />
-          </Panel>
-
-          <PanelResizeHandle className="w-2 bg-white/5 hover:bg-white/15 transition-colors data-[resize-handle-state=drag]:bg-white/20" />
-
-          {/* Editor */}
-          <Panel defaultSize={showPreview ? 38 : 76} minSize={15}>
-            <div className="flex h-full flex-col">
-              {editorMode === 'raw' ? (
-                <MarkdownEditor
-                  value={bodyMarkdown}
-                  onChange={handleBodyChange}
-                  onImageUpload={handleImageUpload}
-                />
-              ) : (
-                <VisualEditor
-                  value={bodyMarkdown}
-                  onChange={handleBodyChange}
-                  onImageUpload={handleImageUpload}
-                />
-              )}
-            </div>
-          </Panel>
-
-          {showPreview && (
-            <>
-              <PanelResizeHandle className="w-2 bg-white/5 hover:bg-white/15 transition-colors data-[resize-handle-state=drag]:bg-white/20" />
-              <Panel defaultSize={38} minSize={15} className="border-l border-white/10">
-                <BlogPreview markdown={bodyMarkdown} />
-              </Panel>
-            </>
           )}
-        </PanelGroup>
+          {mobileTab === 'edit' && (
+            <MarkdownEditor
+              value={bodyMarkdown}
+              onChange={handleBodyChange}
+              onImageUpload={handleImageUpload}
+            />
+          )}
+          {mobileTab === 'preview' && <BlogPreview markdown={bodyMarkdown} />}
+        </div>
+
+        {/* Desktop: resizable panels */}
+        <div className="hidden sm:block flex-1 overflow-hidden">
+          <PanelGroup direction="horizontal" className="h-full">
+            {/* Frontmatter sidebar */}
+            <Panel defaultSize={24} minSize={20} maxSize={40} className="border-r border-white/10">
+              <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} />
+            </Panel>
+
+            <PanelResizeHandle className="w-2 bg-white/5 hover:bg-white/15 transition-colors data-[resize-handle-state=drag]:bg-white/20" />
+
+            {/* Editor */}
+            <Panel defaultSize={showPreview ? 38 : 76} minSize={15}>
+              <div className="flex h-full flex-col">
+                {editorMode === 'raw' ? (
+                  <MarkdownEditor
+                    value={bodyMarkdown}
+                    onChange={handleBodyChange}
+                    onImageUpload={handleImageUpload}
+                  />
+                ) : (
+                  <VisualEditor
+                    value={bodyMarkdown}
+                    onChange={handleBodyChange}
+                    onImageUpload={handleImageUpload}
+                  />
+                )}
+              </div>
+            </Panel>
+
+            {showPreview && (
+              <>
+                <PanelResizeHandle className="w-2 bg-white/5 hover:bg-white/15 transition-colors data-[resize-handle-state=drag]:bg-white/20" />
+                <Panel defaultSize={38} minSize={15} className="border-l border-white/10">
+                  <BlogPreview markdown={bodyMarkdown} />
+                </Panel>
+              </>
+            )}
+          </PanelGroup>
+        </div>
       </div>
     </div>
   )

@@ -29,7 +29,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     href: '/blog',
     icon: Newspaper,
     label: 'Blog Admin',
-    soon: true,
+    soon: false,
     hardNav: false,
     desc: 'Posts and publishing',
     permission: PERMISSIONS.APP_BLOG,

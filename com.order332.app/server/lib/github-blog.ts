@@ -72,8 +72,9 @@ export function buildBlogFilePath(author: string, slug: string): string {
   const cfg = getConfig()
   const base = cfg.basePath.replace(/\/+$/, '') // strip any trailing slash
 
-  // Construct from known-safe parts only
-  const filePath = `${base}/${author}/${slug}.mdx`
+  // Construct from known-safe parts only.
+  // Author directories in this Astro project use (group) naming: (alegs), (unified), etc.
+  const filePath = `${base}/(${author})/${slug}.mdx`
 
   // Defense-in-depth: reject traversal sequences even if they somehow appeared
   // in the config values themselves (e.g. misconfigured GITHUB_BLOG_PATH).
@@ -126,18 +127,21 @@ export async function listBlogPosts(): Promise<BlogPostListItem[]> {
 
   const normalizedBase = cfg.basePath.replace(/^\//, '')
 
-  const mdxFiles = (tree.tree ?? []).filter(
-    (item) =>
-      item.type === 'blob' &&
-      item.path?.startsWith(normalizedBase + '/') &&
-      item.path.endsWith('.mdx'),
-  )
+  const mdxFiles = (tree.tree ?? []).filter((item) => {
+    if (item.type !== 'blob' || !item.path?.startsWith(normalizedBase + '/') || !item.path.endsWith('.mdx')) {
+      return false
+    }
+    // Must be exactly {basePath}/{author}/{slug}.mdx — 2 segments under basePath
+    const relPath = item.path.slice(normalizedBase.length + 1)
+    return relPath.split('/').length === 2
+  })
 
   const posts = await Promise.all(
     mdxFiles.map(async (file) => {
       const pathParts = file.path!.split('/')
       const rawSlug = pathParts[pathParts.length - 1].replace(/\.mdx$/, '')
-      const rawAuthor = pathParts[pathParts.length - 2] ?? ''
+      // Author dirs may use Astro (group) syntax: "(alegs)" → "alegs"
+      const rawAuthor = (pathParts[pathParts.length - 2] ?? '').replace(/^\(|\)$/g, '')
 
       // Skip any file whose author/slug fail validation — these aren't our posts
       if (!AUTHOR_RE.test(rawAuthor) || !SLUG_RE.test(rawSlug)) return null

@@ -93,6 +93,9 @@ export function InstatusBanner() {
   const detailsHref = rest > 0 ? summary.page.url : first.url
   const detailsLabel = rest > 0 ? 'View status page' : 'Details'
 
+  const issueText = incidents.map((i) => i.name).join(' · ')
+  const ariaLabel = `Service alert: ${issueText}`
+
   const reserveHeight = spacerHeight > 0 ? spacerHeight : 52
 
   return (
@@ -101,6 +104,7 @@ export function InstatusBanner() {
       <div
         ref={barRef}
         role="status"
+        aria-label={ariaLabel}
         className={cn(
           'fixed inset-x-0 top-0 z-[100] w-full border-b border-amber-500/25',
           'bg-gradient-to-r from-amber-950/90 via-amber-900/40 to-amber-950/90',
@@ -109,52 +113,48 @@ export function InstatusBanner() {
           'px-4 pb-2.5 sm:px-6',
         )}
       >
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-2 text-center sm:justify-between sm:text-left sm:gap-x-3">
-        <div className="flex min-w-0 flex-1 items-start justify-center gap-2.5 sm:justify-start">
-          <AlertTriangle
-            className="mt-0.5 size-4 shrink-0 text-amber-400/95"
-            aria-hidden
-          />
-          <p className="min-w-0 text-sm leading-snug text-amber-50/95">
-            <span className="font-medium tracking-wide">Service alert</span>
-            <span className="mx-2 text-amber-200/50" aria-hidden>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-2 text-center sm:justify-between sm:text-left sm:gap-x-3">
+          <div className="flex min-w-0 flex-1 items-center justify-center gap-2 sm:justify-start sm:gap-3">
+            <AlertTriangle className="size-4 shrink-0 self-center text-amber-400/95" aria-hidden />
+            <span className="shrink-0 text-sm font-medium tracking-wide text-amber-50/95">
+              Service alert
+            </span>
+            <span className="shrink-0 text-amber-200/50" aria-hidden>
               ·
             </span>
-            <span className="text-amber-100/90">{first.name}</span>
-            {rest > 0 ? (
-              <span className="text-amber-200/75"> (+{rest} more)</span>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <a
-            href={detailsHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              'rounded-lg border border-amber-400/35 bg-amber-950/50 px-3 py-1.5',
-              'text-xs font-medium tracking-widest text-amber-100',
-              'transition-colors hover:border-amber-300/50 hover:bg-amber-900/60 hover:text-white',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400/80',
-            )}
-          >
-            {detailsLabel}
-          </a>
-          <button
-            type="button"
-            onClick={onDismiss}
-            aria-label="Dismiss alert"
-            className={cn(
-              'flex size-9 items-center justify-center rounded-lg text-amber-200/90',
-              'transition-colors hover:bg-amber-950/80 hover:text-amber-50',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400/80',
-            )}
-          >
-            <X className="size-4" strokeWidth={2} />
-          </button>
+            <p className="min-w-0 flex-1 text-sm leading-snug text-amber-100/90 break-words">
+              {issueText}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <a
+              href={detailsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                'rounded-lg border border-amber-400/35 bg-amber-950/50 px-3 py-1.5',
+                'text-xs font-medium tracking-widest text-amber-100',
+                'transition-colors hover:border-amber-300/50 hover:bg-amber-900/60 hover:text-white',
+                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400/80',
+              )}
+            >
+              {detailsLabel}
+            </a>
+            <button
+              type="button"
+              onClick={onDismiss}
+              aria-label="Dismiss alert"
+              className={cn(
+                'flex size-9 items-center justify-center rounded-lg text-amber-200/90',
+                'transition-colors hover:bg-amber-950/80 hover:text-amber-50',
+                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400/80',
+              )}
+            >
+              <X className="size-4" strokeWidth={2} />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     </>
   )
 }

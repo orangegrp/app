@@ -12,6 +12,8 @@ export const PERMISSIONS = {
   ADMIN_SYSTEM_CLEANUP: 'admin.system.cleanup',
   /** Assign app and admin permissions to users (user list + edit). */
   ADMIN_PERMISSIONS_MANAGE: 'admin.permissions.manage',
+  /** Hard-delete blog posts from GitHub (superuser-only in practice; constant kept for UI display). */
+  ADMIN_BLOG_MANAGE: 'admin.blog.manage',
 } as const
 
 /** All mini-app route permissions (for deny-by-default checks). */

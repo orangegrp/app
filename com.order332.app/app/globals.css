@@ -1801,3 +1801,41 @@
   background: #4752c4 !important;
   transform: translateY(0);
 }
+
+/* ── Blog preview prose styles ────────────────────────────────────────────── */
+.blog-preview { color: var(--foreground); line-height: 1.75; font-size: 0.9375rem; }
+.blog-preview h1 { font-size: 1.875rem; font-weight: 700; margin: 1.5rem 0 0.75rem; letter-spacing: -0.01em; }
+.blog-preview h2 { font-size: 1.5rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+.blog-preview h3 { font-size: 1.125rem; font-weight: 600; margin: 1rem 0 0.375rem; }
+.blog-preview h4, .blog-preview h5, .blog-preview h6 { font-size: 1rem; font-weight: 600; margin: 0.875rem 0 0.25rem; }
+.blog-preview p { margin-bottom: 1rem; }
+.blog-preview ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+.blog-preview ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
+.blog-preview li { margin-bottom: 0.25rem; }
+.blog-preview blockquote { border-left: 3px solid rgba(255,255,255,0.2); padding-left: 1rem; margin: 1rem 0; color: var(--muted-foreground); font-style: italic; }
+.blog-preview code { background: rgba(255,255,255,0.08); border-radius: 4px; padding: 0.125rem 0.375rem; font-size: 0.875em; font-family: monospace; }
+.blog-preview pre { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; overflow-x: auto; }
+.blog-preview pre code { background: transparent; padding: 0; font-size: 0.85em; }
+.blog-preview a { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; opacity: 0.8; }
+.blog-preview a:hover { opacity: 1; }
+.blog-preview img { max-width: 100%; border-radius: 8px; margin: 1rem 0; }
+.blog-preview hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5rem 0; }
+.blog-preview table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.875rem; }
+.blog-preview th, .blog-preview td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5rem 0.75rem; text-align: left; }
+.blog-preview th { background: rgba(255,255,255,0.05); font-weight: 600; }
+
+/* TipTap visual editor content styles */
+.tiptap-editor { min-height: 100%; }
+.tiptap-editor p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted-foreground); float: left; height: 0; pointer-events: none; }
+.tiptap-editor h1 { font-size: 1.75rem; font-weight: 700; margin: 0.75rem 0 0.375rem; }
+.tiptap-editor h2 { font-size: 1.375rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+.tiptap-editor h3 { font-size: 1.125rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+.tiptap-editor p { margin-bottom: 0.625rem; }
+.tiptap-editor ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.tiptap-editor ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+.tiptap-editor blockquote { border-left: 3px solid rgba(255,255,255,0.2); padding-left: 0.875rem; margin: 0.75rem 0; color: var(--muted-foreground); }
+.tiptap-editor code { background: rgba(255,255,255,0.08); border-radius: 4px; padding: 0.1rem 0.3rem; font-size: 0.875em; font-family: monospace; }
+.tiptap-editor pre { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.875rem; margin-bottom: 0.75rem; overflow-x: auto; }
+.tiptap-editor pre code { background: transparent; padding: 0; }
+.tiptap-editor img { max-width: 100%; border-radius: 6px; margin: 0.5rem 0; }
+.tiptap-editor hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }

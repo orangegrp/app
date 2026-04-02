@@ -65,6 +65,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'cdn.discordapp.com', pathname: '/avatars/**' },
       { protocol: 'https', hostname: 'cdn.discordapp.com', pathname: '/embed/**' },
+      { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/public/**' },
     ],
   },
   async headers() {
@@ -78,13 +79,12 @@ const nextConfig = {
         key: 'Content-Security-Policy',
         value: [
           "default-src 'self'",
-          "img-src 'self' cdn.discordapp.com data: blob:",
+          "img-src 'self' cdn.discordapp.com data: blob: *.supabase.co *.github.com raw.githubusercontent.com github.com",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-          // CheerpX creates Web Workers from blob: URLs; without worker-src, CSP falls back to script-src.
           "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline'",
           "font-src 'self'",
-          "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.eu.r2.cloudflarestorage.com",
+          "connect-src 'self' *.r2.cloudflarestorage.com",
           "frame-ancestors 'none'",
         ].join('; '),
       },

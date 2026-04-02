@@ -15,6 +15,8 @@ import { accountRoutes } from '@/server/routes/auth/account'
 import { devLoginRoutes } from '@/server/routes/auth/dev-login'
 import { adminInviteRoutes } from '@/server/routes/admin/invites'
 import { adminUserRoutes } from '@/server/routes/admin/users'
+import { blogPostRoutes } from '@/server/routes/blog/posts'
+import { blogImageRoutes } from '@/server/routes/blog/images'
 import { webpcDiskUrlRoutes } from '@/server/routes/webpc/disk-url'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
@@ -254,6 +256,18 @@ app.route('/admin/invites', adminInviteRoutes)
 // GET   /admin/users       — list users (requires admin.permissions.manage)
 // PATCH /admin/users/:id   — profile / permissions / freeze / delete (same gate)
 app.route('/admin/users', adminUserRoutes)
+
+// ── Blog routes ───────────────────────────────────────────────────────────────
+
+// GET    /blog/posts         — list all posts (requires app.blog)
+// GET    /blog/posts/*       — fetch single post by path
+// POST   /blog/posts         — create new post
+// PUT    /blog/posts/*       — update/publish/unpublish post
+// DELETE /blog/posts/*       — hard-delete post (superuser only)
+app.route('/blog/posts', blogPostRoutes)
+
+// POST /blog/images          — upload image to Supabase Storage (requires app.blog)
+app.route('/blog/images', blogImageRoutes)
 
 app.post('/auth/cleanup', requireAuth, requirePermission(PERMISSIONS.ADMIN_SYSTEM_CLEANUP), async (c) => {
   await db.cleanupExpiredRecords()

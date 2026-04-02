@@ -10,11 +10,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { useAuthStore } from '@/lib/auth-store'
 import { createBlogPost } from '@/lib/blog-api'
 
-function toKebab(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+function toAuthorId(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
 function buildInitialContent(author: string, slug: string): string {
@@ -30,19 +27,19 @@ function buildInitialContent(author: string, slug: string): string {
 }
 
 const SLUG_RE = /^[a-z0-9-]+$/
-const AUTHOR_RE = /^[a-z0-9-]+$/
+const AUTHOR_RE = /^[a-z0-9]+$/
 
 export default function NewBlogPostPage() {
   const router = useRouter()
   const { user } = useAuthStore()
-  const defaultAuthor = user?.displayName ? toKebab(user.displayName) : ''
+  const defaultAuthor = user?.displayName ? toAuthorId(user.displayName) : ''
 
   const [author, setAuthor] = useState(defaultAuthor)
   const [slug, setSlug] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const authorError = author && !AUTHOR_RE.test(author) ? 'Use lowercase letters, numbers, and hyphens only' : null
+  const authorError = author && !AUTHOR_RE.test(author) ? 'Use lowercase letters and numbers only (no symbols or spaces)' : null
   const slugError = slug && !SLUG_RE.test(slug) ? 'Use lowercase letters, numbers, and hyphens only' : null
   const canSubmit = AUTHOR_RE.test(author) && SLUG_RE.test(slug) && !creating
 
@@ -82,7 +79,7 @@ export default function NewBlogPostPage() {
         <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-8 flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs tracking-wide text-muted-foreground" htmlFor="author">
-              Author <span className="text-muted-foreground/60">(kebab-case)</span>
+              Author <span className="text-muted-foreground/60">(lowercase, no symbols)</span>
             </label>
             <input
               id="author"

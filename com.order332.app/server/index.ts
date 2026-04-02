@@ -42,6 +42,20 @@ app.use('*', async (_c, next) => {
 app.get('/health', (c) => c.json({ ok: true }))
 app.get('/version', (c) => c.json({ version: process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev' }))
 
+/** Proxies Instatus summary (ISR 60s) for the in-app status banner. */
+app.get('/status/summary', async (c) => {
+  try {
+    const res = await fetch('https://332.instatus.com/summary.json', {
+      next: { revalidate: 60 },
+    })
+    if (!res.ok) return c.json({ error: 'upstream' }, 502)
+    const data: unknown = await res.json()
+    return c.json(data)
+  } catch {
+    return c.json({ error: 'fetch_failed' }, 502)
+  }
+})
+
 // GET /webpc/disk-url — presigned R2 GET for VM disk images (requires app.webpc)
 app.route('/webpc', webpcDiskUrlRoutes)
 

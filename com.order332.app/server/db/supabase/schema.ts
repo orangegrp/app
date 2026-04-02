@@ -140,19 +140,6 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       CREATE INDEX IF NOT EXISTS qr_login_sessions_status_idx ON qr_login_sessions(status);
     `,
   },
-  webauthn_challenges: {
-    columns: ['id', 'challenge', 'user_id', 'type', 'expires_at', 'created_at'],
-    sql: `
-      CREATE TABLE IF NOT EXISTS webauthn_challenges (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        challenge TEXT UNIQUE NOT NULL,
-        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-        type TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      );
-    `,
-  },
   pending_registrations: {
     columns: ['id', 'invite_code_id', 'registration_token', 'expires_at', 'created_at'],
     sql: `
@@ -160,6 +147,28 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         invite_code_id UUID NOT NULL REFERENCES invite_codes(id),
         registration_token TEXT UNIQUE NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `,
+  },
+  webauthn_challenges: {
+    columns: [
+      'id',
+      'challenge',
+      'user_id',
+      'pending_registration_id',
+      'type',
+      'expires_at',
+      'created_at',
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS webauthn_challenges (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        challenge TEXT UNIQUE NOT NULL,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        pending_registration_id UUID REFERENCES pending_registrations(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
@@ -211,6 +220,7 @@ export async function validateAndMigrateSchema(): Promise<void> {
     await ensureUserLoginMethodColumns(sql)
     await ensureDisplayNameColumn(sql)
     await ensureWelcomeWizardColumn(sql)
+    await ensureWebAuthnPendingRegistrationColumn(sql)
 
     console.log('[DB] Schema validation complete')
   } finally {
@@ -237,4 +247,12 @@ async function ensureDisplayNameColumn(sql: postgres.Sql): Promise<void> {
 
 async function ensureWelcomeWizardColumn(sql: postgres.Sql): Promise<void> {
   await sql.unsafe('ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_wizard_completed_at TIMESTAMPTZ')
+}
+
+/** Links invite-registration WebAuthn challenges to pending_registrations (user_id is null for that path). */
+async function ensureWebAuthnPendingRegistrationColumn(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    ALTER TABLE webauthn_challenges
+    ADD COLUMN IF NOT EXISTS pending_registration_id UUID REFERENCES pending_registrations(id) ON DELETE CASCADE
+  `)
 }

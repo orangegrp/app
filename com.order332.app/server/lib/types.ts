@@ -94,6 +94,8 @@ export interface WebAuthnChallenge {
   id: string
   challenge: string
   userId?: string
+  /** Set for invite sign-up registration challenges (ties row to pending_registrations). */
+  pendingRegistrationId?: string
   type: 'registration' | 'authentication'
   expiresAt: Date
   createdAt: Date

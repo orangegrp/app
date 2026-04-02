@@ -11,6 +11,7 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "db:migrate": "NODE_OPTIONS='--conditions react-server' node --env-file=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-db-migration.mts",
     "mirror-cheerpx": "node scripts/mirror-cheerpx.mjs",
     "fetch-webpc-disks": "node scripts/fetch-webpc-disks.mjs",
     "fetch-webpc-assets": "node scripts/mirror-cheerpx.mjs && node scripts/fetch-webpc-disks.mjs"
@@ -97,8 +98,10 @@
     "postcss": "^8",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.1"
   },

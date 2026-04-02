@@ -79,6 +79,8 @@ export interface CreateQRSessionData {
 export interface CreateChallengeData {
   challenge: string
   userId?: string
+  /** Invite sign-up: associate challenge with this pending registration (omit userId). */
+  pendingRegistrationId?: string
   type: 'registration' | 'authentication'
   expiresAt: Date
 }

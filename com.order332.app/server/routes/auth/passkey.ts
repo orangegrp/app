@@ -46,7 +46,7 @@ passkeyRoutes.post('/register/start', rateLimit(10, 60_000), async (c) => {
   const expiresAt = new Date(Date.now() + WEBAUTHN_CHALLENGE_LIFETIME * 1000)
   await db.createChallenge({
     challenge,
-    userId: tempUserId,
+    pendingRegistrationId: pending.id,
     type: 'registration',
     expiresAt,
   })
@@ -95,8 +95,7 @@ passkeyRoutes.post('/register/finish', async (c) => {
   }
 
   // Verify challenge was issued for this specific pending registration
-  const tempUserId = `pending:${pending.id}`
-  if (challengeRecord.userId !== tempUserId) {
+  if (challengeRecord.pendingRegistrationId !== pending.id) {
     await db.deleteChallenge(challengeRecord.id)
     return c.json({ error: 'Invalid or expired challenge' }, 400)
   }

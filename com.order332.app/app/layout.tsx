@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'sonner'
 import { ThemeColor } from '@/components/pwa/ThemeColor'
+import { InstatusBanner } from '@/components/status/InstatusBanner'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -42,7 +43,10 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         <ThemeColor />
-        {children}
+        <div className="flex min-h-screen flex-col">
+          <InstatusBanner />
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </div>
         <Toaster
           className="toaster"
           position="bottom-right"

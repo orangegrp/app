@@ -124,6 +124,7 @@ function mapChallenge(row: Record<string, unknown>): WebAuthnChallenge {
     id: row.id as string,
     challenge: row.challenge as string,
     userId: (row.user_id as string | null) ?? undefined,
+    pendingRegistrationId: (row.pending_registration_id as string | null) ?? undefined,
     type: row.type as 'registration' | 'authentication',
     expiresAt: new Date(row.expires_at as string),
     createdAt: new Date(row.created_at as string),
@@ -140,8 +141,24 @@ function mapPendingReg(row: Record<string, unknown>): PendingRegistration {
   }
 }
 
+function formatDbError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const e = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown }
+    const parts = [e.message, e.code, e.details, e.hint].filter(
+      (x): x is string => typeof x === 'string' && x.length > 0
+    )
+    if (parts.length) return parts.join(' | ')
+  }
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 function dbErr(context: string, error: unknown): never {
-  throw new Error(`[DB:${context}] ${error instanceof Error ? error.message : String(error)}`)
+  throw new Error(`[DB:${context}] ${formatDbError(error)}`)
 }
 
 export class SupabaseAdapter implements DBAdapter {
@@ -519,6 +536,7 @@ export class SupabaseAdapter implements DBAdapter {
     const { data: row, error } = await supabase.from('webauthn_challenges').insert({
       challenge: data.challenge,
       user_id: data.userId ?? null,
+      pending_registration_id: data.pendingRegistrationId ?? null,
       type: data.type,
       expires_at: data.expiresAt.toISOString(),
     }).select().single()

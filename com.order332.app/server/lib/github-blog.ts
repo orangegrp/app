@@ -2,6 +2,12 @@ import 'server-only'
 import { Octokit } from '@octokit/rest'
 import matter from 'gray-matter'
 
+// ── Validation constants ──────────────────────────────────────────────────────
+// These are the ONLY characters permitted in author/slug identifiers.
+// Validated on every code-path that touches the filesystem.
+const AUTHOR_RE = /^[a-z0-9]+$/
+const SLUG_RE = /^[a-z0-9-]+$/
+
 function parseFmDate(value: unknown): string {
   if (!value) return ''
   if (value instanceof Date) return value.toISOString().split('T')[0]
@@ -48,14 +54,46 @@ function getOctokit(): Octokit {
   return _octokit
 }
 
-export interface BlogFileMeta {
-  path: string // full repo-relative path, e.g. "/com.order332/src/content/blog/332/my-post.mdx"
-  sha: string
+/**
+ * Constructs the repo-relative file path from trusted, validated components.
+ * NEVER call GitHub API functions with a path that hasn't gone through here.
+ *
+ * Throws if author or slug fail validation, or if the resulting path escapes
+ * the configured base directory (defense-in-depth against env var injection).
+ */
+export function buildBlogFilePath(author: string, slug: string): string {
+  if (!AUTHOR_RE.test(author)) {
+    throw new Error('Invalid author: must be lowercase letters and numbers only')
+  }
+  if (!SLUG_RE.test(slug)) {
+    throw new Error('Invalid slug: must be lowercase letters, numbers and hyphens only')
+  }
+
+  const cfg = getConfig()
+  const base = cfg.basePath.replace(/\/+$/, '') // strip any trailing slash
+
+  // Construct from known-safe parts only
+  const filePath = `${base}/${author}/${slug}.mdx`
+
+  // Defense-in-depth: reject traversal sequences even if they somehow appeared
+  // in the config values themselves (e.g. misconfigured GITHUB_BLOG_PATH).
+  const normalised = filePath.replace(/\\/g, '/')
+  if (normalised.includes('..') || normalised.includes('//') || normalised.includes('\0')) {
+    throw new Error('Path validation failed: unsafe characters in constructed path')
+  }
+
+  // Final containment check: constructed path must start with the base directory.
+  if (!normalised.startsWith(base + '/')) {
+    throw new Error('Path validation failed: constructed path escapes base directory')
+  }
+
+  return filePath
 }
 
-export interface BlogPostListItem extends BlogFileMeta {
+export interface BlogPostListItem {
   author: string
   slug: string
+  sha: string
   title: string
   description: string
   date: string
@@ -65,7 +103,7 @@ export interface BlogPostListItem extends BlogFileMeta {
 
 /**
  * Lists all .mdx files under basePath using a single recursive tree walk.
- * Fetches each file's content in parallel to parse frontmatter.
+ * Only files whose author/slug segments pass validation are returned.
  */
 export async function listBlogPosts(): Promise<BlogPostListItem[]> {
   const cfg = getConfig()
@@ -91,33 +129,36 @@ export async function listBlogPosts(): Promise<BlogPostListItem[]> {
   const mdxFiles = (tree.tree ?? []).filter(
     (item) =>
       item.type === 'blob' &&
-      item.path?.startsWith(normalizedBase) &&
+      item.path?.startsWith(normalizedBase + '/') &&
       item.path.endsWith('.mdx'),
   )
 
   const posts = await Promise.all(
     mdxFiles.map(async (file) => {
-      const fullPath = '/' + file.path!
+      const pathParts = file.path!.split('/')
+      const rawSlug = pathParts[pathParts.length - 1].replace(/\.mdx$/, '')
+      const rawAuthor = pathParts[pathParts.length - 2] ?? ''
+
+      // Skip any file whose author/slug fail validation — these aren't our posts
+      if (!AUTHOR_RE.test(rawAuthor) || !SLUG_RE.test(rawSlug)) return null
+
       try {
-        const { content, sha } = await getBlogPost(fullPath)
+        // Use buildBlogFilePath to get the validated path — never use file.path directly
+        const filePath = buildBlogFilePath(rawAuthor, rawSlug)
+        const { content, sha } = await fetchBlogFile(filePath)
         const parsed = matter(content)
-        const pathParts = file.path!.split('/')
-        const slug = pathParts[pathParts.length - 1].replace(/\.mdx$/, '')
-        const author = pathParts[pathParts.length - 2] ?? 'unknown'
         const fm = parsed.data as Record<string, unknown>
         return {
-          path: fullPath,
+          author: rawAuthor,
+          slug: rawSlug,
           sha,
-          author,
-          slug,
-          title: (fm.title as string) ?? slug,
+          title: (fm.title as string) ?? rawSlug,
           description: (fm.description as string) ?? '',
           date: parseFmDate(fm.date),
           draft: Boolean(fm.draft ?? false),
           tags: Array.isArray(fm.tags) ? (fm.tags as string[]) : [],
         } satisfies BlogPostListItem
       } catch {
-        // Skip files that can't be fetched/parsed
         return null
       }
     }),
@@ -127,12 +168,12 @@ export async function listBlogPosts(): Promise<BlogPostListItem[]> {
 }
 
 /**
- * Fetches a single blog post's raw MDX content and its current blob SHA.
+ * Internal: fetches raw file content by a pre-validated repo-relative path.
+ * Not exported — callers must use getBlogPost(author, slug) instead.
  */
-export async function getBlogPost(filePath: string): Promise<{ content: string; sha: string }> {
+async function fetchBlogFile(filePath: string): Promise<{ content: string; sha: string }> {
   const cfg = getConfig()
   const octokit = getOctokit()
-
   const normalizedPath = filePath.replace(/^\//, '')
 
   const { data } = await octokit.repos.getContent({
@@ -143,29 +184,43 @@ export async function getBlogPost(filePath: string): Promise<{ content: string; 
   })
 
   if (Array.isArray(data) || data.type !== 'file') {
-    throw new Error(`Path ${filePath} is not a file`)
+    throw new Error(`Not a file: ${normalizedPath}`)
   }
 
-  const content = Buffer.from(data.content, 'base64').toString('utf-8')
-  return { content, sha: data.sha }
-}
-
-export interface UpsertBlogPostParams {
-  filePath: string
-  content: string
-  message: string
-  sha?: string // omit for create, required for update
+  return {
+    content: Buffer.from(data.content, 'base64').toString('utf-8'),
+    sha: data.sha,
+  }
 }
 
 /**
- * Creates or updates a blog post file. Returns the new blob SHA so callers
- * can track it for subsequent saves (avoids 409 lost-update conflicts).
+ * Fetches a blog post by author + slug. Validates both before constructing path.
+ */
+export async function getBlogPost(
+  author: string,
+  slug: string,
+): Promise<{ content: string; sha: string }> {
+  const filePath = buildBlogFilePath(author, slug)
+  return fetchBlogFile(filePath)
+}
+
+export interface UpsertBlogPostParams {
+  author: string
+  slug: string
+  content: string
+  message: string
+  sha?: string
+}
+
+/**
+ * Creates or updates a blog post. Validates author/slug before touching GitHub.
  */
 export async function upsertBlogPost(params: UpsertBlogPostParams): Promise<{ newSha: string }> {
   const cfg = getConfig()
   const octokit = getOctokit()
 
-  const normalizedPath = params.filePath.replace(/^\//, '')
+  const filePath = buildBlogFilePath(params.author, params.slug)
+  const normalizedPath = filePath.replace(/^\//, '')
   const encodedContent = Buffer.from(params.content, 'utf-8').toString('base64')
 
   const { data } = await octokit.repos.createOrUpdateFileContents({
@@ -179,27 +234,28 @@ export async function upsertBlogPost(params: UpsertBlogPostParams): Promise<{ ne
   })
 
   const newSha = data.content?.sha
-  if (!newSha) {
-    throw new Error('GitHub API did not return new blob SHA')
-  }
+  if (!newSha) throw new Error('GitHub API did not return new blob SHA')
 
   return { newSha }
 }
 
 export interface DeleteBlogPostParams {
-  filePath: string
+  author: string
+  slug: string
   sha: string
   message: string
 }
 
 /**
- * Hard-deletes a blog post file from GitHub. Only callable by superusers (enforced in route).
+ * Hard-deletes a blog post. Validates author/slug before touching GitHub.
+ * Superuser gate is enforced in the route handler.
  */
 export async function deleteBlogPost(params: DeleteBlogPostParams): Promise<void> {
   const cfg = getConfig()
   const octokit = getOctokit()
 
-  const normalizedPath = params.filePath.replace(/^\//, '')
+  const filePath = buildBlogFilePath(params.author, params.slug)
+  const normalizedPath = filePath.replace(/^\//, '')
 
   await octokit.repos.deleteFile({
     owner: cfg.owner,

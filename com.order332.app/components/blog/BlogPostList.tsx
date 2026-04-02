@@ -22,10 +22,6 @@ function formatDate(dateStr: string): string {
   }
 }
 
-function postToEditHref(path: string): string {
-  return '/blog/edit' + path
-}
-
 export function BlogPostList({ posts }: Props) {
   const sorted = [...posts].sort((a, b) => {
     if (!a.date && !b.date) return 0
@@ -47,8 +43,8 @@ export function BlogPostList({ posts }: Props) {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {sorted.map((post) => (
         <Link
-          key={post.path}
-          href={postToEditHref(post.path)}
+          key={`${post.author}/${post.slug}`}
+          href={`/blog/edit/${encodeURIComponent(post.author)}/${encodeURIComponent(post.slug)}`}
           className="glass-card group flex flex-col gap-3 rounded-2xl p-5 transition-all hover:bg-white/[0.07] hover:-translate-y-0.5"
         >
           {/* Title row */}

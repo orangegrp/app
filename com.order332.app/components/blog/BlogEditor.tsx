@@ -41,10 +41,11 @@ const DEFAULT_FRONTMATTER: FrontmatterData = {
 }
 
 interface Props {
-  repoPath: string // e.g. /com.order332/src/content/blog/332/my-post.mdx
+  author: string
+  slug: string
 }
 
-export function BlogEditor({ repoPath }: Props) {
+export function BlogEditor({ author, slug }: Props) {
   const router = useRouter()
   const { user } = useAuthStore()
   const isSuperuser = user ? isSuperuserPermissionsCsv(user.permissions) : false
@@ -75,7 +76,7 @@ export function BlogEditor({ repoPath }: Props) {
   // Load post from GitHub
   useEffect(() => {
     setLoading(true)
-    fetchBlogPost(repoPath)
+    fetchBlogPost(author, slug)
       .then(({ content, sha }) => {
         const parsed = matter(content)
         const fm = parsed.data as Partial<FrontmatterData>
@@ -92,7 +93,7 @@ export function BlogEditor({ repoPath }: Props) {
       })
       .catch((err: Error) => setLoadError(err.message))
       .finally(() => setLoading(false))
-  }, [repoPath])
+  }, [author, slug])
 
   const handleFrontmatterChange = useCallback((partial: Partial<FrontmatterData>) => {
     setFrontmatter((prev) => ({ ...prev, ...partial }))
@@ -120,7 +121,7 @@ export function BlogEditor({ repoPath }: Props) {
       overrideDraft !== undefined ? { ...frontmatter, draft: overrideDraft } : frontmatter
     const content = buildContent(fm)
     try {
-      const { sha } = await saveBlogPost(repoPath, content, blobSha)
+      const { sha } = await saveBlogPost(author, slug, content, blobSha)
       setBlobSha(sha)
       setFrontmatter(fm)
       setIsDirty(false)
@@ -143,7 +144,7 @@ export function BlogEditor({ repoPath }: Props) {
     if (!window.confirm('Permanently delete this post from GitHub? This cannot be undone.')) return
     setDeleting(true)
     try {
-      await deleteBlogPost(repoPath, blobSha)
+      await deleteBlogPost(author, slug, blobSha)
       toast.success('Post deleted')
       router.push('/blog')
     } catch (err) {
@@ -177,8 +178,7 @@ export function BlogEditor({ repoPath }: Props) {
     )
   }
 
-  const pathParts = repoPath.split('/')
-  const displaySlug = pathParts[pathParts.length - 1]?.replace(/\.mdx$/, '') ?? 'post'
+  const displaySlug = slug
 
   return (
     <div className="flex flex-col h-screen bg-background">

@@ -50,9 +50,8 @@ export default function NewBlogPostPage() {
     setError(null)
     try {
       const content = buildInitialContent(author, slug)
-      const { path } = await createBlogPost(author, slug, content)
-      // path: /com.order332/src/content/blog/332/my-post.mdx
-      router.push('/blog/edit' + path)
+      const result = await createBlogPost(author, slug, content)
+      router.push(`/blog/edit/${encodeURIComponent(result.author)}/${encodeURIComponent(result.slug)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create post')
       setCreating(false)

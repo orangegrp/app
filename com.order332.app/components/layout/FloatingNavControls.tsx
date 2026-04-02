@@ -66,8 +66,8 @@ export function FloatingNavControls({ sidebarWidth }: { sidebarWidth: number }) 
 
   return (
     <div
-      className="hidden sm:block fixed top-0 z-[90] -translate-x-1/2"
-      style={{ left }}
+      className="hidden sm:block fixed z-[90] -translate-x-1/2"
+      style={{ left, top: 'var(--instatus-banner-height, 0px)' }}
     >
       {/* Invisible hover capture zone */}
       <div

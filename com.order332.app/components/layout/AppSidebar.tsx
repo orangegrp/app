@@ -78,8 +78,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
   return (
     <aside
+      style={{ top: 'var(--instatus-banner-height, 0px)' }}
       className={[
-        'hidden sm:flex fixed inset-y-0 left-0 z-50 flex-col border-r border-white/5',
+        'hidden sm:flex fixed bottom-0 left-0 z-50 flex-col border-r border-white/5',
         'bg-[oklch(0.08_0_0_/_80%)] backdrop-blur-xl transition-[width] duration-200 ease-in-out',
         collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
       ].join(' ')}

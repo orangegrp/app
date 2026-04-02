@@ -1839,3 +1839,15 @@
 .tiptap-editor pre code { background: transparent; padding: 0; }
 .tiptap-editor img { max-width: 100%; border-radius: 6px; margin: 0.5rem 0; }
 .tiptap-editor hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
+
+/* ── Syntax highlighting (highlight.js / lowlight tokens) — Dracula-ish dark theme ── */
+/* Applied to both .tiptap-editor pre and .blog-preview pre via global hljs classes     */
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-strong { color: #ff79c6; }
+.hljs-string, .hljs-meta .hljs-meta-string, .hljs-doctag, .hljs-regexp, .hljs-number { color: #f1fa8c; }
+.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class, .hljs-title.class_, .hljs-title.function_ { color: #50fa7b; }
+.hljs-attribute, .hljs-attr, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-params { color: #8be9fd; }
+.hljs-symbol, .hljs-bullet, .hljs-meta, .hljs-meta .hljs-keyword, .hljs-selector-attr, .hljs-link, .hljs-tag { color: #ffb86c; }
+.hljs-built_in, .hljs-deletion { color: #ff5555; }
+.hljs-comment, .hljs-quote { color: #6272a4; font-style: italic; }
+.hljs-emphasis { font-style: italic; }
+.hljs-addition { color: #50fa7b; }

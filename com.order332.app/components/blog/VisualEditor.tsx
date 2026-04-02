@@ -1,12 +1,18 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
+import type { NodeViewProps } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import { createLowlight, common } from 'lowlight'
 import { Markdown } from 'tiptap-markdown'
+import { toast } from 'sonner'
 import {
   Bold,
   Italic,
@@ -25,6 +31,88 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
+const lowlight = createLowlight(common)
+
+// ── Ensures there's always a paragraph after the last code block so the
+//    cursor can escape to a new line by pressing ↓ or clicking below.
+const TrailingNode = Extension.create({
+  name: 'trailingNode',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('trailingNode'),
+        appendTransaction: (transactions, _, newState) => {
+          if (!transactions.some((tr) => tr.docChanged)) return null
+          const { doc, tr, schema } = newState
+          const lastNode = doc.lastChild
+          if (!lastNode || lastNode.type.name !== 'codeBlock') return null
+          return tr.insert(doc.content.size, schema.nodes.paragraph!.create())
+        },
+      }),
+    ]
+  },
+})
+
+// ── Resizable image NodeView ───────────────────────────────────────────────
+function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = imgRef.current?.offsetWidth ?? (node.attrs.width as number | null) ?? 400
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(40, Math.round(startWidth + ev.clientX - startX))
+      updateAttributes({ width: newWidth })
+    }
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  return (
+    <NodeViewWrapper className="relative inline-block" style={{ maxWidth: '100%' }}>
+      <img
+        ref={imgRef}
+        src={node.attrs.src as string}
+        alt={(node.attrs.alt as string) ?? ''}
+        width={(node.attrs.width as number | null) ?? undefined}
+        style={{ display: 'block', maxWidth: '100%', borderRadius: '6px', margin: '0.5rem 0' }}
+        className={selected ? 'ring-2 ring-blue-400/60' : ''}
+      />
+      {selected && (
+        <div
+          onMouseDown={startResize}
+          className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm border border-blue-300/60 bg-blue-500/80"
+          title="Drag to resize"
+        />
+      )}
+    </NodeViewWrapper>
+  )
+}
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('width'),
+        renderHTML: (attrs) => (attrs.width ? { width: attrs.width } : {}),
+      },
+    }
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView)
+  },
+})
+
+// ── Component ──────────────────────────────────────────────────────────────
 interface Props {
   value: string
   onChange: (md: string) => void
@@ -45,9 +133,11 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: { languageClassPrefix: 'language-' } }),
+      StarterKit.configure({ codeBlock: false }),
+      CodeBlockLowlight.configure({ lowlight }),
+      TrailingNode,
       Markdown.configure({ transformPastedText: true, transformCopiedText: true }),
-      Image,
+      ResizableImage,
       Link.configure({ openOnClick: false, HTMLAttributes: { class: 'underline' } }),
       Placeholder.configure({ placeholder: 'Start writing your post...' }),
     ],
@@ -60,13 +150,10 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
       }
     },
     editorProps: {
-      attributes: {
-        class: 'tiptap-editor focus:outline-none h-full',
-      },
+      attributes: { class: 'tiptap-editor focus:outline-none h-full' },
     },
   })
 
-  // Sync external value changes into TipTap
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     if (value !== prevValueRef.current) {
@@ -82,8 +169,8 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
     try {
       const url = await onImageUploadRef.current(file)
       editor.chain().focus().setImage({ src: url, alt: file.name }).run()
-    } catch {
-      // Upload failed silently; user can retry
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Image upload failed')
     }
   }
 
@@ -223,17 +310,10 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
 
         <span className="mx-1 h-4 w-px bg-white/10" />
 
-        <ToolbarButton
-          onClick={setLink}
-          active={editor?.isActive('link')}
-          title="Link"
-        >
+        <ToolbarButton onClick={setLink} active={editor?.isActive('link')} title="Link">
           <LinkIcon size={14} />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => fileInputRef.current?.click()}
-          title="Upload image"
-        >
+        <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Upload image">
           <ImageIcon size={14} />
         </ToolbarButton>
         <input

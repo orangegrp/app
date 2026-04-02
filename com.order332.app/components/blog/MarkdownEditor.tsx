@@ -7,6 +7,7 @@ import { markdown } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { Image as ImageIcon } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface Props {
   value: string
@@ -42,12 +43,13 @@ export function MarkdownEditor({ value, onChange, onImageUpload }: Props) {
           changes: { from: idx, to: idx + placeholder.length, insert: `![image](${url})` },
         })
       }
-    } catch {
+    } catch (err) {
       const doc = view.state.doc.toString()
       const idx = doc.indexOf(placeholder)
       if (idx >= 0) {
         view.dispatch({ changes: { from: idx, to: idx + placeholder.length, insert: '' } })
       }
+      toast.error(err instanceof Error ? err.message : 'Image upload failed')
     }
   }, [])
 

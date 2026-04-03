@@ -8,7 +8,7 @@ import { consumePostLoginRedirect } from "@/lib/qr-login-redirect"
 import { isPWAContext } from "@/lib/pwa"
 import { MagicLinkForm } from "./MagicLinkForm"
 import { QRLoginPanel } from "./QRLoginPanel"
-import posthog from "posthog-js"
+import { capture, captureException, identify } from "@/lib/analytics"
 import { Spinner } from "@/components/ui/spinner"
 
 const isDev =
@@ -143,11 +143,11 @@ export function LoginCard() {
     // Switching away from QR unmounts QRLoginPanel, which cleans up via useEffect return
     setPasskeyError(null)
     setActiveTab(tab)
-    posthog.capture("login_method_selected", { method: tab })
+    capture("login_method_selected", { method: tab })
   }
 
   const handleDiscordLogin = () => {
-    posthog.capture("discord_login_initiated", { is_pwa: isPWAContext() })
+    capture("discord_login_initiated", { is_pwa: isPWAContext() })
     hardNavigateTo(`/api/auth/discord?isPwa=${isPWAContext()}`)
   }
 
@@ -205,14 +205,14 @@ export function LoginCard() {
         permissions: p.permissions,
         isPwa: p.isPwa,
       })
-      posthog.identify(p.sub, { is_pwa: p.isPwa })
-      posthog.capture("login_completed", { method: "passkey", is_pwa: p.isPwa })
+      identify(p.sub, { is_pwa: p.isPwa })
+      capture("login_completed", { method: "passkey", is_pwa: p.isPwa })
       router.push(consumePostLoginRedirect())
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") {
         setPasskeyError("Passkey login was cancelled.")
       } else if (err instanceof Error && err.message) {
-        posthog.captureException(err, { method: "passkey" })
+        captureException(err, { method: "passkey" })
         setFatalError(err.message)
       } else {
         setFatalError("Something went wrong. Please try again.")

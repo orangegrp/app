@@ -23,7 +23,7 @@ import "@xterm/xterm/css/xterm.css"
 import { isBenignCheerpXWasmPlaceholderRejection } from "@/lib/cheerpx-error-filters"
 import { webpcDiskPublicPath, type MachineId } from "@/lib/webpc-disks"
 import { Spinner } from "../ui/spinner"
-import posthog from "posthog-js"
+import { capture } from "@/lib/analytics"
 
 export type { MachineId }
 
@@ -708,7 +708,7 @@ export function VMRunner({
             : "Starting shell..."
         )
         setVMState("ready")
-        posthog.capture("vm_session_started", { machine })
+        capture("vm_session_started", { machine })
         await cx.run(spec.cmd, spec.args, spec.opts)
       } catch (err) {
         if (cancelled) return
@@ -717,7 +717,7 @@ export function VMRunner({
         setErrorMsg(msg)
         setVMState("error")
         setStatusText(`Error: ${msg}`)
-        posthog.capture("vm_boot_failed", {
+        capture("vm_boot_failed", {
           machine,
           boot_stage: bootStage,
           error: msg,

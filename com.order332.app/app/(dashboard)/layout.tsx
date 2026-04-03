@@ -13,6 +13,7 @@ import { WelcomeWizardDialog } from '@/components/onboarding/WelcomeWizardDialog
 import { DashboardPageTransition } from '@/components/layout/DashboardPageTransition'
 import { Spinner } from '@/components/ui/spinner'
 import { PageBackground } from '@/components/layout/PageBackground'
+import { ProductImprovementAnalyticsNotice } from '@/components/consent/ProductImprovementAnalyticsNotice'
 
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
   const store = useAuthStore()
@@ -70,6 +71,7 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen">
+      <ProductImprovementAnalyticsNotice />
       <UpdatePrompt />
       {user?.welcomeWizardCompleted === false ? <WelcomeWizardDialog /> : null}
       <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} />

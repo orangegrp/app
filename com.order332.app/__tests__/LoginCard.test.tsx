@@ -28,6 +28,12 @@ vi.mock('@/lib/hard-navigation', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
+vi.mock('@/lib/analytics', () => ({
+  capture: vi.fn(),
+  captureException: vi.fn(),
+  identify: vi.fn(),
+}))
+
 describe('LoginCard', () => {
   beforeEach(() => {
     mockHardNavigateTo.mockClear()

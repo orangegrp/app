@@ -6,7 +6,7 @@ import {
   getSuppressInstallPromptSync,
   useSettingsStore,
 } from "@/lib/settings-store"
-import posthog from "posthog-js"
+import { capture } from "@/lib/analytics"
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -89,7 +89,7 @@ export function InstallPrompt() {
       const { outcome } = await installEvent.userChoice
       if (outcome === "accepted") {
         setInstallEvent(null)
-        posthog.capture("pwa_install_accepted", { platform: mode })
+        capture("pwa_install_accepted", { platform: mode })
       }
     }
     commitSuppressIfChecked()

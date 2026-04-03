@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import posthog from "posthog-js"
+import { capture } from "@/lib/analytics"
 import {
   Dialog,
   DialogContent,
@@ -204,7 +204,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
       }>("/me/welcome-wizard/complete", {})
       mergeAuthUser({ welcomeWizardCompleted: data.welcomeWizardCompleted })
       clearStepStorage()
-      posthog.capture("welcome_wizard_completed")
+      capture("welcome_wizard_completed")
       await fetchAndMergeUserProfile(accessToken)
     } catch (e) {
       setFinishError(e instanceof Error ? e.message : "Something went wrong")

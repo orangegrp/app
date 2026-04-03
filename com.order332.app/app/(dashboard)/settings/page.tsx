@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import posthog from "posthog-js"
+import {
+  applyProductImprovementConsent,
+  capture,
+  reset,
+} from "@/lib/analytics"
+import { isProductImprovementConsentAllowedSync } from "@/lib/product-improvement-consent"
 import { Key, Trash2, ArrowLeft } from "lucide-react"
 import { PageBackground } from "@/components/layout/PageBackground"
 import { Spinner } from "@/components/ui/spinner"
@@ -106,6 +111,8 @@ export default function SettingsPage() {
   const [displayNameDraft, setDisplayNameDraft] = useState("")
   const [displayNameSaving, setDisplayNameSaving] = useState(false)
   const [displayNameError, setDisplayNameError] = useState<string | null>(null)
+  const [productImprovementAllowed, setProductImprovementAllowed] =
+    useState(true)
 
   const loadMe = useCallback(async () => {
     try {
@@ -148,6 +155,10 @@ export default function SettingsPage() {
   }, [loadMe])
 
   useEffect(() => {
+    setProductImprovementAllowed(isProductImprovementConsentAllowedSync())
+  }, [])
+
+  useEffect(() => {
     const d = searchParams.get("discord")
     if (!d) return
     const map: Record<string, string> = {
@@ -175,7 +186,7 @@ export default function SettingsPage() {
       useAuthStore
         .getState()
         .mergeAuthUser({ displayName: next.displayName ?? null })
-      posthog.capture("settings_display_name_saved", {
+      capture("settings_display_name_saved", {
         has_display_name: next.displayName !== null,
       })
     } catch (e) {
@@ -270,7 +281,7 @@ export default function SettingsPage() {
       const credentialName = newPkName.trim() || undefined
       await apiPost("/auth/add/finish", { credential, credentialName })
       setNewPkName("")
-      posthog.capture("settings_passkey_added")
+      capture("settings_passkey_added")
       await loadPasskeys()
     } catch (e) {
       setPkError(e instanceof Error ? e.message : "Could not add passkey")
@@ -307,8 +318,8 @@ export default function SettingsPage() {
         accountId: user.id,
         confirmation: "delete my account",
       })
-      posthog.capture("settings_account_deleted")
-      posthog.reset()
+      capture("settings_account_deleted")
+      reset()
       clearAuth()
       setDeleteDialogOpen(false)
       resetDeleteDialog()
@@ -408,6 +419,38 @@ export default function SettingsPage() {
               Last known: <span className="font-mono">{knownAppVersion}</span>
             </p>
           )}
+        </div>
+
+        {/* Product improvement analytics (PostHog) */}
+        <div
+          id="product-improvement-analytics"
+          className="glass-card mb-6 scroll-mt-24 rounded-2xl p-6"
+        >
+          <p className="card-label mb-4">Privacy</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm tracking-wider text-foreground">
+                Help us improve the app
+              </p>
+              <p className="mt-1 text-xs tracking-wider text-muted-foreground">
+                When this is on, we receive basic usage info and automatic crash
+                reports so we can fix bugs and spot problems. Turn it off anytime.
+              </p>
+            </div>
+            <Switch
+              checked={productImprovementAllowed}
+              onCheckedChange={(checked) => {
+                setProductImprovementAllowed(checked)
+                applyProductImprovementConsent(checked)
+              }}
+              className="mt-1 shrink-0 data-[state=checked]:bg-foreground/30"
+              aria-label="Send usage and crash data to help improve the app"
+            />
+          </div>
+          <p className="mt-4 text-[11px] leading-relaxed tracking-wider text-muted-foreground/90">
+            No personal data is collected. All information is anonymised and
+            stored securely in the EU.
+          </p>
         </div>
 
         {/* Discord */}

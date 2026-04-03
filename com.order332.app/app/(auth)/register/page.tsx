@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { hardNavigateTo } from "@/lib/hard-navigation"
 import { isPWAContext } from "@/lib/pwa"
-import posthog from "posthog-js"
+import { capture, identify } from "@/lib/analytics"
 import { useAuthStore } from "@/lib/auth-store"
 import { consumePostLoginRedirect } from "@/lib/qr-login-redirect"
 import { Spinner } from "@/components/ui/spinner"
@@ -82,7 +82,7 @@ export default function RegisterPage() {
         registrationToken: string
       }
       setRegistrationToken(token)
-      posthog.capture("registration_invite_claimed")
+      capture("registration_invite_claimed")
       setStep("choose")
     } catch {
       setErrorMsg("Something went wrong. Please try again.")
@@ -165,8 +165,8 @@ export default function RegisterPage() {
         permissions: payload.permissions,
         isPwa: payload.isPwa,
       })
-      posthog.identify(payload.sub, { is_pwa: payload.isPwa })
-      posthog.capture("registration_completed", {
+      identify(payload.sub, { is_pwa: payload.isPwa })
+      capture("registration_completed", {
         method: "passkey",
         is_pwa: payload.isPwa,
       })

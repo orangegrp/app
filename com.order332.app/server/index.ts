@@ -1,4 +1,5 @@
 import 'server-only'
+import { checkBotId } from 'botid/server'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '@/server/db'
@@ -26,6 +27,18 @@ import type { HonoEnv } from '@/server/lib/types'
 
 export const app = new Hono<HonoEnv>().basePath('/api')
 
+/** Routes that cannot send BotID headers (OAuth redirects, server-to-server, cron, probes). */
+function isBotIdAllowlisted(method: string, pathname: string): boolean {
+  const m = method.toUpperCase()
+  if (m === 'GET' && pathname === '/api/health') return true
+  if (m === 'GET' && pathname === '/api/version') return true
+  if (m === 'GET' && pathname === '/api/auth/discord') return true
+  if (m === 'GET' && pathname === '/api/auth/discord/callback') return true
+  if (m === 'POST' && pathname === '/api/auth/magic/generate') return true
+  if (m === 'GET' && pathname === '/api/cron/cleanup') return true
+  return false
+}
+
 // Schema validation on cold start (non-blocking)
 let schemaValidated = false
 app.use('*', async (_c, next) => {
@@ -34,6 +47,23 @@ app.use('*', async (_c, next) => {
     db.validateAndMigrateSchema().catch((err: unknown) => {
       console.error('[DB] Schema validation failed:', err)
     })
+  }
+  return next()
+})
+
+app.use('*', async (c, next) => {
+  let pathname: string
+  try {
+    pathname = new URL(c.req.url).pathname
+  } catch {
+    pathname = ''
+  }
+  if (isBotIdAllowlisted(c.req.method, pathname)) {
+    return next()
+  }
+  const verification = await checkBotId()
+  if (verification.isBot) {
+    return c.json({ error: 'Forbidden' }, 403)
   }
   return next()
 })

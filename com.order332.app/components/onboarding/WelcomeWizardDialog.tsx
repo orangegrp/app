@@ -1,7 +1,8 @@
-'use client'
+"use client"
 
-import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import posthog from "posthog-js"
 import {
   Dialog,
   DialogContent,
@@ -9,31 +10,41 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
-import { DISPLAY_NAME_MAX_LENGTH, normalizeDisplayName } from '@/lib/display-name'
-import { apiPatch, apiPost } from '@/lib/api-client'
-import { useAuthStore } from '@/lib/auth-store'
-import { fetchAndMergeUserProfile } from '@/lib/fetch-user-profile'
-import { hardNavigateTo } from '@/lib/hard-navigation'
-import { isPWAContext } from '@/lib/pwa'
-import { cn } from '@/lib/utils'
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
+import {
+  DISPLAY_NAME_MAX_LENGTH,
+  normalizeDisplayName,
+} from "@/lib/display-name"
+import { apiPatch, apiPost } from "@/lib/api-client"
+import { useAuthStore } from "@/lib/auth-store"
+import { fetchAndMergeUserProfile } from "@/lib/fetch-user-profile"
+import { hardNavigateTo } from "@/lib/hard-navigation"
+import { isPWAContext } from "@/lib/pwa"
+import { cn } from "@/lib/utils"
 
-const STEP_STORAGE_KEY = '332-welcome-wizard-step'
+const STEP_STORAGE_KEY = "332-welcome-wizard-step"
 
 const SLIDE_COUNT = 4
 
 const DISCORD_OAUTH_ERROR_MESSAGES: Record<string, string> = {
-  taken: 'That Discord account is already linked to another user.',
-  already_linked: 'This account already has a different Discord linked — disconnect it first.',
-  error: 'Could not connect Discord.',
-  denied: 'Discord connection was cancelled.',
+  taken: "That Discord account is already linked to another user.",
+  already_linked:
+    "This account already has a different Discord linked — disconnect it first.",
+  error: "Could not connect Discord.",
+  denied: "Discord connection was cancelled.",
 }
 
 function DiscordGlyph() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
       <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
     </svg>
   )
@@ -46,7 +57,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
   const mergeAuthUser = useAuthStore((s) => s.mergeAuthUser)
 
   const [step, setStep] = useState(0)
-  const [displayNameDraft, setDisplayNameDraft] = useState('')
+  const [displayNameDraft, setDisplayNameDraft] = useState("")
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [finishLoading, setFinishLoading] = useState(false)
@@ -58,35 +69,35 @@ export function WelcomeWizardDialog(): React.ReactNode {
   const passkeyCount = user?.passkeyCount ?? 0
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
-    const discord = params.get('discord')
+    const discord = params.get("discord")
     const token = useAuthStore.getState().accessToken
 
-    if (discord === 'linked') {
+    if (discord === "linked") {
       setStep(3)
-      sessionStorage.setItem(STEP_STORAGE_KEY, '3')
+      sessionStorage.setItem(STEP_STORAGE_KEY, "3")
       setDiscordBusy(false)
       setProfileError(null)
       if (token) void fetchAndMergeUserProfile(token)
-      router.replace('/home', { scroll: false })
+      router.replace("/home", { scroll: false })
       return
     }
 
     if (
       discord &&
-      (discord === 'taken' ||
-        discord === 'already_linked' ||
-        discord === 'error' ||
-        discord === 'denied')
+      (discord === "taken" ||
+        discord === "already_linked" ||
+        discord === "error" ||
+        discord === "denied")
     ) {
       setStep(2)
-      sessionStorage.setItem(STEP_STORAGE_KEY, '2')
+      sessionStorage.setItem(STEP_STORAGE_KEY, "2")
       setProfileError(
-        DISCORD_OAUTH_ERROR_MESSAGES[discord] ?? 'Could not connect Discord.',
+        DISCORD_OAUTH_ERROR_MESSAGES[discord] ?? "Could not connect Discord."
       )
       setDiscordBusy(false)
-      router.replace('/home', { scroll: false })
+      router.replace("/home", { scroll: false })
       return
     }
 
@@ -100,7 +111,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
   }, [router])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === "undefined") return
     sessionStorage.setItem(STEP_STORAGE_KEY, String(step))
   }, [step])
 
@@ -109,7 +120,8 @@ export function WelcomeWizardDialog(): React.ReactNode {
   }, [user?.displayName])
 
   const clearStepStorage = useCallback(() => {
-    if (typeof window !== 'undefined') sessionStorage.removeItem(STEP_STORAGE_KEY)
+    if (typeof window !== "undefined")
+      sessionStorage.removeItem(STEP_STORAGE_KEY)
   }, [])
 
   const handleNextFromWelcome = (): void => {
@@ -122,11 +134,13 @@ export function WelcomeWizardDialog(): React.ReactNode {
     setProfileError(null)
     const normalized = normalizeDisplayName(displayNameDraft)
     try {
-      await apiPatch('/me/profile', { displayName: normalized })
+      await apiPatch("/me/profile", { displayName: normalized })
       await fetchAndMergeUserProfile(accessToken)
       setStep(2)
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : 'Could not save display name')
+      setProfileError(
+        e instanceof Error ? e.message : "Could not save display name"
+      )
     } finally {
       setProfileSaving(false)
     }
@@ -134,22 +148,30 @@ export function WelcomeWizardDialog(): React.ReactNode {
 
   const handleAddPasskey = async (): Promise<void> => {
     if (!accessToken) return
-    if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-      setProfileError('Passkeys are not supported in this browser.')
+    if (typeof window === "undefined" || !window.PublicKeyCredential) {
+      setProfileError("Passkeys are not supported in this browser.")
       return
     }
     setPasskeyBusy(true)
     setProfileError(null)
     try {
-      const { options } = await apiPost<{ options: unknown }>('/auth/add/start', {})
-      const { startRegistration } = await import('@simplewebauthn/browser')
+      const { options } = await apiPost<{ options: unknown }>(
+        "/auth/add/start",
+        {}
+      )
+      const { startRegistration } = await import("@simplewebauthn/browser")
       const credential = await startRegistration({
-        optionsJSON: options as Parameters<typeof startRegistration>[0]['optionsJSON'],
+        optionsJSON: options as Parameters<
+          typeof startRegistration
+        >[0]["optionsJSON"],
       })
-      await apiPost('/auth/add/finish', { credential, credentialName: 'This device' })
+      await apiPost("/auth/add/finish", {
+        credential,
+        credentialName: "This device",
+      })
       await fetchAndMergeUserProfile(accessToken)
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : 'Could not add passkey')
+      setProfileError(e instanceof Error ? e.message : "Could not add passkey")
     } finally {
       setPasskeyBusy(false)
     }
@@ -158,13 +180,16 @@ export function WelcomeWizardDialog(): React.ReactNode {
   const handleConnectDiscord = async (): Promise<void> => {
     setDiscordBusy(true)
     try {
-      const { url } = await apiPost<{ url: string }>('/auth/discord/link-start', {
-        isPwa: isPWAContext(),
-        returnTo: 'home',
-      })
+      const { url } = await apiPost<{ url: string }>(
+        "/auth/discord/link-start",
+        {
+          isPwa: isPWAContext(),
+          returnTo: "home",
+        }
+      )
       hardNavigateTo(url)
     } catch {
-      setProfileError('Could not start Discord connection.')
+      setProfileError("Could not start Discord connection.")
       setDiscordBusy(false)
     }
   }
@@ -176,12 +201,13 @@ export function WelcomeWizardDialog(): React.ReactNode {
     try {
       const data = await apiPost<{
         welcomeWizardCompleted: boolean
-      }>('/me/welcome-wizard/complete', {})
+      }>("/me/welcome-wizard/complete", {})
       mergeAuthUser({ welcomeWizardCompleted: data.welcomeWizardCompleted })
       clearStepStorage()
+      posthog.capture("welcome_wizard_completed")
       await fetchAndMergeUserProfile(accessToken)
     } catch (e) {
-      setFinishError(e instanceof Error ? e.message : 'Something went wrong')
+      setFinishError(e instanceof Error ? e.message : "Something went wrong")
     } finally {
       setFinishLoading(false)
     }
@@ -190,26 +216,33 @@ export function WelcomeWizardDialog(): React.ReactNode {
   if (!user || user.welcomeWizardCompleted !== false) return null
 
   return (
-    <Dialog open onOpenChange={() => { /* non-dismissible until completed */ }}>
+    <Dialog
+      open
+      onOpenChange={() => {
+        /* non-dismissible until completed */
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         className={cn(
-          'glass-card max-h-[90vh] overflow-y-auto border-white/10 sm:max-w-lg',
-          'p-6 sm:p-8',
+          "glass-card max-h-[90vh] overflow-y-auto border-white/10 sm:max-w-lg",
+          "p-6 sm:p-8"
         )}
       >
-        <div className="flex justify-center gap-2 mb-2" aria-hidden="true">
+        <div className="mb-2 flex justify-center gap-2" aria-hidden="true">
           {Array.from({ length: SLIDE_COUNT }, (_, i) => (
             <span
               key={i}
               className={cn(
-                'h-1.5 rounded-full transition-all',
-                i === step ? 'w-6 bg-foreground/80' : 'w-1.5 bg-muted-foreground/35',
+                "h-1.5 rounded-full transition-all",
+                i === step
+                  ? "w-6 bg-foreground/80"
+                  : "w-1.5 bg-muted-foreground/35"
               )}
             />
           ))}
         </div>
-        <p className="text-center text-[11px] tracking-widest text-muted-foreground uppercase mb-4">
+        <p className="mb-4 text-center text-[11px] tracking-widest text-muted-foreground uppercase">
           {step + 1} / {SLIDE_COUNT}
         </p>
 
@@ -219,22 +252,22 @@ export function WelcomeWizardDialog(): React.ReactNode {
               <DialogTitle className="text-xl tracking-widest text-foreground">
                 Welcome to the 332 app<span className="blink-cursor">_</span>
               </DialogTitle>
-              <DialogDescription className="text-sm tracking-wider text-muted-foreground pt-2 space-y-3">
+              <DialogDescription className="space-y-3 pt-2 text-sm tracking-wider text-muted-foreground">
                 <span className="block">
-                  This is your hub for the latest dev work from the 332 community — apps, labs, and tools in one
-                  installable home.
+                  This is your hub for the latest dev work from the 332
+                  community — apps, labs, and tools in one installable home.
                 </span>
                 <span className="block">
                   {signedInWithDiscord
-                    ? 'Take a minute to set up how you appear. You can optionally add a passkey on this device.'
-                    : 'Take a minute to set up how you appear and optionally link Discord.'}
+                    ? "Take a minute to set up how you appear. You can optionally add a passkey on this device."
+                    : "Take a minute to set up how you appear and optionally link Discord."}
                 </span>
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:justify-end mt-4">
+            <DialogFooter className="mt-4 gap-2 sm:justify-end">
               <Button
                 type="button"
-                className="glass-button glass-button-default rounded-xl tracking-widest min-h-[44px]"
+                className="glass-button glass-button-default min-h-[44px] rounded-xl tracking-widest"
                 onClick={handleNextFromWelcome}
               >
                 Next
@@ -246,13 +279,19 @@ export function WelcomeWizardDialog(): React.ReactNode {
         {step === 1 && (
           <>
             <DialogHeader>
-              <DialogTitle className="text-xl tracking-widest text-foreground">Display name</DialogTitle>
-              <DialogDescription className="text-sm tracking-wider text-muted-foreground pt-1">
-                Choose a nickname shown across the app (you can change it later in Settings).
+              <DialogTitle className="text-xl tracking-widest text-foreground">
+                Display name
+              </DialogTitle>
+              <DialogDescription className="pt-1 text-sm tracking-wider text-muted-foreground">
+                Choose a nickname shown across the app (you can change it later
+                in Settings).
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2 py-2">
-              <label className="text-xs tracking-wider text-muted-foreground" htmlFor="wizard-display-name">
+              <label
+                className="text-xs tracking-wider text-muted-foreground"
+                htmlFor="wizard-display-name"
+              >
                 Nickname
               </label>
               <input
@@ -262,34 +301,37 @@ export function WelcomeWizardDialog(): React.ReactNode {
                 value={displayNameDraft}
                 onChange={(e) => setDisplayNameDraft(e.target.value)}
                 placeholder="e.g. alexei bogodanov"
-                className="glass-card rounded-xl px-4 py-3 text-sm tracking-wider text-foreground placeholder:text-muted-foreground/40 bg-transparent border-0 outline-none focus:ring-1 focus:ring-white/10 min-h-[44px]"
+                className="glass-card min-h-[44px] rounded-xl border-0 bg-transparent px-4 py-3 text-sm tracking-wider text-foreground outline-none placeholder:text-muted-foreground/40 focus:ring-1 focus:ring-white/10"
                 autoComplete="nickname"
               />
-              <p className="text-[11px] text-muted-foreground tracking-wider">
+              <p className="text-[11px] tracking-wider text-muted-foreground">
                 Optional — max {DISPLAY_NAME_MAX_LENGTH} characters.
               </p>
               {profileError && (
-                <p className="text-xs tracking-wider" style={{ color: 'oklch(0.7 0.19 22)' }}>
+                <p
+                  className="text-xs tracking-wider"
+                  style={{ color: "oklch(0.7 0.19 22)" }}
+                >
                   {profileError}
                 </p>
               )}
             </div>
-            <DialogFooter className="gap-2 sm:justify-between mt-2">
+            <DialogFooter className="mt-2 gap-2 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
-                className="glass-button glass-button-secondary rounded-xl tracking-widest min-h-[44px]"
+                className="glass-button glass-button-secondary min-h-[44px] rounded-xl tracking-widest"
                 onClick={() => setStep(0)}
               >
                 Back
               </Button>
               <Button
                 type="button"
-                className="glass-button glass-button-default rounded-xl tracking-widest min-h-[44px] min-w-[120px]"
+                className="glass-button glass-button-default min-h-[44px] min-w-[120px] rounded-xl tracking-widest"
                 disabled={profileSaving}
                 onClick={() => void handleNextFromDisplayName()}
               >
-                {profileSaving ? <Spinner size="xs" /> : 'Next'}
+                {profileSaving ? <Spinner size="xs" /> : "Next"}
               </Button>
             </DialogFooter>
           </>
@@ -299,21 +341,23 @@ export function WelcomeWizardDialog(): React.ReactNode {
           <>
             <DialogHeader>
               <DialogTitle className="text-xl tracking-widest text-foreground">
-                {signedInWithDiscord ? 'Add a passkey' : 'Connect Discord'}
+                {signedInWithDiscord ? "Add a passkey" : "Connect Discord"}
               </DialogTitle>
-              <DialogDescription className="text-sm tracking-wider text-muted-foreground pt-1">
+              <DialogDescription className="pt-1 text-sm tracking-wider text-muted-foreground">
                 {signedInWithDiscord
-                  ? 'You signed in with Discord. You can add a passkey on this device for quick sign-in and as a backup if Discord is unavailable — or skip and add one later in Settings.'
-                  : 'Link Discord for quick sign-in and to use your avatar in the app.'}
+                  ? "You signed in with Discord. You can add a passkey on this device for quick sign-in and as a backup if Discord is unavailable — or skip and add one later in Settings."
+                  : "Link Discord for quick sign-in and to use your avatar in the app."}
               </DialogDescription>
             </DialogHeader>
-            <div className="py-3 space-y-4">
+            <div className="space-y-4 py-3">
               {signedInWithDiscord ? (
                 <>
                   {passkeyCount > 0 ? (
                     <div className="rounded-xl border border-white/10 px-4 py-3">
-                      <p className="text-sm tracking-wider text-foreground">Passkey added on this account</p>
-                      <p className="text-xs text-muted-foreground tracking-wider mt-1">
+                      <p className="text-sm tracking-wider text-foreground">
+                        Passkey added on this account
+                      </p>
+                      <p className="mt-1 text-xs tracking-wider text-muted-foreground">
                         You can add more passkeys anytime in Settings.
                       </p>
                     </div>
@@ -323,12 +367,17 @@ export function WelcomeWizardDialog(): React.ReactNode {
                         type="button"
                         disabled={passkeyBusy}
                         onClick={() => void handleAddPasskey()}
-                        className="glass-button glass-button-glass w-full rounded-xl px-4 py-3 text-sm tracking-widest min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="glass-button glass-button-glass flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm tracking-widest disabled:opacity-50"
                       >
-                        {passkeyBusy ? <Spinner size="xs" /> : <span>Add passkey on this device</span>}
+                        {passkeyBusy ? (
+                          <Spinner size="xs" />
+                        ) : (
+                          <span>Add passkey on this device</span>
+                        )}
                       </button>
-                      <p className="text-[11px] text-muted-foreground tracking-wider text-center">
-                        Optional — continue without one if you prefer to sign in with Discord only.
+                      <p className="text-center text-[11px] tracking-wider text-muted-foreground">
+                        Optional — continue without one if you prefer to sign in
+                        with Discord only.
                       </p>
                     </div>
                   )}
@@ -338,7 +387,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
                   type="button"
                   disabled={discordBusy}
                   onClick={() => void handleConnectDiscord()}
-                  className="glass-button glass-button-glass w-full rounded-xl px-4 py-3 text-sm tracking-widest min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="glass-button glass-button-glass flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm tracking-widest disabled:opacity-50"
                 >
                   {discordBusy ? (
                     <Spinner size="xs" />
@@ -351,23 +400,26 @@ export function WelcomeWizardDialog(): React.ReactNode {
                 </button>
               )}
               {profileError && (
-                <p className="text-xs tracking-wider" style={{ color: 'oklch(0.7 0.19 22)' }}>
+                <p
+                  className="text-xs tracking-wider"
+                  style={{ color: "oklch(0.7 0.19 22)" }}
+                >
                   {profileError}
                 </p>
               )}
             </div>
-            <DialogFooter className="gap-2 sm:justify-between mt-2">
+            <DialogFooter className="mt-2 gap-2 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
-                className="glass-button glass-button-secondary rounded-xl tracking-widest min-h-[44px]"
+                className="glass-button glass-button-secondary min-h-[44px] rounded-xl tracking-widest"
                 onClick={() => setStep(1)}
               >
                 Back
               </Button>
               <Button
                 type="button"
-                className="glass-button glass-button-default rounded-xl tracking-widest min-h-[44px]"
+                className="glass-button glass-button-default min-h-[44px] rounded-xl tracking-widest"
                 onClick={() => setStep(3)}
               >
                 Next
@@ -379,36 +431,44 @@ export function WelcomeWizardDialog(): React.ReactNode {
         {step === 3 && (
           <>
             <DialogHeader>
-              <DialogTitle className="text-xl tracking-widest text-foreground">Explore 332</DialogTitle>
-              <DialogDescription className="text-sm tracking-wider text-muted-foreground pt-2 space-y-3">
+              <DialogTitle className="text-xl tracking-widest text-foreground">
+                Explore 332
+              </DialogTitle>
+              <DialogDescription className="space-y-3 pt-2 text-sm tracking-wider text-muted-foreground">
                 <span className="block">
-                  Browse the sidebar for apps and content. Some areas are gated: you may need to request access from
-                  an app admin before you can use them.
+                  Browse the sidebar for apps and content. Some areas are gated:
+                  you may need to request access from an app admin before you
+                  can use them.
                 </span>
-                <span className="block">When you are ready, continue to the home screen.</span>
+                <span className="block">
+                  When you are ready, continue to the home screen.
+                </span>
               </DialogDescription>
             </DialogHeader>
             {finishError && (
-              <p className="text-xs tracking-wider" style={{ color: 'oklch(0.7 0.19 22)' }}>
+              <p
+                className="text-xs tracking-wider"
+                style={{ color: "oklch(0.7 0.19 22)" }}
+              >
                 {finishError}
               </p>
             )}
-            <DialogFooter className="gap-2 sm:justify-between mt-4">
+            <DialogFooter className="mt-4 gap-2 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
-                className="glass-button glass-button-secondary rounded-xl tracking-widest min-h-[44px]"
+                className="glass-button glass-button-secondary min-h-[44px] rounded-xl tracking-widest"
                 onClick={() => setStep(2)}
               >
                 Back
               </Button>
               <Button
                 type="button"
-                className="glass-button glass-button-default rounded-xl tracking-widest min-h-[44px] min-w-[140px]"
+                className="glass-button glass-button-default min-h-[44px] min-w-[140px] rounded-xl tracking-widest"
                 disabled={finishLoading}
                 onClick={() => void handleFinish()}
               >
-                {finishLoading ? <Spinner size="xs" /> : 'Get started'}
+                {finishLoading ? <Spinner size="xs" /> : "Get started"}
               </Button>
             </DialogFooter>
           </>

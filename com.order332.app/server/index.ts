@@ -27,6 +27,10 @@ import type { HonoEnv } from '@/server/lib/types'
 
 export const app = new Hono<HonoEnv>().basePath('/api')
 
+function isBotIdDisabled(): boolean {
+  return process.env.DISABLE_BOT_ID === 'true'
+}
+
 /** Routes that cannot send BotID headers (OAuth redirects, server-to-server, cron, probes). */
 function isBotIdAllowlisted(method: string, pathname: string): boolean {
   const m = method.toUpperCase()
@@ -59,6 +63,9 @@ app.use('*', async (c, next) => {
     pathname = ''
   }
   if (isBotIdAllowlisted(c.req.method, pathname)) {
+    return next()
+  }
+  if (isBotIdDisabled()) {
     return next()
   }
   const verification = await checkBotId()

@@ -1,6 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+  type ReactNode,
+} from 'react'
+import type { Editor } from '@tiptap/core'
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -121,7 +130,10 @@ const ResizableImage = Image.extend({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: any) {
+        serialize(
+          state: { write: (s: string) => void },
+          node: { attrs: Record<string, unknown> },
+        ) {
           const src = (node.attrs.src as string) ?? ''
           const alt = ((node.attrs.alt as string) ?? '').replace(/"/g, '&quot;')
           if (node.attrs.width) {
@@ -149,14 +161,66 @@ interface Props {
   onImageUpload: (file: File) => Promise<string>
 }
 
+export interface VisualEditorHandle {
+  toggleBold: () => void
+  toggleItalic: () => void
+  toggleStrike: () => void
+  toggleCode: () => void
+  toggleHeading1: () => void
+  toggleHeading2: () => void
+  toggleHeading3: () => void
+  toggleBulletList: () => void
+  toggleOrderedList: () => void
+  toggleBlockquote: () => void
+  toggleCodeBlock: () => void
+  setHorizontalRule: () => void
+  openLinkDialog: () => void
+  openImagePicker: () => void
+  openTableDialog: () => void
+}
+
 const hasJsxComponents = (md: string) => /<[A-Z]/.test(md)
 
-export function VisualEditor({ value, onChange, onImageUpload }: Props) {
+function ToolbarButton({
+  onClick,
+  active,
+  title,
+  children,
+}: {
+  onClick: () => void
+  active?: boolean
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => {
+        e.preventDefault()
+        onClick()
+      }}
+      title={title}
+      className={`rounded p-1.5 transition-colors ${
+        active
+          ? 'bg-white/20 text-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function VisualEditor(
+  { value, onChange, onImageUpload },
+  ref,
+) {
   const onChangeRef = useRef(onChange)
   const onImageUploadRef = useRef(onImageUpload)
   const isExternalUpdateRef = useRef(false)
   const prevValueRef = useRef(value)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<Editor | null>(null)
 
   // Link dialog
   const [linkOpen, setLinkOpen] = useState(false)
@@ -169,8 +233,10 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
   const [tableRows, setTableRows] = useState(3)
   const [tableCols, setTableCols] = useState(3)
 
-  onChangeRef.current = onChange
-  onImageUploadRef.current = onImageUpload
+  useEffect(() => {
+    onChangeRef.current = onChange
+    onImageUploadRef.current = onImageUpload
+  }, [onChange, onImageUpload])
 
   const editor = useEditor({
     extensions: [
@@ -200,6 +266,10 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
   })
 
   useEffect(() => {
+    editorRef.current = editor ?? null
+  }, [editor])
+
+  useEffect(() => {
     if (!editor || editor.isDestroyed) return
     if (value !== prevValueRef.current) {
       isExternalUpdateRef.current = true
@@ -210,39 +280,39 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
   }, [editor, value])
 
   const handleImageUpload = async (file: File) => {
-    if (!editor) return
+    const ed = editorRef.current
+    if (!ed) return
     try {
       const url = await onImageUploadRef.current(file)
-      editor.chain().focus().setImage({ src: url, alt: file.name }).run()
+      ed.chain().focus().setImage({ src: url, alt: file.name }).run()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Image upload failed')
     }
   }
 
-  const openLinkDialog = () => {
-    if (!editor) return
-    const { from, to } = editor.state.selection
+  const openLinkDialog = useCallback(() => {
+    const ed = editorRef.current
+    if (!ed) return
+    const { from, to } = ed.state.selection
     const sel = from !== to
-    const selectedText = sel ? editor.state.doc.textBetween(from, to, ' ') : ''
-    const currentHref = editor.getAttributes('link').href as string | undefined
+    const selectedText = sel ? ed.state.doc.textBetween(from, to, ' ') : ''
+    const currentHref = ed.getAttributes('link').href as string | undefined
     setLinkHasSelection(sel)
     setLinkText(sel ? selectedText : '')
     setLinkUrl(currentHref ?? 'https://')
     setLinkOpen(true)
-  }
+  }, [])
 
   const confirmLink = () => {
-    if (!editor) return
+    const ed = editorRef.current
+    if (!ed) return
     if (!linkUrl || linkUrl === 'https://') {
-      // Remove link
-      editor.chain().focus().extendMarkRange('link').unsetLink().run()
+      ed.chain().focus().extendMarkRange('link').unsetLink().run()
     } else if (linkHasSelection) {
-      // Wrap selection with link
-      editor.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run()
+      ed.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run()
     } else {
-      // Insert new linked text at caret
       const text = linkText.trim() || linkUrl
-      editor
+      ed
         .chain()
         .focus()
         .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href: linkUrl } }] })
@@ -251,15 +321,16 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
     setLinkOpen(false)
   }
 
-  const openTableDialog = () => {
+  const openTableDialog = useCallback(() => {
     setTableRows(3)
     setTableCols(3)
     setTableOpen(true)
-  }
+  }, [])
 
   const confirmTable = () => {
-    if (!editor) return
-    editor
+    const ed = editorRef.current
+    if (!ed) return
+    ed
       .chain()
       .focus()
       .insertTable({ rows: tableRows, cols: tableCols, withHeaderRow: true })
@@ -267,32 +338,26 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
     setTableOpen(false)
   }
 
-  const ToolbarButton = ({
-    onClick,
-    active,
-    title,
-    children,
-  }: {
-    onClick: () => void
-    active?: boolean
-    title: string
-    children: React.ReactNode
-  }) => (
-    <button
-      type="button"
-      onMouseDown={(e) => {
-        e.preventDefault()
-        onClick()
-      }}
-      title={title}
-      className={`rounded p-1.5 transition-colors ${
-        active
-          ? 'bg-white/20 text-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
-      }`}
-    >
-      {children}
-    </button>
+  useImperativeHandle(
+    ref,
+    () => ({
+      toggleBold: () => editorRef.current?.chain().focus().toggleBold().run(),
+      toggleItalic: () => editorRef.current?.chain().focus().toggleItalic().run(),
+      toggleStrike: () => editorRef.current?.chain().focus().toggleStrike().run(),
+      toggleCode: () => editorRef.current?.chain().focus().toggleCode().run(),
+      toggleHeading1: () => editorRef.current?.chain().focus().toggleHeading({ level: 1 }).run(),
+      toggleHeading2: () => editorRef.current?.chain().focus().toggleHeading({ level: 2 }).run(),
+      toggleHeading3: () => editorRef.current?.chain().focus().toggleHeading({ level: 3 }).run(),
+      toggleBulletList: () => editorRef.current?.chain().focus().toggleBulletList().run(),
+      toggleOrderedList: () => editorRef.current?.chain().focus().toggleOrderedList().run(),
+      toggleBlockquote: () => editorRef.current?.chain().focus().toggleBlockquote().run(),
+      toggleCodeBlock: () => editorRef.current?.chain().focus().toggleCodeBlock().run(),
+      setHorizontalRule: () => editorRef.current?.chain().focus().setHorizontalRule().run(),
+      openLinkDialog,
+      openImagePicker: () => fileInputRef.current?.click(),
+      openTableDialog,
+    }),
+    [openLinkDialog, openTableDialog],
   )
 
   return (
@@ -447,7 +512,8 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
             </div>
             {linkHasSelection ? (
               <p className="text-xs text-muted-foreground">
-                Linking selected text: <span className="text-foreground font-medium">"{linkText}"</span>
+                Linking selected text:{' '}
+                <span className="text-foreground font-medium">{`"${linkText}"`}</span>
               </p>
             ) : (
               <div className="flex flex-col gap-1.5">
@@ -539,4 +605,4 @@ export function VisualEditor({ value, onChange, onImageUpload }: Props) {
       </Dialog>
     </div>
   )
-}
+})

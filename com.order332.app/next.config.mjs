@@ -55,6 +55,7 @@ const withPWAConfig = withPWA({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
+    DISABLE_BOT_ID: process.env.DISABLE_BOT_ID ?? "",
     NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_DEPLOYMENT_ID
       ? (() => {
           // Cheap CRC32 implementation for short string input
@@ -139,4 +140,7 @@ const nextConfig = {
   },
 }
 
-export default withBotId(withPWAConfig(nextConfig))
+const nextConfigWithPwa = withPWAConfig(nextConfig)
+export default process.env.DISABLE_BOT_ID === "true"
+  ? nextConfigWithPwa
+  : withBotId(nextConfigWithPwa)

@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import matter from 'gray-matter'
 import { toast } from 'sonner'
-import { ArrowLeft, Eye, EyeOff, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  MoreVertical,
+  PenLine,
+  Save,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react'
 import Link from 'next/link'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { Spinner } from '@/components/ui/spinner'
@@ -28,6 +37,26 @@ import {
   uploadBlogImage,
   parseFrontmatterDate,
 } from '@/lib/blog-api'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import {
+  CommandDialog,
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+} from '@/components/ui/command'
+import type { MarkdownEditorHandle } from '@/components/blog/MarkdownEditor'
+import type { VisualEditorHandle } from '@/components/blog/VisualEditor'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 // Dynamic imports to avoid SSR issues with CodeMirror / TipTap
 const MarkdownEditor = dynamic(
@@ -70,6 +99,14 @@ export function BlogEditor({ author, slug }: Props) {
   const [isDirty, setIsDirty] = useState(false)
   const [mobileTab, setMobileTab] = useState<'attributes' | 'edit' | 'preview'>('edit')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+  const [isMac] = useState(
+    () => typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/.test(navigator.platform),
+  )
+
+  const markdownEditorRef = useRef<MarkdownEditorHandle>(null)
+  const visualEditorRef = useRef<VisualEditorHandle>(null)
 
   // Warn on unsaved changes
   useEffect(() => {
@@ -104,6 +141,28 @@ export function BlogEditor({ author, slug }: Props) {
       .catch((err: Error) => setLoadError(err.message))
       .finally(() => setLoading(false))
   }, [author, slug])
+
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 640px)')
+    const sync = () => setIsDesktop(mql.matches)
+    sync()
+    mql.addEventListener('change', sync)
+    return () => mql.removeEventListener('change', sync)
+  }, [])
+
+  // ⌘P / Ctrl+P → toggle command palette (override browser print)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+      if (e.key.toLowerCase() !== 'p') return
+      e.preventDefault()
+      e.stopPropagation()
+      setPaletteOpen((v) => !v)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [])
 
   const handleFrontmatterChange = useCallback((partial: Partial<FrontmatterData>) => {
     setFrontmatter((prev) => ({ ...prev, ...partial }))
@@ -168,6 +227,8 @@ export function BlogEditor({ author, slug }: Props) {
     return url
   }, [])
 
+  const closePalette = useCallback(() => setPaletteOpen(false), [])
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -189,10 +250,105 @@ export function BlogEditor({ author, slug }: Props) {
 
   const displaySlug = slug
 
+  const canUseVisualFormatting = isDesktop && editorMode === 'visual'
+  const canUseRawImage =
+    (isDesktop && editorMode === 'raw') || (!isDesktop && mobileTab === 'edit')
+  const canUseVisualImage = canUseVisualFormatting
+
+  const runVisual = (fn: (api: VisualEditorHandle) => void) => {
+    if (!canUseVisualFormatting) return
+    const api = visualEditorRef.current
+    if (!api) return
+    fn(api)
+  }
+
+  const mobileTabs: { id: 'attributes' | 'edit' | 'preview'; label: string; icon: typeof SlidersHorizontal }[] = [
+    { id: 'attributes', label: 'Attributes', icon: SlidersHorizontal },
+    { id: 'edit', label: 'Edit', icon: PenLine },
+    { id: 'preview', label: 'Preview', icon: Eye },
+  ]
+
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
-      <header className="flex items-center gap-3 border-b border-white/10 px-4 py-2.5 shrink-0">
+      {/* Header — mobile */}
+      <header className="flex sm:hidden items-center gap-2 border-b border-white/10 px-3 py-3 shrink-0">
+        <Link
+          href="/blog"
+          className="flex shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground min-h-11 min-w-11"
+          aria-label="Back to posts"
+        >
+          <ArrowLeft size={18} strokeWidth={1.5} />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium tracking-wide text-foreground">
+            {frontmatter.title || displaySlug}
+          </p>
+          {isDirty ? (
+            <p className="text-[10px] tracking-wider text-muted-foreground">Unsaved changes</p>
+          ) : (
+            <p className="text-[10px] tracking-wider text-muted-foreground/70">Blog post</p>
+          )}
+        </div>
+        {frontmatter.draft ? (
+          <button
+            type="button"
+            onClick={() => void handleSave(false)}
+            disabled={saving}
+            className="shrink-0 rounded-lg bg-white/90 px-3 py-2.5 text-xs font-medium tracking-wide text-black transition-colors hover:bg-white disabled:opacity-50 min-h-11"
+          >
+            {saving ? 'Saving…' : 'Publish'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white/90 px-3 py-2.5 text-xs font-medium tracking-wide text-black transition-colors hover:bg-white disabled:opacity-50 min-h-11"
+          >
+            {saving ? (
+              <Spinner size="sm" className="text-black" />
+            ) : (
+              <Save size={16} strokeWidth={1.75} className="shrink-0" aria-hidden />
+            )}
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            type="button"
+            className="flex shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground min-h-11 min-w-11 outline-none"
+            aria-label="More actions"
+          >
+            <MoreVertical size={18} strokeWidth={1.5} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[12rem]">
+            <DropdownMenuItem onClick={() => setPaletteOpen(true)}>Commands…</DropdownMenuItem>
+            {!frontmatter.draft && (
+              <DropdownMenuItem
+                onClick={() => void handleSave(true)}
+                disabled={saving}
+              >
+                {saving ? 'Saving…' : 'Unpublish'}
+              </DropdownMenuItem>
+            )}
+            {isSuperuser && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={deleting}
+                >
+                  Delete post…
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      {/* Header — desktop */}
+      <header className="hidden sm:flex items-center gap-3 border-b border-white/10 px-4 py-2.5 shrink-0">
         <Link
           href="/blog"
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground tracking-wide transition-colors"
@@ -239,6 +395,24 @@ export function BlogEditor({ author, slug }: Props) {
           Preview
         </button>
 
+        {/* Command palette */}
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="hidden sm:flex items-center shrink-0 gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground tracking-wide transition-colors"
+          title="Open command palette"
+        >
+          <span className="inline-flex items-center gap-2">
+            Commands
+            <span className="inline-flex items-center gap-1 opacity-40 pointer-events-none">
+              <KbdGroup>
+                <Kbd className="text-[10px] h-4 px-1">{isMac ? '⌘' : 'Ctrl'}</Kbd>
+                <Kbd className="text-[10px] h-4 px-1">P</Kbd>
+              </KbdGroup>
+            </span>
+          </span>
+        </button>
+
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           {frontmatter.draft ? (
@@ -264,8 +438,13 @@ export function BlogEditor({ author, slug }: Props) {
                 type="button"
                 onClick={() => handleSave()}
                 disabled={saving}
-                className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium tracking-wide text-black hover:bg-white disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium tracking-wide text-black hover:bg-white disabled:opacity-50 transition-colors"
               >
+                {saving ? (
+                  <Spinner size="sm" className="text-black" />
+                ) : (
+                  <Save size={14} strokeWidth={1.75} className="shrink-0" aria-hidden />
+                )}
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </>
@@ -314,32 +493,40 @@ export function BlogEditor({ author, slug }: Props) {
       </AlertDialog>
 
       {/* Body */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Mobile tab bar */}
-        <div className="sm:hidden flex shrink-0 border-b border-white/10">
-          {(['attributes', 'edit', 'preview'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setMobileTab(tab)}
-              className={`flex-1 py-2 text-xs tracking-wide capitalize transition-colors ${
-                mobileTab === tab
-                  ? 'border-b-2 border-white/60 text-foreground'
-                  : 'text-muted-foreground'
-              }`}
-            >
-              {tab === 'attributes' ? 'Attributes' : tab === 'edit' ? 'Edit' : 'Preview'}
-            </button>
-          ))}
-        </div>
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        {/* Mobile: section tabs — top only (dashboard already has bottom nav) */}
+        <nav
+          className="sm:hidden shrink-0 border-b border-white/10 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80"
+          aria-label="Editor section"
+        >
+          <div className="flex items-stretch justify-around px-1 py-2">
+            {mobileTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMobileTab(id)}
+                className={[
+                  'flex min-h-11 min-w-0 flex-1 flex-row items-center justify-center gap-1.5 px-1.5 py-2 transition-colors rounded-lg',
+                  mobileTab === id
+                    ? 'bg-white/10 text-foreground'
+                    : 'text-muted-foreground active:bg-white/5',
+                ].join(' ')}
+              >
+                <Icon size={22} strokeWidth={1.5} className="shrink-0" />
+                <span className="min-w-0 truncate text-[11px] font-medium tracking-widest">{label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
 
-        {/* Mobile: single active panel */}
-        <div className="sm:hidden flex-1 overflow-hidden">
+        {/* Mobile: active panel — bottom padding clears dashboard MobileTabBar only */}
+        <div className="sm:hidden flex-1 min-h-0 overflow-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
           {mobileTab === 'attributes' && (
             <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} />
           )}
           {mobileTab === 'edit' && (
             <MarkdownEditor
+              ref={markdownEditorRef}
               value={bodyMarkdown}
               onChange={handleBodyChange}
               onImageUpload={handleImageUpload}
@@ -363,12 +550,14 @@ export function BlogEditor({ author, slug }: Props) {
               <div className="flex h-full flex-col">
                 {editorMode === 'raw' ? (
                   <MarkdownEditor
+                    ref={markdownEditorRef}
                     value={bodyMarkdown}
                     onChange={handleBodyChange}
                     onImageUpload={handleImageUpload}
                   />
                 ) : (
                   <VisualEditor
+                    ref={visualEditorRef}
                     value={bodyMarkdown}
                     onChange={handleBodyChange}
                     onImageUpload={handleImageUpload}
@@ -388,6 +577,320 @@ export function BlogEditor({ author, slug }: Props) {
           </PanelGroup>
         </div>
       </div>
+
+      <CommandDialog
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        title="Blog editor command palette"
+        description="Search and run editor commands"
+      >
+        <Command>
+          <CommandInput placeholder="Search commands..." />
+          <CommandList>
+            <CommandEmpty>No commands found.</CommandEmpty>
+
+            <CommandGroup heading="Post">
+              <CommandItem
+                onSelect={() => {
+                  closePalette()
+                  router.push('/blog')
+                }}
+              >
+                <span>Back to posts</span>
+              </CommandItem>
+            </CommandGroup>
+
+            {isDesktop && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Editor mode">
+                  <CommandItem
+                    onSelect={() => {
+                      setEditorMode('raw')
+                      closePalette()
+                    }}
+                  >
+                    <span>Switch to Raw editor</span>
+                  </CommandItem>
+                  <CommandItem
+                    onSelect={() => {
+                      setEditorMode('visual')
+                      closePalette()
+                    }}
+                  >
+                    <span>Switch to Visual editor</span>
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+
+            {isDesktop && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="View">
+                  <CommandItem
+                    onSelect={() => {
+                      setShowPreview((v) => !v)
+                      closePalette()
+                    }}
+                  >
+                    <span>{showPreview ? 'Hide preview panel' : 'Show preview panel'}</span>
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+
+            {!isDesktop && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="View">
+                  <CommandItem
+                    onSelect={() => {
+                      setMobileTab('attributes')
+                      closePalette()
+                    }}
+                  >
+                    <span>Go to Attributes</span>
+                  </CommandItem>
+                  <CommandItem
+                    onSelect={() => {
+                      setMobileTab('edit')
+                      closePalette()
+                    }}
+                  >
+                    <span>Go to Edit</span>
+                  </CommandItem>
+                  <CommandItem
+                    onSelect={() => {
+                      setMobileTab('preview')
+                      closePalette()
+                    }}
+                  >
+                    <span>Go to Preview</span>
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+
+            <CommandSeparator />
+            <CommandGroup heading="Frontmatter">
+              <CommandItem
+                onSelect={() => {
+                  handleFrontmatterChange({ draft: !frontmatter.draft })
+                  closePalette()
+                }}
+              >
+                <span>{frontmatter.draft ? 'Mark as published (draft off)' : 'Mark as draft'}</span>
+              </CommandItem>
+            </CommandGroup>
+
+            <CommandSeparator />
+            <CommandGroup heading="Publish">
+              {frontmatter.draft ? (
+                <CommandItem
+                  disabled={saving}
+                  onSelect={() => {
+                    closePalette()
+                    void handleSave(false)
+                  }}
+                >
+                  <span>Publish</span>
+                </CommandItem>
+              ) : (
+                <>
+                  <CommandItem
+                    disabled={saving}
+                    onSelect={() => {
+                      closePalette()
+                      void handleSave(true)
+                    }}
+                  >
+                    <span>Unpublish (save as draft)</span>
+                  </CommandItem>
+                  <CommandItem
+                    disabled={saving}
+                    onSelect={() => {
+                      closePalette()
+                      void handleSave()
+                    }}
+                  >
+                    <span>Save</span>
+                  </CommandItem>
+                </>
+              )}
+            </CommandGroup>
+
+            {isSuperuser && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Danger">
+                  <CommandItem
+                    disabled={deleting}
+                    onSelect={() => {
+                      setDeleteConfirmOpen(true)
+                      closePalette()
+                    }}
+                  >
+                    <span>Delete post…</span>
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+
+            <CommandSeparator />
+            <CommandGroup heading="Insert">
+              <CommandItem
+                disabled={!canUseRawImage}
+                onSelect={() => {
+                  markdownEditorRef.current?.openImagePicker()
+                  closePalette()
+                }}
+              >
+                <span>Insert image (raw editor)</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualImage}
+                onSelect={() => {
+                  visualEditorRef.current?.openImagePicker()
+                  closePalette()
+                }}
+              >
+                <span>Insert image (visual editor)</span>
+              </CommandItem>
+            </CommandGroup>
+
+            <CommandSeparator />
+            <CommandGroup heading="Format (visual)">
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleBold())
+                }}
+              >
+                <span>Bold</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleItalic())
+                }}
+              >
+                <span>Italic</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleStrike())
+                }}
+              >
+                <span>Strikethrough</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleCode())
+                }}
+              >
+                <span>Inline code</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleHeading1())
+                }}
+              >
+                <span>Heading 1</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleHeading2())
+                }}
+              >
+                <span>Heading 2</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleHeading3())
+                }}
+              >
+                <span>Heading 3</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleBulletList())
+                }}
+              >
+                <span>Bullet list</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleOrderedList())
+                }}
+              >
+                <span>Ordered list</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleBlockquote())
+                }}
+              >
+                <span>Blockquote</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.toggleCodeBlock())
+                }}
+              >
+                <span>Code block</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.setHorizontalRule())
+                }}
+              >
+                <span>Horizontal rule</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.openLinkDialog())
+                }}
+              >
+                <span>Link…</span>
+              </CommandItem>
+              <CommandItem
+                disabled={!canUseVisualFormatting}
+                onSelect={() => {
+                  closePalette()
+                  runVisual((api) => api.openTableDialog())
+                }}
+              >
+                <span>Table…</span>
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </CommandDialog>
     </div>
   )
 }

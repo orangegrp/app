@@ -1,0 +1,48 @@
+# Copy to terraform.tfvars (gitignored) and fill in values.
+# Authenticate with: VERCEL_API_TOKEN, CLOUDFLARE_API_TOKEN, SUPABASE_ACCESS_TOKEN
+
+create_supabase_project   = false
+supabase_project_ref      = "your-project-ref"
+supabase_organization_id  = "" # required only when create_supabase_project = true
+
+create_vercel_project         = true
+vercel_existing_project_id    = ""
+vercel_project_name           = "order332-app"
+vercel_team_id                = ""
+vercel_root_directory         = "com.order332.app"
+vercel_git_repository = {
+  type = "github"
+  repo = "orangegrp/app"
+}
+
+manage_vercel_environment = true
+vercel_env_targets        = ["production", "preview"]
+database_url              = "postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres"
+
+create_r2_bucket      = true
+cloudflare_account_id = "your-32-char-cloudflare-account-id"
+r2_bucket_name        = "order332-webpc-disks"
+r2_access_key_id      = "" # R2 → Manage R2 API Tokens (S3 credentials)
+r2_secret_access_key  = ""
+
+# Blog CMS → Vercel env (repo + Astro site must already exist). All four or none.
+github_blog_cms = {
+  token  = "" # e.g. fine-grained PAT with Contents read+write on the website repo
+  repo   = "" # e.g. orangegrp/website
+  branch = "main"
+  path   = "" # e.g. /com.order332/src/content/blog — see com.order332.app/.env.local.example
+}
+
+app_secrets = {
+  jwt_secret             = "min-32-chars-hex-or-random"
+  jwt_refresh_secret     = "different-from-jwt_secret"
+  discord_link_secret    = "different-secret"
+  qr_encryption_key      = "exactly-64-hex-chars-32-bytes-for-aes-256"
+  discord_client_id      = ""
+  discord_client_secret  = ""
+  discord_redirect_uri   = "https://your-domain.com/api/auth/discord/callback"
+  bot_secret             = ""
+  cron_secret            = "min-16-chars-for-vercel-cron-bearer"
+  next_public_app_url    = "https://your-domain.com"
+  next_public_app_version = null # or set a string to set NEXT_PUBLIC_APP_VERSION on Vercel
+}

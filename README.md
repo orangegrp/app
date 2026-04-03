@@ -38,7 +38,7 @@ pnpm build
 pnpm start
 ```
 
-Set the same environment variables on your host (e.g. Vercel project settings → Environment Variables). There is no `vercel.json` in this repo; use the **Next.js** framework preset. If the Git repository root is above the Next app, set the Vercel **Root Directory** to `app`.
+Set the same environment variables on your host (e.g. Vercel project settings → Environment Variables). [`com.order332.app/vercel.json`](com.order332.app/vercel.json) defines a **Cron Job** that GETs `/api/cron/cleanup` on a schedule (UTC) to run the database cleanup routine; set **`CRON_SECRET`** in Production so Vercel can authenticate those requests. Cron invocations only run against the **production** deployment. Use the **Next.js** framework preset. If the Git repository root is above the Next app, set the Vercel **Root Directory** to `app`.
 
 ### Environment variables
 
@@ -48,6 +48,7 @@ Copy [`app/.env.local.example`](app/.env.local.example) and fill every value you
 | --- | --- |
 | **URLs** | `NEXT_PUBLIC_APP_URL` must be the exact browser origin (scheme, host, port, no trailing slash unless your app expects it). Used for WebAuthn: the passkey **RP ID** is derived from this URL’s **hostname** (`app/server/lib/passkey.ts`). |
 | **JWT / crypto** | `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DISCORD_LINK_SECRET` — each must be at least 32 characters. In production, JWT secrets are validated when the server loads (`app/server/lib/jwt.ts`). `BOT_SECRET` protects bot-only endpoints (e.g. magic link generation). `QR_ENCRYPTION_KEY` must be exactly **64 hex characters** (32 bytes) for QR login. |
+| **Vercel Cron** | `CRON_SECRET` (at least 16 characters) — secures `GET /api/cron/cleanup` invoked by [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs). Required in production for the scheduled database cleanup; optional locally if you call that route manually with the same header. |
 | **Supabase** | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `DATABASE_URL` (PostgreSQL URI for schema/migrations). See `app/server/db/`. |
 | **Discord OAuth** | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI` — the redirect URI must match the URL configured in the [Discord Developer Portal](https://discord.com/developers/applications) (typically `{NEXT_PUBLIC_APP_URL}/api/auth/discord/callback`). |
 | **Client** | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_APP_VERSION` (optional). |

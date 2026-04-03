@@ -21,6 +21,7 @@ import { webpcDiskUrlRoutes } from '@/server/routes/webpc/disk-url'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
 import { PERMISSIONS } from '@/lib/permissions'
+import { safeCompare } from '@/server/lib/crypto'
 import type { HonoEnv } from '@/server/lib/types'
 
 export const app = new Hono<HonoEnv>().basePath('/api')
@@ -282,6 +283,23 @@ app.route('/blog/posts', blogPostRoutes)
 
 // POST /blog/images          — upload image to Supabase Storage (requires app.blog)
 app.route('/blog/images', blogImageRoutes)
+
+// GET /cron/cleanup — Vercel Cron (Authorization: Bearer CRON_SECRET); runs db cleanup on a schedule
+app.get('/cron/cleanup', async (c) => {
+  const secret = process.env.CRON_SECRET
+  if (process.env.NODE_ENV === 'production' && !secret) {
+    return c.json({ error: 'misconfigured' }, 500)
+  }
+  if (!secret) {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+  const authHeader = c.req.header('Authorization')
+  if (!authHeader?.startsWith('Bearer ') || !safeCompare(authHeader.slice(7), secret)) {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+  await db.cleanupExpiredRecords()
+  return c.json({ ok: true })
+})
 
 app.post('/auth/cleanup', requireAuth, requirePermission(PERMISSIONS.ADMIN_SYSTEM_CLEANUP), async (c) => {
   await db.cleanupExpiredRecords()

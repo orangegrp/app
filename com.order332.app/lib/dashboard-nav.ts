@@ -37,7 +37,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   {
     href: '/content',
     icon: Library,
-    label: 'Content Hub',
+    label: 'Library',
     soon: true,
     hardNav: false,
     desc: 'Media and assets',

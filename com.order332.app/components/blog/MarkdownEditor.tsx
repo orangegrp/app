@@ -122,7 +122,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
               '.cm-gutter': { background: '#000 !important' },
               '.cm-activeLineGutter': { background: 'rgba(255,255,255,0.04) !important' },
               '.cm-activeLine': { background: 'rgba(255,255,255,0.03) !important' },
-            }),
+              // WebKit: base theme uses `background` shorthand on &dark .cm-selectionBackground; use
+              // !important + box-shadow (outline is unreliable on absolute selection rects in Safari).
+              '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground':
+                {
+                  background: '#b8c0ce !important',
+                  backgroundColor: '#b8c0ce !important',
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.92) !important',
+                },
+              '.cm-content ::selection': {
+                background: '#b8c0ce !important',
+                backgroundColor: '#b8c0ce !important',
+              },
+            },
+            { dark: true },
+            ),
           ],
         }),
         parent: containerRef.current,

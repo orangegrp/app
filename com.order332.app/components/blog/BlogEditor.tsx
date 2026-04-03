@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import matter from 'gray-matter'
@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   MoreVertical,
+  NotebookPen,
   PenLine,
   Save,
   SlidersHorizontal,
@@ -29,7 +30,8 @@ import {
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
 import { useAuthStore } from '@/lib/auth-store'
-import { isSuperuserPermissionsCsv } from '@/lib/permissions'
+import { isSuperuserPermissionsCsv, PERMISSIONS } from '@/lib/permissions'
+import { usePermission } from '@/hooks/usePermission'
 import {
   fetchBlogPost,
   saveBlogPost,
@@ -50,6 +52,12 @@ import {
 } from '@/components/ui/command'
 import type { MarkdownEditorHandle } from '@/components/blog/MarkdownEditor'
 import type { VisualEditorHandle } from '@/components/blog/VisualEditor'
+import {
+  BlogAiAssistLayer,
+  type BlogAiEditorHandle,
+  type BlogSelectionFormatActions,
+} from '@/components/blog/BlogAiAssistLayer'
+import { BlogQuickDraftDialog } from '@/components/blog/BlogQuickDraftDialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,6 +94,7 @@ export function BlogEditor({ author, slug }: Props) {
   const router = useRouter()
   const { user } = useAuthStore()
   const isSuperuser = user ? isSuperuserPermissionsCsv(user.permissions) : false
+  const canBlogAi = usePermission(PERMISSIONS.APP_BLOG_AI)
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -100,6 +109,7 @@ export function BlogEditor({ author, slug }: Props) {
   const [mobileTab, setMobileTab] = useState<'attributes' | 'edit' | 'preview'>('edit')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [quickDraftOpen, setQuickDraftOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
   const [isMac] = useState(
     () => typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/.test(navigator.platform),
@@ -107,6 +117,9 @@ export function BlogEditor({ author, slug }: Props) {
 
   const markdownEditorRef = useRef<MarkdownEditorHandle>(null)
   const visualEditorRef = useRef<VisualEditorHandle>(null)
+
+  const [aiSelRevision, setAiSelRevision] = useState(0)
+  const bumpAiSelection = useCallback(() => setAiSelRevision((n) => n + 1), [])
 
   // Warn on unsaved changes
   useEffect(() => {
@@ -149,6 +162,81 @@ export function BlogEditor({ author, slug }: Props) {
     mql.addEventListener('change', sync)
     return () => mql.removeEventListener('change', sync)
   }, [])
+
+  useEffect(() => {
+    if (!canBlogAi) return
+    const onScroll = () => bumpAiSelection()
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onScroll)
+    }
+  }, [canBlogAi, bumpAiSelection])
+
+  // Ctrl/Cmd+A (select all) — bump revision after the editor applies selection so the AI popover shows.
+  useEffect(() => {
+    if (!canBlogAi) return
+    const onSelectAll = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key.toLowerCase() !== 'a') return
+      const el = document.activeElement
+      if (!el || !(el instanceof Element)) return
+      if (!el.closest('.cm-editor, .ProseMirror')) return
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => bumpAiSelection())
+      })
+    }
+    window.addEventListener('keydown', onSelectAll, true)
+    return () => window.removeEventListener('keydown', onSelectAll, true)
+  }, [canBlogAi, bumpAiSelection])
+
+  useEffect(() => {
+    bumpAiSelection()
+  }, [editorMode, mobileTab, isDesktop, bumpAiSelection])
+
+  const getActiveAiEditor = useCallback((): BlogAiEditorHandle | null => {
+    if (!isDesktop) {
+      if (mobileTab !== 'edit') return null
+      return markdownEditorRef.current
+    }
+    if (editorMode === 'raw') return markdownEditorRef.current
+    return visualEditorRef.current
+  }, [isDesktop, mobileTab, editorMode])
+
+  const selectionFormatActions = useMemo<BlogSelectionFormatActions>(
+    () => ({
+      bold: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.toggleBold()
+        else markdownEditorRef.current?.wrapSelection('**', '**')
+      },
+      italic: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.toggleItalic()
+        else markdownEditorRef.current?.wrapSelection('*', '*')
+      },
+      code: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.toggleCode()
+        else markdownEditorRef.current?.wrapSelection('`', '`')
+      },
+      strike: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.toggleStrike()
+        else markdownEditorRef.current?.wrapSelection('~~', '~~')
+      },
+      link: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.openLinkDialog()
+        else markdownEditorRef.current?.wrapSelection('[', '](https://)')
+      },
+      heading1: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.toggleHeading1()
+        else markdownEditorRef.current?.prefixHeadingLine(1)
+      },
+      heading2: () => {
+        if (isDesktop && editorMode === 'visual') visualEditorRef.current?.toggleHeading2()
+        else markdownEditorRef.current?.prefixHeadingLine(2)
+      },
+    }),
+    [isDesktop, editorMode],
+  )
 
   // ⌘P / Ctrl+P → toggle command palette (override browser print)
   useEffect(() => {
@@ -228,6 +316,14 @@ export function BlogEditor({ author, slug }: Props) {
   }, [])
 
   const closePalette = useCallback(() => setPaletteOpen(false), [])
+
+  const handleQuickDraftInsert = useCallback(
+    (markdown: string) => {
+      getActiveAiEditor()?.insertAfterSelection(markdown)
+      bumpAiSelection()
+    },
+    [getActiveAiEditor, bumpAiSelection],
+  )
 
   if (loading) {
     return (
@@ -323,6 +419,9 @@ export function BlogEditor({ author, slug }: Props) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[12rem]">
             <DropdownMenuItem onClick={() => setPaletteOpen(true)}>Commands…</DropdownMenuItem>
+            {canBlogAi && mobileTab === 'edit' && (
+              <DropdownMenuItem onClick={() => setQuickDraftOpen(true)}>Quick draft…</DropdownMenuItem>
+            )}
             {!frontmatter.draft && (
               <DropdownMenuItem
                 onClick={() => void handleSave(true)}
@@ -394,6 +493,18 @@ export function BlogEditor({ author, slug }: Props) {
           {showPreview ? <EyeOff size={12} /> : <Eye size={12} />}
           Preview
         </button>
+
+        {canBlogAi && (
+          <button
+            type="button"
+            onClick={() => setQuickDraftOpen(true)}
+            title="Turn notes into a draft at the cursor"
+            className="hidden sm:flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground tracking-wide transition-colors"
+          >
+            <NotebookPen size={12} aria-hidden />
+            Quick draft
+          </button>
+        )}
 
         {/* Command palette */}
         <button
@@ -530,6 +641,7 @@ export function BlogEditor({ author, slug }: Props) {
               value={bodyMarkdown}
               onChange={handleBodyChange}
               onImageUpload={handleImageUpload}
+              onSelectionChange={canBlogAi ? bumpAiSelection : undefined}
             />
           )}
           {mobileTab === 'preview' && <BlogPreview markdown={bodyMarkdown} />}
@@ -554,6 +666,7 @@ export function BlogEditor({ author, slug }: Props) {
                     value={bodyMarkdown}
                     onChange={handleBodyChange}
                     onImageUpload={handleImageUpload}
+                    onSelectionChange={canBlogAi ? bumpAiSelection : undefined}
                   />
                 ) : (
                   <VisualEditor
@@ -561,6 +674,7 @@ export function BlogEditor({ author, slug }: Props) {
                     value={bodyMarkdown}
                     onChange={handleBodyChange}
                     onImageUpload={handleImageUpload}
+                    onSelectionChange={canBlogAi ? bumpAiSelection : undefined}
                   />
                 )}
               </div>
@@ -577,6 +691,25 @@ export function BlogEditor({ author, slug }: Props) {
           </PanelGroup>
         </div>
       </div>
+
+      {canBlogAi && (
+        <BlogAiAssistLayer
+          enabled
+          selectionRevision={aiSelRevision}
+          getEditor={getActiveAiEditor}
+          formatActions={selectionFormatActions}
+          onFormatApplied={bumpAiSelection}
+          onAiActionComplete={bumpAiSelection}
+        />
+      )}
+
+      {canBlogAi && (
+        <BlogQuickDraftDialog
+          open={quickDraftOpen}
+          onOpenChange={setQuickDraftOpen}
+          onInsert={handleQuickDraftInsert}
+        />
+      )}
 
       <CommandDialog
         open={paletteOpen}
@@ -636,6 +769,32 @@ export function BlogEditor({ author, slug }: Props) {
                   >
                     <span>{showPreview ? 'Hide preview panel' : 'Show preview panel'}</span>
                   </CommandItem>
+                  {editorMode === 'raw' && (
+                    <CommandItem
+                      onSelect={() => {
+                        markdownEditorRef.current?.toggleWordWrap()
+                        closePalette()
+                      }}
+                    >
+                      <span>Toggle word wrap</span>
+                    </CommandItem>
+                  )}
+                </CommandGroup>
+              </>
+            )}
+
+            {canBlogAi && (isDesktop || mobileTab === 'edit') && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="AI">
+                  <CommandItem
+                    onSelect={() => {
+                      setQuickDraftOpen(true)
+                      closePalette()
+                    }}
+                  >
+                    <span>Quick draft…</span>
+                  </CommandItem>
                 </CommandGroup>
               </>
             )}
@@ -668,6 +827,16 @@ export function BlogEditor({ author, slug }: Props) {
                   >
                     <span>Go to Preview</span>
                   </CommandItem>
+                  {mobileTab === 'edit' && (
+                    <CommandItem
+                      onSelect={() => {
+                        markdownEditorRef.current?.toggleWordWrap()
+                        closePalette()
+                      }}
+                    >
+                      <span>Toggle word wrap</span>
+                    </CommandItem>
+                  )}
                 </CommandGroup>
               </>
             )}

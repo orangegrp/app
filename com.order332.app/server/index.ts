@@ -18,6 +18,7 @@ import { adminInviteRoutes } from '@/server/routes/admin/invites'
 import { adminUserRoutes } from '@/server/routes/admin/users'
 import { blogPostRoutes } from '@/server/routes/blog/posts'
 import { blogImageRoutes } from '@/server/routes/blog/images'
+import { blogAiAssistRoutes } from '@/server/routes/blog/ai-assist'
 import { webpcDiskUrlRoutes } from '@/server/routes/webpc/disk-url'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
@@ -320,6 +321,9 @@ app.route('/blog/posts', blogPostRoutes)
 
 // POST /blog/images          — upload image to Supabase Storage (requires app.blog)
 app.route('/blog/images', blogImageRoutes)
+
+// POST /blog/ai-assist       — AI-assisted editing (requires app.blog + app.blog.ai)
+app.route('/blog/ai-assist', blogAiAssistRoutes)
 
 // GET /cron/cleanup — Vercel Cron (Authorization: Bearer CRON_SECRET); runs db cleanup on a schedule
 app.get('/cron/cleanup', async (c) => {

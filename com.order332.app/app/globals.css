@@ -1864,3 +1864,84 @@
 .hljs-strong { color: #c9d1d9; font-weight: bold; }
 .hljs-addition { color: #aff5b4; background-color: #033a16; }
 .hljs-deletion { color: #ffdcd7; background-color: #67060c; }
+
+/* Blog editor — AI assist glow / flash */
+.blog-ai-glow-root {
+  pointer-events: none;
+  position: fixed;
+  /* Above resizable panels, preview column, and other dashboard chrome */
+  z-index: 100;
+  border-radius: 12px;
+  overflow: visible;
+  /* Uniform perimeter aura (no filter: blur stack) */
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 0 8px rgba(255, 255, 255, 0.18),
+    0 0 14px rgba(200, 230, 255, 0.1);
+}
+
+/* Subtle fill — no blur filter (avoids uneven smear vs. stroke) */
+.blog-ai-glow-soft {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  opacity: 0.45;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.04) 62%,
+    transparent 78%
+  );
+}
+
+/* Single soft stroke glow — not stacked with .blog-ai-glow-soft blur */
+.blog-ai-glow-snake-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.45));
+}
+
+.blog-ai-snake-dash {
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation-name: blog-ai-snake-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes blog-ai-snake-marquee {
+  to {
+    stroke-dashoffset: calc(-1 * var(--blog-ai-p));
+  }
+}
+
+@keyframes blog-ai-flash-in {
+  from {
+    opacity: 0.55;
+    transform: scale(0.99);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.blog-ai-insert-flash {
+  pointer-events: none;
+  position: fixed;
+  z-index: 100;
+  border-radius: 10px;
+  animation: blog-ai-flash-in 0.65s ease-out forwards;
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.22),
+    rgba(56, 189, 248, 0.18)
+  );
+}

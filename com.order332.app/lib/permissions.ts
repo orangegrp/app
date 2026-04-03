@@ -3,6 +3,8 @@ export const PERMISSIONS = {
   /** @deprecated Legacy DB value; not granted on signup. Does not imply mini-app access. */
   APP_HOME: 'app.home',
   APP_BLOG: 'app.blog',
+  /** AI-assisted editing in the blog CMS (proofread, rephrase, etc.). Requires `app.blog`. */
+  APP_BLOG_AI: 'app.blog.ai',
   APP_CONTENT: 'app.content',
   APP_MUSIC: 'app.music',
   APP_ROOM: 'app.room',

@@ -51,6 +51,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { mergeDomRects, type BlogEditorSelectionMeta } from '@/lib/blog-editor-ai-types'
 
 const lowlight = createLowlight(common)
 
@@ -159,6 +160,7 @@ interface Props {
   value: string
   onChange: (md: string) => void
   onImageUpload: (file: File) => Promise<string>
+  onSelectionChange?: () => void
 }
 
 export interface VisualEditorHandle {
@@ -177,6 +179,77 @@ export interface VisualEditorHandle {
   openLinkDialog: () => void
   openImagePicker: () => void
   openTableDialog: () => void
+  getSelectionMeta: () => BlogEditorSelectionMeta | null
+  getSelectionRect: () => DOMRect | null
+  getSelectionRects: () => DOMRect[]
+  replaceSelection: (text: string) => void
+  insertAfterSelection: (markdown: string) => void
+}
+
+function selectionInTipTapCodeBlock(editor: Editor): boolean {
+  const { from, to } = editor.state.selection
+  let hit = false
+  editor.state.doc.nodesBetween(from, to, (node) => {
+    if (node.type.name === 'codeBlock') hit = true
+  })
+  if (hit) return true
+  const $from = editor.state.selection.$from
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type.name === 'codeBlock') return true
+  }
+  return false
+}
+
+function rectFromPmEditor(editor: Editor): DOMRect | null {
+  return mergeDomRects(rectsFromPmSelection(editor))
+}
+
+/**
+ * One rect per client box from the native selection, clipped to the ProseMirror root.
+ * Matches how the browser paints multi-line selections.
+ */
+function rectsFromPmSelection(editor: Editor): DOMRect[] {
+  const { from, to } = editor.state.selection
+  if (from === to) return []
+  const pm = editor.view.dom as HTMLElement
+  const pmRect = pm.getBoundingClientRect()
+  try {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) {
+      return rectsFromPmCoordsFallback(editor)
+    }
+    const range = sel.getRangeAt(0)
+    const out: DOMRect[] = []
+    const rects = range.getClientRects()
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects.item(i)
+      if (!r || (r.width < 0.5 && r.height < 0.5)) continue
+      const interLeft = Math.max(r.left, pmRect.left)
+      const interTop = Math.max(r.top, pmRect.top)
+      const interRight = Math.min(r.right, pmRect.right)
+      const interBottom = Math.min(r.bottom, pmRect.bottom)
+      if (interLeft >= interRight || interTop >= interBottom) continue
+      out.push(new DOMRect(interLeft, interTop, interRight - interLeft, interBottom - interTop))
+    }
+    if (out.length > 0) return out
+  } catch {
+    /* ignore */
+  }
+  return rectsFromPmCoordsFallback(editor)
+}
+
+function rectsFromPmCoordsFallback(editor: Editor): DOMRect[] {
+  const { from, to } = editor.state.selection
+  if (from === to) return []
+  const view = editor.view
+  const s = view.coordsAtPos(from)
+  const e = view.coordsAtPos(to)
+  if (!s || !e) return []
+  const left = Math.min(s.left, s.right, e.left, e.right)
+  const right = Math.max(s.left, s.right, e.left, e.right)
+  const top = Math.min(s.top, s.bottom, e.top, e.bottom)
+  const bottom = Math.max(s.top, s.bottom, e.top, e.bottom)
+  return [new DOMRect(left, top, right - left, bottom - top)]
 }
 
 const hasJsxComponents = (md: string) => /<[A-Z]/.test(md)
@@ -212,11 +285,12 @@ function ToolbarButton({
 }
 
 export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function VisualEditor(
-  { value, onChange, onImageUpload },
+  { value, onChange, onImageUpload, onSelectionChange },
   ref,
 ) {
   const onChangeRef = useRef(onChange)
   const onImageUploadRef = useRef(onImageUpload)
+  const onSelectionChangeRef = useRef(onSelectionChange)
   const isExternalUpdateRef = useRef(false)
   const prevValueRef = useRef(value)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -236,7 +310,8 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
   useEffect(() => {
     onChangeRef.current = onChange
     onImageUploadRef.current = onImageUpload
-  }, [onChange, onImageUpload])
+    onSelectionChangeRef.current = onSelectionChange
+  }, [onChange, onImageUpload, onSelectionChange])
 
   const editor = useEditor({
     extensions: [
@@ -259,6 +334,9 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
         onChangeRef.current(md)
         prevValueRef.current = md
       }
+    },
+    onSelectionUpdate: () => {
+      onSelectionChangeRef.current?.()
     },
     editorProps: {
       attributes: { class: 'tiptap-editor focus:outline-none h-full' },
@@ -356,6 +434,37 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
       openLinkDialog,
       openImagePicker: () => fileInputRef.current?.click(),
       openTableDialog,
+      getSelectionMeta: (): BlogEditorSelectionMeta | null => {
+        const ed = editorRef.current
+        if (!ed) return null
+        const { from, to } = ed.state.selection
+        if (from === to) return null
+        const text = ed.state.doc.textBetween(from, to, '\n')
+        const inCodeBlock = selectionInTipTapCodeBlock(ed)
+        return { from, to, text, inCodeBlock }
+      },
+      getSelectionRect: () => {
+        const ed = editorRef.current
+        if (!ed) return null
+        return rectFromPmEditor(ed)
+      },
+      getSelectionRects: () => {
+        const ed = editorRef.current
+        if (!ed) return []
+        return rectsFromPmSelection(ed)
+      },
+      replaceSelection: (text: string) => {
+        const ed = editorRef.current
+        if (!ed) return
+        const { from, to } = ed.state.selection
+        ed.chain().focus().insertContentAt({ from, to }, text).run()
+      },
+      insertAfterSelection: (markdown: string) => {
+        const ed = editorRef.current
+        if (!ed) return
+        const pos = ed.state.selection.to
+        ed.chain().focus().insertContentAt(pos, markdown).run()
+      },
     }),
     [openLinkDialog, openTableDialog],
   )

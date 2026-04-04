@@ -20,7 +20,7 @@ export function roundedRectInnerMetrics(
 }
 
 /**
- * Clockwise open path along the rounded-rect border (top-left start).
+ * Clockwise path along the rounded-rect border (top-left start).
  * Coordinates in the same space as viewBox (typically 0,0 to width,height).
  */
 export function roundedRectPathD(

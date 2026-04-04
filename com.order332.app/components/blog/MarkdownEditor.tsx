@@ -16,7 +16,11 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap, selectAll } from '@codemirror/commands'
 import { Image as ImageIcon, WrapText } from 'lucide-react'
 import { toast } from 'sonner'
-import { mergeDomRects, type BlogEditorSelectionMeta } from '@/lib/blog-editor-ai-types'
+import {
+  clipDomRectsToRect,
+  mergeDomRects,
+  type BlogEditorSelectionMeta,
+} from '@/lib/blog-editor-ai-types'
 
 const BLOG_MD_WORD_WRAP_KEY = 'blog-md-word-wrap'
 
@@ -84,7 +88,8 @@ function rectsFromCmSelection(view: EditorView): DOMRect[] {
     const bottom = Math.max(s.top, s.bottom, e.top, e.bottom)
     rects.push(new DOMRect(left, top, right - left, bottom - top))
   }
-  return rects
+  const clip = view.scrollDOM.getBoundingClientRect()
+  return clipDomRectsToRect(rects, clip)
 }
 
 function rectFromCmSelection(view: EditorView): DOMRect | null {

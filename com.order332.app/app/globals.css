@@ -1865,7 +1865,7 @@
 .hljs-addition { color: #aff5b4; background-color: #033a16; }
 .hljs-deletion { color: #ffdcd7; background-color: #67060c; }
 
-/* Blog editor — AI assist glow: purple fill + animated perimeter snake (SVG) */
+/* Blog editor — AI assist: SVG perimeter trail (solid + blur), pulse on glow group */
 .blog-ai-glow-root {
   pointer-events: none;
   position: fixed;
@@ -1877,15 +1877,6 @@
   box-shadow: none;
 }
 
-.blog-ai-glow-fill {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: none;
-  outline: none;
-  background: rgba(138, 133, 168, 0.62);
-}
-
 .blog-ai-glow-snake-svg {
   position: absolute;
   inset: 0;
@@ -1893,15 +1884,35 @@
   pointer-events: none;
 }
 
+@keyframes blog-ai-glow-trail-pulse-opacity {
+  0%,
+  100% {
+    opacity: 0.92;
+  }
+  50% {
+    opacity: 0.98;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .blog-ai-glow-snake-svg .blog-ai-glow-trail-pulse {
+    animation: blog-ai-glow-trail-pulse-opacity 2.2s ease-in-out infinite;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .blog-ai-glow-snake-svg {
     display: none;
   }
 
+  .blog-ai-glow-snake-svg .blog-ai-glow-trail-pulse {
+    animation: none !important;
+  }
+
   .blog-ai-glow-root {
     box-shadow:
-      0 0 20px rgba(255, 255, 255, 0.08),
-      0 0 48px rgba(255, 255, 255, 0.05);
+      0 0 14px rgba(255, 255, 255, 0.055),
+      0 0 32px rgba(255, 255, 255, 0.035);
   }
 }
 

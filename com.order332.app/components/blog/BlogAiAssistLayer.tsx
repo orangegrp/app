@@ -92,37 +92,39 @@ function selectionGlowBounds(ed: BlogAiEditorHandle): DOMRect | null {
 }
 
 const BLOG_AI_GLOW_PATH_INSET = 0.75
-const BLOG_AI_SNAKE_VISIBLE_FRACTION = 0.22
+/** ~one line of text; larger P → longer visible arc along perimeter */
+const BLOG_AI_SNAKE_PERIMETER_REF = 900
 
+/** Perimeter trail: solid line + blurred white sweep; dash length scales with selection size. */
 function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }) {
+  const idSuffix = useId().replace(/:/g, '')
+  const filterTrailId = `blog-ai-glow-trail-${idSuffix}`
+  const filterHeadId = `blog-ai-glow-head-${idSuffix}`
+  const clipId = `blog-ai-glow-inward-${idSuffix}`
+
   const w = rect.width + glowPad * 2
   const h = rect.height + glowPad * 2
   const r = Math.min(12, w / 2, h / 2)
-  const filterId = `blog-ai-glow-blur-${useId().replace(/:/g, '')}`
+  const minDim = Math.min(w, h)
+  if (w < 2 || h < 2) {
+    return null
+  }
 
   const pathD = roundedRectPathD(w, h, r, BLOG_AI_GLOW_PATH_INSET)
   const { w: iw, h: ih, r: ir } = roundedRectInnerMetrics(w, h, r, BLOG_AI_GLOW_PATH_INSET)
   const P = roundedRectPerimeter(iw, ih, ir)
-  const dashDraw = BLOG_AI_SNAKE_VISIBLE_FRACTION * P
+
+  const t = Math.min(P / BLOG_AI_SNAKE_PERIMETER_REF, 1)
+  const snakeFrac = Math.min(
+    0.46,
+    Math.max(0.16, 0.18 + 0.28 * t + 0.06 * Math.min(minDim / 200, 1)),
+  )
+  const dashDraw = snakeFrac * P
   const dashGap = P - dashDraw
   const dashArray = `${dashDraw} ${dashGap}`
 
   if (!pathD || P < 4) {
-    return (
-      <div
-        className="blog-ai-glow-root"
-        style={{
-          left: rect.left - glowPad,
-          top: rect.top - glowPad,
-          width: w,
-          height: h,
-          borderRadius: r,
-        }}
-        aria-hidden
-      >
-        <div className="blog-ai-glow-fill" style={{ borderRadius: r }} />
-      </div>
-    )
+    return null
   }
 
   return (
@@ -137,7 +139,6 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
       }}
       aria-hidden
     >
-      <div className="blog-ai-glow-fill" style={{ borderRadius: r }} />
       <svg
         className="blog-ai-glow-snake-svg"
         viewBox={`0 0 ${w} ${h}`}
@@ -146,47 +147,85 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
         aria-hidden
       >
         <defs>
-          <filter id={filterId} x="-45%" y="-45%" width="190%" height="190%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="b" />
+          <clipPath id={clipId}>
+            <rect x={0} y={0} width={w} height={h} rx={r} ry={r} />
+          </clipPath>
+          <filter id={filterTrailId} x="-55%" y="-55%" width="210%" height="210%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="4.75" result="blur" />
+            <feComponentTransfer in="blur" result="boosted">
+              <feFuncR type="linear" slope="1.22" intercept="0.03" />
+              <feFuncG type="linear" slope="1.22" intercept="0.03" />
+              <feFuncB type="linear" slope="1.22" intercept="0.03" />
+              <feFuncA type="linear" slope="1.22" intercept="0" />
+            </feComponentTransfer>
+          </filter>
+          <filter id={filterHeadId} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.85" result="blur" />
+            <feComponentTransfer in="blur" result="boosted">
+              <feFuncR type="linear" slope="1.18" intercept="0.03" />
+              <feFuncG type="linear" slope="1.18" intercept="0.03" />
+              <feFuncB type="linear" slope="1.18" intercept="0.03" />
+              <feFuncA type="linear" slope="1.2" intercept="0" />
+            </feComponentTransfer>
           </filter>
         </defs>
-        <path
-          className="blog-ai-glow-snake-trail"
-          d={pathD}
-          fill="none"
-          stroke="rgba(255,255,255,0.42)"
-          strokeWidth={4.25}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={dashArray}
-          filter={`url(#${filterId})`}
-        >
-          <animate
-            attributeName="stroke-dashoffset"
-            from="0"
-            to={-P}
-            dur="2.35s"
-            repeatCount="indefinite"
-          />
-        </path>
-        <path
-          className="blog-ai-glow-snake-head"
-          d={pathD}
-          fill="none"
-          stroke="rgba(255,255,255,0.92)"
-          strokeWidth={1.65}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={dashArray}
-        >
-          <animate
-            attributeName="stroke-dashoffset"
-            from="0"
-            to={-P}
-            dur="2.35s"
-            repeatCount="indefinite"
-          />
-        </path>
+        <g clipPath={`url(#${clipId})`}>
+          <path
+            d={pathD}
+            fill="none"
+            stroke="rgba(255,255,255,0.3)"
+            strokeWidth={1.15}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={dashArray}
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to={-P}
+              dur="2.35s"
+              repeatCount="indefinite"
+            />
+          </path>
+        </g>
+        <g className="blog-ai-glow-trail-pulse" clipPath={`url(#${clipId})`}>
+          <path
+            d={pathD}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth={5.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={dashArray}
+            filter={`url(#${filterTrailId})`}
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to={-P}
+              dur="2.35s"
+              repeatCount="indefinite"
+            />
+          </path>
+          <path
+            d={pathD}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={dashArray}
+            filter={`url(#${filterHeadId})`}
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to={-P}
+              dur="2.35s"
+              repeatCount="indefinite"
+            />
+          </path>
+        </g>
       </svg>
     </div>
   )
@@ -289,7 +328,6 @@ export function BlogAiAssistLayer({
         const fr = ed.getSelectionRect()
         if (fr) setFlashRect(fr)
         setTimeout(() => setFlashRect(null), 700)
-        toast.success('Image inserted')
       } else {
         const res = await blogAiAssistRequest(action, meta.text, { signal: ac.signal })
         const text = await consumeBlogAiTextStream(res, () => {
@@ -302,7 +340,6 @@ export function BlogAiAssistLayer({
         const fr = ed.getSelectionRect()
         if (fr) setFlashRect(fr)
         setTimeout(() => setFlashRect(null), 700)
-        toast.success('Updated')
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
@@ -367,7 +404,6 @@ export function BlogAiAssistLayer({
       const fr = ed.getSelectionRect()
       if (fr) setFlashRect(fr)
       setTimeout(() => setFlashRect(null), 700)
-      toast.success('Translated')
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       toast.error(err instanceof Error ? err.message : 'AI request failed')
@@ -461,8 +497,9 @@ export function BlogAiAssistLayer({
               buttonVariants({ variant: 'ghost', size: 'sm' }),
               'h-8 shrink-0 gap-1.5 rounded-lg px-2.5 text-xs font-medium text-sky-100/95',
               'hover:bg-white/12',
+              'focus-visible:border-white/35 focus-visible:ring-3 focus-visible:ring-white/40',
               aiMenuOpen &&
-                'bg-sky-500/30 text-white shadow-[inset_0_0_0_1px_rgba(56,189,248,0.45)]',
+                'bg-white/[0.1] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)]',
             )}
             onMouseDown={(e) => e.preventDefault()}
           >

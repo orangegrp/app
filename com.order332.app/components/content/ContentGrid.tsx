@@ -81,7 +81,7 @@ export function ContentGrid({
         {(currentFolders.length > 0 || isCreator) && (
           <div>
             <p className="card-label mb-3">Folders</p>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 items-start">
               {isCreator && (
                 <button
                   onClick={() => setCreateOpen(true)}
@@ -107,19 +107,20 @@ export function ContentGrid({
           </div>
         )}
 
-        {/* Items section */}
+        {/* Items section — CSS columns for natural card heights (masonry feel) */}
         {items.length > 0 && (
           <div>
             {currentFolders.length > 0 && <p className="card-label mb-3">Files</p>}
             <AudioPlayerProvider>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
                 {items.map((item) => (
-                  <ContentItemCard
-                    key={item.id}
-                    item={item}
-                    isCreator={isCreator}
-                    onDelete={onDelete}
-                  />
+                  <div key={item.id} className="mb-4 break-inside-avoid">
+                    <ContentItemCard
+                      item={item}
+                      isCreator={isCreator}
+                      onDelete={onDelete}
+                    />
+                  </div>
                 ))}
               </div>
             </AudioPlayerProvider>

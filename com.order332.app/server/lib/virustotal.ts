@@ -80,11 +80,19 @@ export async function getVtAnalysis(
         stats: VtScanStats
       }
       links: { item?: string }
+      meta?: { file_info?: { sha256?: string } }
     }
   }
 
   const { status, stats } = json.data.attributes
-  const vtUrl = json.data.links.item ?? `https://www.virustotal.com/gui/file-analysis/${encodeURIComponent(analysisId)}`
+
+  // Prefer SHA256-based GUI permalink; fall back to extracting from the API item URL
+  const sha256 =
+    json.data.meta?.file_info?.sha256 ??
+    json.data.links.item?.split('/').pop()
+  const vtUrl = sha256
+    ? `https://www.virustotal.com/gui/file/${sha256}`
+    : `https://www.virustotal.com/gui/file-analysis/${encodeURIComponent(analysisId)}`
 
   if (status === 'queued' || status === 'in-progress') {
     return null

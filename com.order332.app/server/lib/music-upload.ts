@@ -29,7 +29,7 @@ export async function ensureMusicTracksBucket(): Promise<void> {
   if (buckets?.some((b) => b.id === MUSIC_TRACKS_BUCKET)) return
 
   await supabase.storage.createBucket(MUSIC_TRACKS_BUCKET, {
-    public: true,
+    public: false,
     fileSizeLimit: 100 * 1024 * 1024,
     allowedMimeTypes: [...ALL_MUSIC_ALLOWED_TYPES],
   })

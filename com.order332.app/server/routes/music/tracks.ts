@@ -6,6 +6,7 @@ import { requirePermission } from '@/server/middleware/rbac'
 import { rateLimitByUser } from '@/server/middleware/rate-limit'
 import { PERMISSIONS } from '@/lib/permissions'
 import {
+  MUSIC_TRACKS_BUCKET,
   MUSIC_AUDIO_ALLOWED_TYPES,
   MUSIC_AUDIO_MAX_SIZE,
   MUSIC_COVER_ALLOWED_TYPES,
@@ -16,6 +17,7 @@ import {
   uploadMusicLyrics,
 } from '@/server/lib/music-upload'
 import { supabase } from '@/server/db/supabase/client'
+import { signUrl, signUrls } from '@/server/lib/signed-url'
 import type { HonoEnv, MusicTrack } from '@/server/lib/types'
 
 export const musicTrackRoutes = new Hono<HonoEnv>()
@@ -43,7 +45,18 @@ musicTrackRoutes.get('/', async (c) => {
   }
 
   const tracks: MusicTrack[] = (data ?? []).map(rowToMusicTrack)
-  return c.json({ tracks })
+
+  const keysToSign = tracks.flatMap((t) =>
+    [t.audioKey, t.coverKey ?? null, t.lyricsKey ?? null].filter(Boolean) as string[]
+  )
+  const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+  const result = tracks.map((t) => ({
+    ...t,
+    audioUrl: signed.get(t.audioKey) ?? t.audioUrl,
+    coverUrl: t.coverKey ? (signed.get(t.coverKey) ?? t.coverUrl) : t.coverUrl,
+    lyricsUrl: t.lyricsKey ? (signed.get(t.lyricsKey) ?? t.lyricsUrl) : t.lyricsUrl,
+  }))
+  return c.json({ tracks: result })
 })
 
 // POST /music/tracks — upload a new music track
@@ -223,7 +236,18 @@ musicTrackRoutes.post(
         return c.json({ error: 'Failed to save track' }, 500)
       }
 
-      return c.json({ track: rowToMusicTrack(data) }, 201)
+      const track = rowToMusicTrack(data)
+      const postKeysToSign = [track.audioKey, track.coverKey ?? null, track.lyricsKey ?? null]
+        .filter(Boolean) as string[]
+      const postSigned = await signUrls(MUSIC_TRACKS_BUCKET, postKeysToSign)
+      return c.json({
+        track: {
+          ...track,
+          audioUrl: postSigned.get(track.audioKey) ?? track.audioUrl,
+          coverUrl: track.coverKey ? (postSigned.get(track.coverKey) ?? track.coverUrl) : track.coverUrl,
+          lyricsUrl: track.lyricsKey ? (postSigned.get(track.lyricsKey) ?? track.lyricsUrl) : track.lyricsUrl,
+        },
+      }, 201)
     } catch (err) {
       // Best-effort cleanup
       if (uploadedStorageKeys.length > 0) {
@@ -288,7 +312,7 @@ musicTrackRoutes.get('/:id/lyrics', async (c) => {
 
   const { data, error } = await supabase
     .from('music_tracks')
-    .select('lyrics_url, lyrics_type')
+    .select('lyrics_key, lyrics_type')
     .eq('id', id)
     .single()
 
@@ -296,16 +320,17 @@ musicTrackRoutes.get('/:id/lyrics', async (c) => {
     return c.json({ error: 'Track not found' }, 404)
   }
 
-  if (!data.lyrics_url) {
+  if (!data.lyrics_key) {
     return c.json({ error: 'No lyrics available' }, 404)
   }
 
   try {
-    const res = await fetch(data.lyrics_url)
-    if (!res.ok) {
+    const { data: blob, error: dlErr } = await supabase.storage
+      .from(MUSIC_TRACKS_BUCKET).download(data.lyrics_key as string)
+    if (dlErr || !blob) {
       return c.json({ error: 'Failed to fetch lyrics' }, 502)
     }
-    const content = await res.text()
+    const content = await blob.text()
     return c.json({ content, type: data.lyrics_type ?? 'txt' })
   } catch (err) {
     console.error('[music/tracks] lyrics fetch error:', err)

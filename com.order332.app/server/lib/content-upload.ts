@@ -47,7 +47,7 @@ export async function ensureContentLibraryBucket(): Promise<void> {
   if (buckets?.some((b) => b.id === CONTENT_LIBRARY_BUCKET)) return
 
   await supabase.storage.createBucket(CONTENT_LIBRARY_BUCKET, {
-    public: true,
+    public: false,
     fileSizeLimit: 100 * 1024 * 1024,
     allowedMimeTypes: [...ALL_CONTENT_ALLOWED_TYPES],
   })

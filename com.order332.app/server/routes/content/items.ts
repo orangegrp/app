@@ -9,7 +9,9 @@ import {
   CONTENT_SIZE_LIMITS,
   VIDEO_MIME_TYPES,
   uploadContentItemBuffer,
+  CONTENT_LIBRARY_BUCKET,
 } from '@/server/lib/content-upload'
+import { signUrl, signUrls } from '@/server/lib/signed-url'
 import { requiresVtScan, submitFileToVt } from '@/server/lib/virustotal'
 import { supabase } from '@/server/db/supabase/client'
 import type { HonoEnv, ContentItem, VtScanStats } from '@/server/lib/types'
@@ -48,7 +50,10 @@ contentItemRoutes.get('/', async (c) => {
   }
 
   const items: ContentItem[] = (data ?? []).map(rowToContentItem)
-  return c.json({ items })
+
+  const signed = await signUrls(CONTENT_LIBRARY_BUCKET, items.map((i) => i.storageKey))
+  const result = items.map((i) => ({ ...i, publicUrl: signed.get(i.storageKey) ?? i.publicUrl }))
+  return c.json({ items: result })
 })
 
 // POST /content/items — upload a new content item
@@ -156,7 +161,8 @@ contentItemRoutes.post(
         void submitVtScan(item.id, buffer, file.name)
       }
 
-      return c.json({ item }, 201)
+      const signedPublicUrl = await signUrl(CONTENT_LIBRARY_BUCKET, item.storageKey)
+      return c.json({ item: { ...item, publicUrl: signedPublicUrl || item.publicUrl } }, 201)
     } catch (err) {
       console.error('[content/items] upload error:', err)
       return c.json({ error: 'Upload failed' }, 500)
@@ -249,13 +255,14 @@ contentItemRoutes.post(
       return c.json({ error: 'Failed to reset scan status' }, 500)
     }
 
-    // Fetch file from public URL and re-submit to VT (fire-and-forget)
+    // Download file from storage and re-submit to VT (fire-and-forget)
     const filename = (data.storage_key as string).split('/').pop() ?? 'file'
     void (async () => {
       try {
-        const fileRes = await fetch(data.public_url as string)
-        if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`)
-        const buffer = await fileRes.arrayBuffer()
+        const { data: fileBlob, error: dlErr } = await supabase.storage
+          .from(CONTENT_LIBRARY_BUCKET).download(data.storage_key as string)
+        if (dlErr || !fileBlob) throw new Error('Failed to download file for re-scan')
+        const buffer = await fileBlob.arrayBuffer()
         await submitVtScan(id, buffer, filename)
       } catch (err) {
         console.error('[content/items] retry-scan fetch error:', err)
@@ -267,7 +274,9 @@ contentItemRoutes.post(
       }
     })()
 
-    return c.json({ item: rowToContentItem(updated) })
+    const signedPublicUrl = await signUrl(CONTENT_LIBRARY_BUCKET, updated.storage_key as string)
+    const item = rowToContentItem(updated)
+    return c.json({ item: { ...item, publicUrl: signedPublicUrl || item.publicUrl } })
   }
 )
 

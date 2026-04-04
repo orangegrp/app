@@ -6,6 +6,7 @@ import { rateLimitByUser } from '@/server/middleware/rate-limit'
 import { PERMISSIONS } from '@/lib/permissions'
 import { supabase } from '@/server/db/supabase/client'
 import { getVtAnalysis, submitFileToVt } from '@/server/lib/virustotal'
+import { CONTENT_LIBRARY_BUCKET } from '@/server/lib/content-upload'
 import type { HonoEnv, VtScanStats } from '@/server/lib/types'
 
 export const contentScanRoutes = new Hono<HonoEnv>()
@@ -27,7 +28,7 @@ contentScanRoutes.post(
 
     const { data, error } = await supabase
       .from('content_items')
-      .select('id, vt_scan_id, vt_scan_status, storage_key, mime_type, public_url')
+      .select('id, vt_scan_id, vt_scan_status, storage_key, mime_type')
       .in('vt_scan_status', ['pending', 'scanning'])
       .limit(20)
 
@@ -44,13 +45,14 @@ contentScanRoutes.post(
       rows.map(async (row) => {
         try {
           if (row.vt_scan_status === 'pending' || !row.vt_scan_id) {
-            // Re-try initial submission by fetching the file from storage
-            const fileRes = await fetch(row.public_url as string)
-            if (!fileRes.ok) {
+            // Re-try initial submission by downloading directly from private storage
+            const { data: fileBlob, error: dlErr } = await supabase.storage
+              .from(CONTENT_LIBRARY_BUCKET).download(row.storage_key as string)
+            if (dlErr || !fileBlob) {
               stillPending++
               return
             }
-            const buffer = await fileRes.arrayBuffer()
+            const buffer = await fileBlob.arrayBuffer()
             const filename = (row.storage_key as string).split('/').pop() ?? 'file'
             const analysisId = await submitFileToVt(buffer, filename, apiKey)
             await supabase

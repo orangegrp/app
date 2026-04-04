@@ -131,13 +131,15 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
 
   return (
     <>
-      {/* Mobile — above tab bar */}
-      <div
-        className="fixed inset-x-0 z-40 sm:hidden"
-        style={{ bottom: "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))" }}
-      >
-        {barContent}
-      </div>
+      {/* Mobile — above tab bar, only on /music/* (OS media session handles off-page controls) */}
+      {isOnMusicPage && (
+        <div
+          className="fixed inset-x-0 z-40 sm:hidden"
+          style={{ bottom: "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))" }}
+        >
+          {barContent}
+        </div>
+      )}
 
       {/* Desktop — only on /music/* pages */}
       {isOnMusicPage && (

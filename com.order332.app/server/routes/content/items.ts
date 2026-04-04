@@ -10,15 +10,17 @@ import {
   VIDEO_MIME_TYPES,
   uploadContentItemBuffer,
 } from '@/server/lib/content-upload'
+import { requiresVtScan, submitFileToVt } from '@/server/lib/virustotal'
 import { supabase } from '@/server/db/supabase/client'
-import type { HonoEnv, ContentItem } from '@/server/lib/types'
+import type { HonoEnv, ContentItem, VtScanStats } from '@/server/lib/types'
 
 export const contentItemRoutes = new Hono<HonoEnv>()
 contentItemRoutes.use('*', requireAuth, requirePermission(PERMISSIONS.APP_CONTENT))
 
-// GET /content/items — list all content items, optional ?type= filter
+// GET /content/items — list content items, optional ?type= and ?folderId= filters
 contentItemRoutes.get('/', async (c) => {
   const type = c.req.query('type')
+  const folderId = c.req.query('folderId') ?? null
   const validTypes = ['image', 'audio', 'pdf', 'download']
 
   let query = supabase
@@ -29,6 +31,13 @@ contentItemRoutes.get('/', async (c) => {
 
   if (type && validTypes.includes(type)) {
     query = query.eq('item_type', type)
+  }
+
+  // null folderId → root items; non-null → items in that folder
+  if (folderId) {
+    query = query.eq('folder_id', folderId)
+  } else {
+    query = query.is('folder_id', null)
   }
 
   const { data, error } = await query
@@ -68,6 +77,21 @@ contentItemRoutes.post(
     const descriptionRaw = formData.get('description')
     const description = typeof descriptionRaw === 'string' ? descriptionRaw.trim().slice(0, 1000) || null : null
 
+    const folderIdRaw = formData.get('folderId')
+    const folderId = typeof folderIdRaw === 'string' && folderIdRaw ? folderIdRaw : null
+
+    // Validate folderId if provided
+    if (folderId) {
+      const { data: folder, error: folderErr } = await supabase
+        .from('content_folders')
+        .select('id')
+        .eq('id', folderId)
+        .single()
+      if (folderErr || !folder) {
+        return c.json({ error: 'Folder not found' }, 404)
+      }
+    }
+
     // Block video uploads explicitly
     if (VIDEO_MIME_TYPES.has(file.type)) {
       return c.json({ error: 'Video uploads are not available yet.' }, 400)
@@ -87,13 +111,19 @@ contentItemRoutes.post(
     const user = c.get('user')
 
     try {
+      // Read buffer once — reused for storage upload and optional VT submission
       const buffer = await file.arrayBuffer()
+
       const { storageKey, publicUrl } = await uploadContentItemBuffer({
         userId: user.id,
         buffer,
         contentType: file.type,
         filenameHint: file.name,
       })
+
+      // Initial VT status: pending (will be updated below if VT is configured)
+      const vtEnabled = !!process.env.VIRUSTOTAL_API_KEY && requiresVtScan(file.type)
+      const initialVtStatus = vtEnabled ? 'pending' : 'not_required'
 
       const { data, error } = await supabase
         .from('content_items')
@@ -106,6 +136,8 @@ contentItemRoutes.post(
           public_url: publicUrl,
           mime_type: file.type,
           file_size: file.size,
+          folder_id: folderId,
+          vt_scan_status: initialVtStatus,
         })
         .select()
         .single()
@@ -117,7 +149,14 @@ contentItemRoutes.post(
         return c.json({ error: 'Failed to save item' }, 500)
       }
 
-      return c.json({ item: rowToContentItem(data) }, 201)
+      const item = rowToContentItem(data)
+
+      // Fire-and-forget VT submission: don't block the 201 response
+      if (vtEnabled) {
+        void submitVtScan(item.id, buffer, file.name)
+      }
+
+      return c.json({ item }, 201)
     } catch (err) {
       console.error('[content/items] upload error:', err)
       return c.json({ error: 'Upload failed' }, 500)
@@ -171,6 +210,29 @@ contentItemRoutes.delete(
   }
 )
 
+/** Submits a file to VT and updates the DB row with the result. Best-effort. */
+async function submitVtScan(itemId: string, buffer: ArrayBuffer, filename: string): Promise<void> {
+  const apiKey = process.env.VIRUSTOTAL_API_KEY
+  if (!apiKey) return
+  try {
+    const analysisId = await submitFileToVt(buffer, filename, apiKey)
+    await supabase
+      .from('content_items')
+      .update({ vt_scan_id: analysisId, vt_scan_status: 'scanning', updated_at: new Date().toISOString() })
+      .eq('id', itemId)
+  } catch (err) {
+    console.error('[content/items] VT submit error:', err)
+    try {
+      await supabase
+        .from('content_items')
+        .update({ vt_scan_status: 'error', updated_at: new Date().toISOString() })
+        .eq('id', itemId)
+    } catch {
+      // Best-effort — ignore
+    }
+  }
+}
+
 function rowToContentItem(row: Record<string, unknown>): ContentItem {
   return {
     id: row.id as string,
@@ -187,5 +249,11 @@ function rowToContentItem(row: Record<string, unknown>): ContentItem {
     durationSec: row.duration_sec as number | null,
     width: row.width as number | null,
     height: row.height as number | null,
+    folderId: row.folder_id as string | null,
+    vtScanId: row.vt_scan_id as string | null,
+    vtScanStatus: (row.vt_scan_status as ContentItem['vtScanStatus']) ?? 'not_required',
+    vtScanUrl: row.vt_scan_url as string | null,
+    vtScanStats: row.vt_scan_stats as ContentItem['vtScanStats'],
+    vtScannedAt: row.vt_scanned_at as string | null,
   }
 }

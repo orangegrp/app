@@ -122,6 +122,27 @@ export interface JWTPayload {
 
 export type ContentItemType = 'image' | 'audio' | 'pdf' | 'download'
 
+export type VtScanStatus = 'not_required' | 'pending' | 'scanning' | 'clean' | 'flagged' | 'error'
+
+export interface VtScanStats {
+  malicious: number
+  suspicious: number
+  undetected: number
+  harmless: number
+  timeout: number
+  failure: number
+  'type-unsupported': number
+}
+
+export interface ContentFolder {
+  id: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  name: string
+  parentId: string | null
+}
+
 export interface ContentItem {
   id: string
   createdAt: string
@@ -137,6 +158,12 @@ export interface ContentItem {
   durationSec?: number | null
   width?: number | null
   height?: number | null
+  folderId: string | null
+  vtScanId: string | null
+  vtScanStatus: VtScanStatus
+  vtScanUrl: string | null
+  vtScanStats: VtScanStats | null
+  vtScannedAt: string | null
 }
 
 // ── Music ─────────────────────────────────────────────────────────────────────

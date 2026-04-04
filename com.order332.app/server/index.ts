@@ -22,6 +22,8 @@ import { blogImageRoutes } from '@/server/routes/blog/images'
 import { blogAiAssistRoutes } from '@/server/routes/blog/ai-assist'
 import { webpcDiskUrlRoutes } from '@/server/routes/webpc/disk-url'
 import { contentItemRoutes } from '@/server/routes/content/items'
+import { contentFolderRoutes } from '@/server/routes/content/folders'
+import { contentScanRoutes } from '@/server/routes/content/scans'
 import { musicTrackRoutes } from '@/server/routes/music/tracks'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
@@ -318,10 +320,19 @@ app.route('/admin/ai-usage', adminAiUsageRoutes)
 
 // ── Content Library routes ────────────────────────────────────────────────────
 
-// GET    /content/items      — list content items (requires app.content)
-// POST   /content/items      — upload item (requires app.content + app.content.upload)
-// DELETE /content/items/:id  — delete item (requires app.content + app.content.upload)
+// GET    /content/items         — list content items (requires app.content)
+// POST   /content/items         — upload item (requires app.content + app.content.upload)
+// DELETE /content/items/:id     — delete item (requires app.content + app.content.upload)
 app.route('/content/items', contentItemRoutes)
+
+// GET    /content/folders        — list all folders flat (requires app.content)
+// POST   /content/folders        — create folder (requires app.content.upload)
+// PATCH  /content/folders/:id    — rename folder (requires app.content.upload)
+// DELETE /content/folders/:id    — delete folder (requires app.content.upload)
+app.route('/content/folders', contentFolderRoutes)
+
+// POST   /content/scans/check    — poll VT for pending/scanning items (requires app.content)
+app.route('/content/scans', contentScanRoutes)
 
 // ── Music routes ──────────────────────────────────────────────────────────────
 

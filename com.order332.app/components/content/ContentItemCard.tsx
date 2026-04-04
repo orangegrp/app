@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Download, File, FileText, Music, Trash2 } from "lucide-react"
+import { Download, File, FileText, Loader2, Music, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatFileSize, type ContentItemMeta } from "@/lib/content-api"
+import { formatFileSize, type ContentItemMeta, type VtScanStatus, type VtScanStats } from "@/lib/content-api"
 import { AudioPlayerButton, AudioPlayerProgress, AudioPlayerTime, AudioPlayerDuration } from "@/components/ui/audio-player"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { VTWarningDialog } from "./VTWarningDialog"
 
 interface ContentItemCardProps {
   item: ContentItemMeta
@@ -140,49 +141,154 @@ function AudioCard({ item }: { item: ContentItemMeta }) {
 }
 
 function PdfCard({ item }: { item: ContentItemMeta }) {
+  const [vtWarningOpen, setVtWarningOpen] = useState(false)
+  const status = item.vtScanStatus
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (status === "flagged" || status === "error") {
+      e.preventDefault()
+      setVtWarningOpen(true)
+    }
+  }
+
+  const isBlocked = status === "pending" || status === "scanning"
+
   return (
-    <a
-      href={item.publicUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex flex-col gap-3 p-4 hover:bg-foreground/5 transition-colors"
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/5">
-        <FileText className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <div>
-        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-        {item.description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+    <>
+      <a
+        href={isBlocked ? undefined : item.publicUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleClick}
+        className={cn(
+          "flex flex-col gap-3 p-4 transition-colors",
+          isBlocked ? "cursor-not-allowed opacity-70" : "hover:bg-foreground/5",
         )}
-        <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(item.fileSize)} · PDF</p>
-      </div>
-    </a>
+        aria-disabled={isBlocked}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground/5">
+            <FileText className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <VtBadge status={status} stats={item.vtScanStats} />
+        </div>
+        <div>
+          <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+          {item.description && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(item.fileSize)} · PDF</p>
+        </div>
+      </a>
+      <VTWarningDialog
+        open={vtWarningOpen}
+        onClose={() => setVtWarningOpen(false)}
+        onConfirm={() => { setVtWarningOpen(false); window.open(item.publicUrl, "_blank", "noopener,noreferrer") }}
+        vtScanStats={item.vtScanStats}
+        vtScanUrl={item.vtScanUrl}
+      />
+    </>
   )
 }
 
 function DownloadCard({ item }: { item: ContentItemMeta }) {
+  const [vtWarningOpen, setVtWarningOpen] = useState(false)
+  const status = item.vtScanStatus
+  const isBlocked = status === "pending" || status === "scanning"
+  const needsWarning = status === "flagged" || status === "error"
+
+  const handleDownload = (e: React.MouseEvent) => {
+    if (isBlocked) {
+      e.preventDefault()
+      return
+    }
+    if (needsWarning) {
+      e.preventDefault()
+      setVtWarningOpen(true)
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/5">
-        <File className="h-5 w-5 text-muted-foreground" />
+    <>
+      <div className="flex flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground/5">
+            <File className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <VtBadge status={status} stats={item.vtScanStats} />
+        </div>
+        <div className="flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+          {item.description && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
+        </div>
+        <a
+          href={isBlocked ? undefined : item.publicUrl}
+          download={item.title}
+          onClick={handleDownload}
+          className={cn(
+            "inline-flex items-center gap-1.5 text-xs transition-colors",
+            isBlocked
+              ? "cursor-not-allowed text-muted-foreground/40"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-disabled={isBlocked}
+          title={isBlocked ? "Awaiting scan" : undefined}
+        >
+          <Download className="h-3.5 w-3.5" />
+          {isBlocked ? "Scanning…" : "Download"}
+        </a>
       </div>
-      <div className="flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-        {item.description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
-        )}
-        <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
-      </div>
-      <a
-        href={item.publicUrl}
-        download={item.title}
-        onClick={(e) => e.stopPropagation()}
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <Download className="h-3.5 w-3.5" />
-        Download
-      </a>
-    </div>
+      <VTWarningDialog
+        open={vtWarningOpen}
+        onClose={() => setVtWarningOpen(false)}
+        onConfirm={() => {
+          setVtWarningOpen(false)
+          const a = document.createElement("a")
+          a.href = item.publicUrl
+          a.download = item.title
+          a.rel = "noopener noreferrer"
+          a.click()
+        }}
+        vtScanStats={item.vtScanStats}
+        vtScanUrl={item.vtScanUrl}
+      />
+    </>
   )
+}
+
+function VtBadge({ status, stats }: { status: VtScanStatus; stats: VtScanStats | null }) {
+  if (status === "not_required" || status === "clean") return null
+
+  if (status === "scanning" || status === "pending") {
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-[10px] text-yellow-600 dark:text-yellow-400">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        Scanning…
+      </span>
+    )
+  }
+
+  if (status === "flagged") {
+    const count = (stats?.malicious ?? 0) + (stats?.suspicious ?? 0)
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
+        <ShieldAlert className="h-2.5 w-2.5" />
+        {count > 0 ? `${count} threat${count !== 1 ? "s" : ""}` : "Flagged"}
+      </span>
+    )
+  }
+
+  if (status === "error") {
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+        <ShieldCheck className="h-2.5 w-2.5" />
+        Scan failed
+      </span>
+    )
+  }
+
+  return null
 }

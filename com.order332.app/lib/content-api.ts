@@ -1,7 +1,28 @@
-import { apiGet, apiDelete, apiFetch } from './api-client'
+import { apiGet, apiDelete, apiPost } from './api-client'
 import { useAuthStore } from './auth-store'
 
 export type ContentItemType = 'image' | 'audio' | 'pdf' | 'download'
+
+export type VtScanStatus = 'not_required' | 'pending' | 'scanning' | 'clean' | 'flagged' | 'error'
+
+export interface VtScanStats {
+  malicious: number
+  suspicious: number
+  undetected: number
+  harmless: number
+  timeout: number
+  failure: number
+  'type-unsupported': number
+}
+
+export interface ContentFolder {
+  id: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  name: string
+  parentId: string | null
+}
 
 export interface ContentItemMeta {
   id: string
@@ -17,11 +38,22 @@ export interface ContentItemMeta {
   durationSec?: number | null
   width?: number | null
   height?: number | null
+  folderId: string | null
+  vtScanStatus: VtScanStatus
+  vtScanUrl: string | null
+  vtScanStats: VtScanStats | null
+  vtScannedAt: string | null
 }
 
-export async function fetchContentItems(type?: ContentItemType): Promise<{ items: ContentItemMeta[] }> {
-  const path = type ? `/content/items?type=${encodeURIComponent(type)}` : '/content/items'
-  return apiGet<{ items: ContentItemMeta[] }>(path)
+export async function fetchContentItems(
+  type?: ContentItemType,
+  folderId?: string | null,
+): Promise<{ items: ContentItemMeta[] }> {
+  const params = new URLSearchParams()
+  if (type) params.set('type', type)
+  if (folderId) params.set('folderId', folderId)
+  const qs = params.toString()
+  return apiGet<{ items: ContentItemMeta[] }>(`/content/items${qs ? `?${qs}` : ''}`)
 }
 
 export async function deleteContentItem(id: string): Promise<{ ok: boolean }> {
@@ -35,7 +67,7 @@ export async function deleteContentItem(id: string): Promise<{ ok: boolean }> {
  */
 export async function uploadContentItem(
   file: File,
-  meta: { title: string; description?: string },
+  meta: { title: string; description?: string; folderId?: string | null },
   onProgress?: (pct: number) => void,
 ): Promise<{ item: ContentItemMeta }> {
   return new Promise((resolve, reject) => {
@@ -43,6 +75,7 @@ export async function uploadContentItem(
     formData.append('file', file)
     formData.append('title', meta.title)
     if (meta.description) formData.append('description', meta.description)
+    if (meta.folderId) formData.append('folderId', meta.folderId)
 
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/content/items')
@@ -81,6 +114,51 @@ export async function uploadContentItem(
     xhr.send(formData)
   })
 }
+
+// ── Folder CRUD ───────────────────────────────────────────────────────────────
+
+export async function fetchContentFolders(): Promise<{ folders: ContentFolder[] }> {
+  return apiGet<{ folders: ContentFolder[] }>('/content/folders')
+}
+
+export async function createContentFolder(
+  name: string,
+  parentId?: string | null,
+): Promise<{ folder: ContentFolder }> {
+  return apiPost<{ folder: ContentFolder }>('/content/folders', { name, parentId: parentId ?? null })
+}
+
+export async function renameContentFolder(
+  id: string,
+  name: string,
+): Promise<{ folder: ContentFolder }> {
+  const accessToken = useAuthStore.getState().accessToken
+  const res = await fetch(`/api/content/folders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(err.error ?? 'Failed to rename folder')
+  }
+  return res.json() as Promise<{ folder: ContentFolder }>
+}
+
+export async function deleteContentFolder(id: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`/content/folders/${encodeURIComponent(id)}`)
+}
+
+// ── VT polling ────────────────────────────────────────────────────────────────
+
+export async function pollVtScans(): Promise<{ updated: number; stillPending: number }> {
+  return apiPost<{ updated: number; stillPending: number }>('/content/scans/check', {})
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
 
 /** Whether a MIME type is a video (blocked from upload). */
 export function isVideoMimeType(mime: string): boolean {

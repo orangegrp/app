@@ -189,32 +189,58 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       CREATE INDEX IF NOT EXISTS blog_ai_usage_action_idx     ON blog_ai_usage (action);
     `,
   },
+  content_folders: {
+    columns: ['id', 'created_at', 'updated_at', 'created_by', 'name', 'parent_id'],
+    sql: `
+      CREATE TABLE IF NOT EXISTS content_folders (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        created_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL    DEFAULT now(),
+        created_by UUID        REFERENCES users(id) ON DELETE SET NULL,
+        name       TEXT        NOT NULL,
+        parent_id  UUID        REFERENCES content_folders(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS content_folders_parent_id_idx  ON content_folders (parent_id);
+      CREATE INDEX IF NOT EXISTS content_folders_created_by_idx ON content_folders (created_by);
+    `,
+  },
   content_items: {
     columns: [
       'id', 'created_at', 'updated_at', 'uploaded_by', 'item_type',
       'title', 'description', 'storage_key', 'public_url', 'mime_type',
       'file_size', 'duration_sec', 'width', 'height',
+      'folder_id', 'vt_scan_id', 'vt_scan_status', 'vt_scan_url', 'vt_scan_stats', 'vt_scanned_at',
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS content_items (
-        id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-        created_at   TIMESTAMPTZ NOT NULL    DEFAULT now(),
-        updated_at   TIMESTAMPTZ NOT NULL    DEFAULT now(),
-        uploaded_by  UUID        REFERENCES users(id) ON DELETE SET NULL,
-        item_type    TEXT        NOT NULL,
-        title        TEXT        NOT NULL,
-        description  TEXT,
-        storage_key  TEXT        NOT NULL UNIQUE,
-        public_url   TEXT        NOT NULL,
-        mime_type    TEXT        NOT NULL,
-        file_size    BIGINT      NOT NULL,
-        duration_sec INTEGER,
-        width        INTEGER,
-        height       INTEGER
+        id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        created_at     TIMESTAMPTZ NOT NULL    DEFAULT now(),
+        updated_at     TIMESTAMPTZ NOT NULL    DEFAULT now(),
+        uploaded_by    UUID        REFERENCES users(id) ON DELETE SET NULL,
+        item_type      TEXT        NOT NULL,
+        title          TEXT        NOT NULL,
+        description    TEXT,
+        storage_key    TEXT        NOT NULL UNIQUE,
+        public_url     TEXT        NOT NULL,
+        mime_type      TEXT        NOT NULL,
+        file_size      BIGINT      NOT NULL,
+        duration_sec   INTEGER,
+        width          INTEGER,
+        height         INTEGER,
+        folder_id      UUID        REFERENCES content_folders(id) ON DELETE SET NULL,
+        vt_scan_id     TEXT,
+        vt_scan_status TEXT        NOT NULL DEFAULT 'not_required'
+          CHECK (vt_scan_status IN ('not_required', 'pending', 'scanning', 'clean', 'flagged', 'error')),
+        vt_scan_url    TEXT,
+        vt_scan_stats  JSONB,
+        vt_scanned_at  TIMESTAMPTZ
       );
       CREATE INDEX IF NOT EXISTS content_items_item_type_idx   ON content_items (item_type);
       CREATE INDEX IF NOT EXISTS content_items_uploaded_by_idx ON content_items (uploaded_by);
       CREATE INDEX IF NOT EXISTS content_items_created_at_idx  ON content_items (created_at DESC);
+      CREATE INDEX IF NOT EXISTS content_items_folder_id_idx   ON content_items (folder_id);
+      CREATE INDEX IF NOT EXISTS content_items_vt_pending_idx  ON content_items (vt_scan_status)
+        WHERE vt_scan_status IN ('pending', 'scanning');
     `,
   },
   music_tracks: {

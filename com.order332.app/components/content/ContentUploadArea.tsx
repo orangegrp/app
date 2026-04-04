@@ -16,9 +16,10 @@ const ACCEPTED_TYPES = [
 
 interface ContentUploadAreaProps {
   onUploadComplete: (item: ContentItemMeta) => void
+  currentFolderId?: string | null
 }
 
-export function ContentUploadArea({ onUploadComplete }: ContentUploadAreaProps) {
+export function ContentUploadArea({ onUploadComplete, currentFolderId }: ContentUploadAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -59,7 +60,7 @@ export function ContentUploadArea({ onUploadComplete }: ContentUploadAreaProps) 
     try {
       const { item } = await uploadContentItem(
         selectedFile,
-        { title: title.trim(), description: description.trim() || undefined },
+        { title: title.trim(), description: description.trim() || undefined, folderId: currentFolderId },
         setProgress,
       )
       onUploadComplete(item)

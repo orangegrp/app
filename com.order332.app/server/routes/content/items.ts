@@ -210,6 +210,67 @@ contentItemRoutes.delete(
   }
 )
 
+// POST /content/items/:id/retry-scan — re-submit a failed VT scan
+contentItemRoutes.post(
+  '/:id/retry-scan',
+  requirePermission(PERMISSIONS.APP_CONTENT),
+  rateLimitByUser(5, 60_000),
+  async (c) => {
+    const id = c.req.param('id')
+
+    const { data, error } = await supabase
+      .from('content_items')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error || !data) {
+      return c.json({ error: 'Item not found' }, 404)
+    }
+
+    if (!process.env.VIRUSTOTAL_API_KEY) {
+      return c.json({ error: 'VirusTotal is not configured' }, 503)
+    }
+
+    // Only allow retry on error status
+    if (data.vt_scan_status !== 'error') {
+      return c.json({ error: 'Item is not in an error state' }, 400)
+    }
+
+    // Reset to pending immediately so the UI reflects the change
+    const { data: updated, error: updateErr } = await supabase
+      .from('content_items')
+      .update({ vt_scan_status: 'pending', vt_scan_id: null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (updateErr || !updated) {
+      return c.json({ error: 'Failed to reset scan status' }, 500)
+    }
+
+    // Fetch file from public URL and re-submit to VT (fire-and-forget)
+    const filename = (data.storage_key as string).split('/').pop() ?? 'file'
+    void (async () => {
+      try {
+        const fileRes = await fetch(data.public_url as string)
+        if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`)
+        const buffer = await fileRes.arrayBuffer()
+        await submitVtScan(id, buffer, filename)
+      } catch (err) {
+        console.error('[content/items] retry-scan fetch error:', err)
+        await supabase
+          .from('content_items')
+          .update({ vt_scan_status: 'error', updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .then(() => {}, () => {})
+      }
+    })()
+
+    return c.json({ item: rowToContentItem(updated) })
+  }
+)
+
 /** Submits a file to VT and updates the DB row with the result. Best-effort. */
 async function submitVtScan(itemId: string, buffer: ArrayBuffer, filename: string): Promise<void> {
   const apiKey = process.env.VIRUSTOTAL_API_KEY

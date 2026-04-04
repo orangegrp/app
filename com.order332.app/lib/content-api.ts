@@ -152,10 +152,14 @@ export async function deleteContentFolder(id: string): Promise<{ ok: boolean }> 
   return apiDelete<{ ok: boolean }>(`/content/folders/${encodeURIComponent(id)}`)
 }
 
-// ── VT polling ────────────────────────────────────────────────────────────────
+// ── VT polling + retry ────────────────────────────────────────────────────────
 
 export async function pollVtScans(): Promise<{ updated: number; stillPending: number }> {
   return apiPost<{ updated: number; stillPending: number }>('/content/scans/check', {})
+}
+
+export async function retryVtScan(id: string): Promise<{ item: ContentItemMeta }> {
+  return apiPost<{ item: ContentItemMeta }>(`/content/items/${encodeURIComponent(id)}/retry-scan`, {})
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

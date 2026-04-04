@@ -134,6 +134,10 @@ export default function ContentPage() {
     }
   }, [])
 
+  const handleUpdate = useCallback((item: ContentItemMeta) => {
+    setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)))
+  }, [])
+
   return (
     <div className="page-root relative min-h-screen px-6 pb-32 pt-8 sm:pt-10">
       <PageBackground />
@@ -187,6 +191,7 @@ export default function ContentPage() {
             currentFolderId={currentFolderId}
             isCreator={isCreatorMode}
             onDelete={handleDelete}
+            onUpdate={handleUpdate}
             onNavigateFolder={navigateFolder}
             onFoldersChange={setFolders}
           />

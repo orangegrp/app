@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Download, ExternalLink, File, FileText, Loader2, Music, Shield, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatFileSize, type ContentItemMeta, type VtScanStatus, type VtScanStats } from "@/lib/content-api"
+import { formatFileSize, retryVtScan, type ContentItemMeta, type VtScanStatus, type VtScanStats } from "@/lib/content-api"
 import { AudioPlayerButton, AudioPlayerProgress, AudioPlayerTime, AudioPlayerDuration } from "@/components/ui/audio-player"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -21,9 +21,10 @@ interface ContentItemCardProps {
   item: ContentItemMeta
   isCreator: boolean
   onDelete: (id: string) => void
+  onUpdate: (item: ContentItemMeta) => void
 }
 
-export function ContentItemCard({ item, isCreator, onDelete }: ContentItemCardProps) {
+export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: ContentItemCardProps) {
   const [imageExpanded, setImageExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -33,6 +34,16 @@ export function ContentItemCard({ item, isCreator, onDelete }: ContentItemCardPr
 
   const openVtInfo = () => { setVtDownloadFn(null); setVtOpen(true) }
   const openVtGate = (fn: () => void) => { setVtDownloadFn(() => fn); setVtOpen(true) }
+
+  const handleRetry = async () => {
+    try {
+      const { item: updated } = await retryVtScan(item.id)
+      onUpdate(updated)
+      setVtOpen(false)
+    } catch (err) {
+      console.error('[ContentItemCard] retry error:', err)
+    }
+  }
 
   const handleDeleteConfirm = () => {
     setDeleting(true)
@@ -96,6 +107,7 @@ export function ContentItemCard({ item, isCreator, onDelete }: ContentItemCardPr
         open={vtOpen}
         onClose={() => setVtOpen(false)}
         onDownload={vtDownloadFn ?? undefined}
+        onRetry={item.vtScanStatus === "error" ? handleRetry : undefined}
         status={item.vtScanStatus}
         stats={item.vtScanStats}
         vtUrl={item.vtScanUrl}
@@ -381,15 +393,28 @@ interface VtDialogProps {
   open: boolean
   onClose: () => void
   onDownload?: () => void   // if set → shows "Download anyway" confirm CTA
+  onRetry?: () => Promise<void>   // if set → shows "Retry scan" button (error state)
   status: VtScanStatus
   stats: VtScanStats | null
   vtUrl: string | null
 }
 
-function VtDialog({ open, onClose, onDownload, status, stats, vtUrl }: VtDialogProps) {
+function VtDialog({ open, onClose, onDownload, onRetry, status, stats, vtUrl }: VtDialogProps) {
+  const [retrying, setRetrying] = useState(false)
+
   const handleDownload = () => {
     onDownload?.()
     onClose()
+  }
+
+  const handleRetry = async () => {
+    if (!onRetry) return
+    setRetrying(true)
+    try {
+      await onRetry()
+    } finally {
+      setRetrying(false)
+    }
   }
 
   const total = stats ? Object.values(stats).reduce((a: number, b: number) => a + b, 0) : null
@@ -428,10 +453,18 @@ function VtDialog({ open, onClose, onDownload, status, stats, vtUrl }: VtDialogP
         <AlertDialogFooter>
           <AlertDialogCancel
             onClick={onClose}
-            className={!onDownload ? "col-span-2" : undefined}
+            className={!onDownload && !onRetry ? "col-span-2" : undefined}
           >
             {onDownload ? "Cancel" : "Close"}
           </AlertDialogCancel>
+          {onRetry && (
+            <AlertDialogAction
+              onClick={() => void handleRetry()}
+              disabled={retrying}
+            >
+              {retrying ? "Retrying…" : "Retry scan"}
+            </AlertDialogAction>
+          )}
           {onDownload && (
             <AlertDialogAction variant="destructive" onClick={handleDownload}>
               Download anyway

@@ -20,6 +20,7 @@ interface ContentGridProps {
   currentFolderId: string | null
   isCreator: boolean
   onDelete: (id: string) => void
+  onUpdate: (item: ContentItemMeta) => void
   onNavigateFolder: (id: string) => void
   onFoldersChange: (folders: ContentFolder[]) => void
 }
@@ -30,6 +31,7 @@ export function ContentGrid({
   currentFolderId,
   isCreator,
   onDelete,
+  onUpdate,
   onNavigateFolder,
   onFoldersChange,
 }: ContentGridProps) {
@@ -119,6 +121,7 @@ export function ContentGrid({
                       item={item}
                       isCreator={isCreator}
                       onDelete={onDelete}
+                      onUpdate={onUpdate}
                     />
                   </div>
                 ))}

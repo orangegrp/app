@@ -35,9 +35,9 @@ function SyncedLyrics({
 }) {
   const lines = parseLrc(content)
   const { activeIndex } = useLrcSync(lines)
-  const activeRef = useRef<HTMLButtonElement>(null)
+  // Scroll anchor is a non-focusable <span> so scrollIntoView never steals focus
+  const activeRef = useRef<HTMLSpanElement>(null)
 
-  // Scroll active line into the centre of the nearest overflow-y-auto ancestor
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
   }, [activeIndex])
@@ -52,7 +52,6 @@ function SyncedLyrics({
         return (
           <button
             key={i}
-            ref={isActive ? activeRef : undefined}
             type="button"
             onClick={onSeek ? () => onSeek(line.timeMs / 1000) : undefined}
             className={cn(
@@ -67,6 +66,8 @@ function SyncedLyrics({
                 : "cursor-default",
             )}
           >
+            {/* Non-focusable scroll anchor — must not be a button/input */}
+            <span ref={isActive ? activeRef : undefined} aria-hidden="true" />
             {line.text || <span className="text-muted-foreground/20">·</span>}
           </button>
         )

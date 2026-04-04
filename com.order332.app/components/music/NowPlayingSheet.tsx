@@ -114,14 +114,14 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
           <button
             onClick={() => setShowLyrics((v) => !v)}
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
               showLyrics
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
             )}
             aria-label={showLyrics ? "Show artwork" : "Show lyrics"}
           >
-            <AlignLeft className="h-4 w-4" />
+            <AlignLeft className="h-5 w-5" />
           </button>
         )}
       </div>
@@ -184,46 +184,49 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 {/* Art panel */}
                 <div
                   className={cn(
-                    "absolute inset-0 flex flex-col items-center overflow-y-auto px-5 pt-2 pb-4 transition-all duration-300 ease-in-out",
+                    "absolute inset-0 overflow-y-auto scrollbar-hide transition-all duration-300 ease-in-out",
                     showLyrics
                       ? "pointer-events-none -translate-y-4 opacity-0"
                       : "translate-y-0 opacity-100",
                   )}
                 >
-                  <div className="my-5 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
-                    {currentTrack.coverUrl ? (
-                      <img
-                        src={currentTrack.coverUrl}
-                        alt={`${currentTrack.title} cover`}
-                        className={cn(
-                          "h-full w-full object-cover transition-transform duration-1000",
-                          player.isPlaying && "scale-105",
-                        )}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <Music2 className="h-14 w-14 text-muted-foreground/20" />
-                      </div>
-                    )}
-                  </div>
+                  {/* Inner wrapper: min-h-full + justify-center eliminates the gap */}
+                  <div className="flex min-h-full flex-col items-center justify-center px-5 py-4">
+                    <div className="mb-5 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
+                      {currentTrack.coverUrl ? (
+                        <img
+                          src={currentTrack.coverUrl}
+                          alt={`${currentTrack.title} cover`}
+                          className={cn(
+                            "h-full w-full object-cover transition-transform duration-1000",
+                            player.isPlaying && "scale-105",
+                          )}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Music2 className="h-14 w-14 text-muted-foreground/20" />
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="mb-2 text-center">
-                    <h3 className="text-lg font-semibold tracking-wide text-foreground">
-                      {currentTrack.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">{currentTrack.artist}</p>
-                    {currentTrack.genre && (
-                      <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
-                        {currentTrack.genre}
-                      </span>
-                    )}
+                    <div className="text-center">
+                      <h3 className="text-lg font-semibold tracking-wide text-foreground">
+                        {currentTrack.title}
+                      </h3>
+                      <p className="mt-0.5 text-sm text-muted-foreground">{currentTrack.artist}</p>
+                      {currentTrack.genre && (
+                        <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
+                          {currentTrack.genre}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Lyrics panel */}
                 <div
                   className={cn(
-                    "absolute inset-0 overflow-y-auto px-5 pt-2 pb-4 transition-all duration-300 ease-in-out",
+                    "absolute inset-0 overflow-y-auto scrollbar-hide px-5 pt-2 pb-4 transition-all duration-300 ease-in-out",
                     !showLyrics
                       ? "pointer-events-none translate-y-4 opacity-0"
                       : "translate-y-0 opacity-100",
@@ -281,7 +284,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
             {/* Two-column layout */}
             <div className="flex h-full w-full overflow-hidden">
               {/* Left: player panel */}
-              <div className="flex w-[360px] shrink-0 flex-col items-center justify-center overflow-y-auto border-r border-foreground/8 px-10 py-8">
+              <div className="flex w-[360px] shrink-0 flex-col items-center justify-center overflow-y-auto scrollbar-hide border-r border-foreground/8 px-10 py-8">
                 <div className="mb-6 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                   {currentTrack.coverUrl ? (
                     <img
@@ -319,7 +322,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
               {/* Right: lyrics panel */}
               <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 {hasLyrics ? (
-                  <div className="flex-1 overflow-y-auto px-12 py-8">
+                  <div className="flex-1 overflow-y-auto scrollbar-hide px-12 py-8">
                     <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
                       LYRICS
                     </p>

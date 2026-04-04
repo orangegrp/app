@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
+import { useSidebarStore } from '@/lib/sidebar-store'
 import { fetchAndMergeUserProfile } from '@/lib/fetch-user-profile'
 import { isPWAContext } from '@/lib/pwa'
 import { AppSidebar } from '@/components/layout/AppSidebar'
@@ -20,7 +21,8 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
   const user = useAuthStore((s) => s.user)
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(() => !useAuthStore.getState().accessToken)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed)
+  const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed)
 
   useEffect(() => {
     if (store.accessToken) {
@@ -74,7 +76,7 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
       <ProductImprovementAnalyticsNotice />
       <UpdatePrompt />
       {user?.welcomeWizardCompleted === false ? <WelcomeWizardDialog /> : null}
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
       <FloatingNavControls sidebarWidth={sidebarCollapsed ? 60 : 224} />
       <main
         className={[

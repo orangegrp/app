@@ -1410,6 +1410,26 @@ input[type="number"]::-webkit-outer-spin-button:hover {
   color: oklch(1 0 0 / 40%);
 }
 
+/* ── Utility: input-glass ───────────────────────────────────────────── */
+
+.input-glass {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-top);
+  background: var(--glass-bg-input);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  outline: none;
+  transition: var(--glass-transition-fast);
+}
+.input-glass::placeholder {
+  color: var(--muted-foreground);
+}
+.input-glass:focus {
+  border-color: oklch(1 0 0 / 20%);
+}
+
 /* ── Reduced Motion ─────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

@@ -6,7 +6,11 @@ export const PERMISSIONS = {
   /** AI-assisted editing in the blog CMS (proofread, rephrase, etc.). Requires `app.blog`. */
   APP_BLOG_AI: 'app.blog.ai',
   APP_CONTENT: 'app.content',
+  /** Upload content to the Content Library (images, audio, PDFs, downloads). Requires app.content. */
+  APP_CONTENT_UPLOAD: 'app.content.upload',
   APP_MUSIC: 'app.music',
+  /** Upload tracks to the Music mini-app. Requires app.music. */
+  APP_MUSIC_UPLOAD: 'app.music.upload',
   APP_ROOM: 'app.room',
   APP_LABS: 'app.labs',
   APP_WEBPC: 'app.webpc',

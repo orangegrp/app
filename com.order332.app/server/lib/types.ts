@@ -118,6 +118,49 @@ export interface JWTPayload {
   exp: number
 }
 
+// ── Content Library ───────────────────────────────────────────────────────────
+
+export type ContentItemType = 'image' | 'audio' | 'pdf' | 'download'
+
+export interface ContentItem {
+  id: string
+  createdAt: string
+  updatedAt: string
+  uploadedBy: string | null
+  itemType: ContentItemType
+  title: string
+  description?: string | null
+  storageKey: string
+  publicUrl: string
+  mimeType: string
+  fileSize: number
+  durationSec?: number | null
+  width?: number | null
+  height?: number | null
+}
+
+// ── Music ─────────────────────────────────────────────────────────────────────
+
+export type LyricsType = 'lrc' | 'txt'
+
+export interface MusicTrack {
+  id: string
+  createdAt: string
+  updatedAt: string
+  uploadedBy: string | null
+  title: string
+  artist: string
+  genre?: string | null
+  durationSec: number
+  audioKey: string
+  audioUrl: string
+  coverKey?: string | null
+  coverUrl?: string | null
+  lyricsKey?: string | null
+  lyricsUrl?: string | null
+  lyricsType?: LyricsType | null
+}
+
 // Hono context variable bindings
 export interface HonoEnv {
   Variables: {

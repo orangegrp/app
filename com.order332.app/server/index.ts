@@ -21,6 +21,8 @@ import { blogPostRoutes } from '@/server/routes/blog/posts'
 import { blogImageRoutes } from '@/server/routes/blog/images'
 import { blogAiAssistRoutes } from '@/server/routes/blog/ai-assist'
 import { webpcDiskUrlRoutes } from '@/server/routes/webpc/disk-url'
+import { contentItemRoutes } from '@/server/routes/content/items'
+import { musicTrackRoutes } from '@/server/routes/music/tracks'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -313,6 +315,21 @@ app.route('/admin/users', adminUserRoutes)
 
 // GET /admin/ai-usage      — AI usage log + stats (requires admin.permissions.manage)
 app.route('/admin/ai-usage', adminAiUsageRoutes)
+
+// ── Content Library routes ────────────────────────────────────────────────────
+
+// GET    /content/items      — list content items (requires app.content)
+// POST   /content/items      — upload item (requires app.content + app.content.upload)
+// DELETE /content/items/:id  — delete item (requires app.content + app.content.upload)
+app.route('/content/items', contentItemRoutes)
+
+// ── Music routes ──────────────────────────────────────────────────────────────
+
+// GET    /music/tracks           — list tracks (requires app.music)
+// POST   /music/tracks           — upload track (requires app.music + app.music.upload)
+// DELETE /music/tracks/:id       — delete track (requires app.music + app.music.upload)
+// GET    /music/tracks/:id/lyrics — get lyrics content (requires app.music)
+app.route('/music/tracks', musicTrackRoutes)
 
 // ── Blog routes ───────────────────────────────────────────────────────────────
 

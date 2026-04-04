@@ -57,6 +57,8 @@ export async function consumeBlogAiTextStream(
     throw new Error(err.error ?? 'Request failed')
   }
 
+  const MAX_STREAM_CHARS = 32_000
+
   const reader = response.body?.getReader()
   if (!reader) throw new Error('No response body')
 
@@ -66,6 +68,10 @@ export async function consumeBlogAiTextStream(
     const { done, value } = await reader.read()
     if (done) break
     full += decoder.decode(value, { stream: true })
+    if (full.length > MAX_STREAM_CHARS) {
+      reader.cancel().catch(() => {})
+      throw new Error('AI response exceeded size limit')
+    }
     onDelta(full)
   }
   const tail = decoder.decode()

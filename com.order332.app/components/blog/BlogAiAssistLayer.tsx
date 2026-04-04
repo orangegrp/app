@@ -324,7 +324,16 @@ export function BlogAiAssistLayer({
           return
         }
         const safeAlt = escapeMdAlt(alt.trim() || 'Illustration')
-        ed.insertAfterSelection(`\n\n![${safeAlt}](${url})\n`)
+        let parsedUrl: URL
+        try {
+          parsedUrl = new URL(url)
+        } catch {
+          return
+        }
+        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+          return
+        }
+        ed.insertAfterSelection(`\n\n![${safeAlt}](${parsedUrl.href})\n`)
         const fr = ed.getSelectionRect()
         if (fr) setFlashRect(fr)
         setTimeout(() => setFlashRect(null), 700)

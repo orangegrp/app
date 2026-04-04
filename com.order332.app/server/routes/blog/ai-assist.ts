@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { generateText, streamText } from 'ai'
 import { requireAuth } from '@/server/middleware/auth'
 import { requirePermission } from '@/server/middleware/rbac'
+import { rateLimit, rateLimitByUser, checkRateLimit } from '@/server/middleware/rate-limit'
 import { PERMISSIONS } from '@/lib/permissions'
 import { BLOG_AI_MAX_REQUEST_TEXT_CHARS } from '@/lib/blog-ai-assist-limits'
 import { uploadBlogImageBuffer } from '@/server/lib/blog-image-upload'
@@ -129,6 +130,8 @@ export const blogAiAssistRoutes = new Hono<HonoEnv>()
 blogAiAssistRoutes.use('*', requireAuth)
 blogAiAssistRoutes.use('*', requirePermission(PERMISSIONS.APP_BLOG))
 blogAiAssistRoutes.use('*', requirePermission(PERMISSIONS.APP_BLOG_AI))
+blogAiAssistRoutes.use('*', rateLimit(5, 60_000))
+blogAiAssistRoutes.use('*', rateLimitByUser(5, 60_000))
 
 blogAiAssistRoutes.post('/', async (c) => {
   let json: unknown
@@ -175,6 +178,13 @@ blogAiAssistRoutes.post('/', async (c) => {
   const promptBlock = wrapUserSnippetForPrompt(trimmed)
 
   if (action === 'createImage') {
+    const user = c.get('user')
+    const imgLimit = checkRateLimit(`createImage:user:${user.id}`, 10, 60 * 60_000)
+    if (imgLimit.limited) {
+      c.header('Retry-After', String(imgLimit.retryAfter))
+      return c.json({ error: 'Too many requests' }, 429)
+    }
+
     try {
       const imageGen = await generateText({
         model: MODEL_IMAGE,
@@ -231,6 +241,15 @@ blogAiAssistRoutes.post('/', async (c) => {
       maxOutputTokens: maxOutputTokensForTextAction(action),
       temperature: 0,
     })
+  }
+
+  if (action === 'rephrase' || action === 'expand') {
+    const user = c.get('user')
+    const haikuLimit = checkRateLimit(`haiku:user:${user.id}`, 30, 60 * 60_000)
+    if (haikuLimit.limited) {
+      c.header('Retry-After', String(haikuLimit.retryAfter))
+      return emptyTextOkResponse()
+    }
   }
 
   const system =

@@ -860,7 +860,9 @@ export function BlogAiAssistLayer({
               <Label>Model</Label>
               <Select value={imageModel} onValueChange={(v) => setImageModel(v as 'grok' | 'gemini')}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: string | null) => v === 'gemini' ? 'Gemini — text rendering' : 'Grok'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="grok">Grok</SelectItem>

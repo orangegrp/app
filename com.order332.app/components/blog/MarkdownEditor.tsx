@@ -72,27 +72,31 @@ function selectionInMarkdownCode(state: EditorState, from: number, to: number): 
   return false
 }
 
-/** One client rect per logical line in the selection (matches native highlight strips). */
+/** One client rect per visual line in the selection (handles word-wrap correctly). */
 function rectsFromCmSelection(view: EditorView): DOMRect[] {
   const { from, to } = view.state.selection.main
   if (from === to) return []
-  const doc = view.state.doc
   const rects: DOMRect[] = []
-  const fromLine = doc.lineAt(from)
-  const toLine = doc.lineAt(to)
-  for (let n = fromLine.number; n <= toLine.number; n++) {
-    const line = doc.line(n)
-    const a = Math.max(from, line.from)
-    const b = Math.min(to, line.to)
-    if (a >= b) continue
-    const s = view.coordsAtPos(a)
-    const e = view.coordsAtPos(b)
-    if (!s || !e) continue
-    const left = Math.min(s.left, s.right, e.left, e.right)
-    const right = Math.max(s.left, s.right, e.left, e.right)
-    const top = Math.min(s.top, s.bottom, e.top, e.bottom)
-    const bottom = Math.max(s.top, s.bottom, e.top, e.bottom)
-    rects.push(new DOMRect(left, top, right - left, bottom - top))
+  // Iterate visual (wrapped) line blocks rather than logical lines so that
+  // word-wrapped logical lines produce one rect per wrapped visual segment.
+  let pos = from
+  while (pos <= to) {
+    const block = view.lineBlockAt(pos)
+    const a = Math.max(from, block.from)
+    const b = Math.min(to, block.to)
+    if (a < b) {
+      const s = view.coordsAtPos(a)
+      const e = view.coordsAtPos(b)
+      if (s && e) {
+        const left = Math.min(s.left, e.left)
+        const right = Math.max(s.right, e.right)
+        const top = Math.min(s.top, e.top)
+        const bottom = Math.max(s.bottom, e.bottom)
+        rects.push(new DOMRect(left, top, right - left, bottom - top))
+      }
+    }
+    if (block.to >= to) break
+    pos = block.to + 1
   }
   const clip = view.scrollDOM.getBoundingClientRect()
   return clipDomRectsToRect(rects, clip)

@@ -114,7 +114,7 @@ const MODEL_TEXT_NANO = 'openai/gpt-5.4-nano' as const                      // r
 const MODEL_TEXT_HAIKU = 'anthropic/claude-3-haiku' as const                // fast, cheap, good for short generative tasks
 const MODEL_TEXT_GROK = 'xai/grok-4.1-fast-non-reasoning' as const          // cheapest non-reasoning, best style/quality
 
-const MODEL_IMAGE_NANOBANANA = 'google/imagen-4.0-fast-generate-001' as const     // 0.02$ per image
+const MODEL_IMAGE_GEMINI = 'google/imagen-4.0-fast-generate-001' as const     // 0.02$ per image
 const MODEL_IMAGE_GROK = 'xai/grok-imagine-image' as const                          // 0.02$ per image
 
 // switch these over to grok once openai credits expire
@@ -159,8 +159,8 @@ export const blogAiAssistRoutes = new Hono<HonoEnv>()
 blogAiAssistRoutes.use('*', requireAuth)
 blogAiAssistRoutes.use('*', requirePermission(PERMISSIONS.APP_BLOG))
 blogAiAssistRoutes.use('*', requirePermission(PERMISSIONS.APP_BLOG_AI))
-blogAiAssistRoutes.use('*', rateLimit(5, 60_000))
-blogAiAssistRoutes.use('*', rateLimitByUser(5, 60_000))
+blogAiAssistRoutes.use('*', rateLimit(10, 60_000))
+blogAiAssistRoutes.use('*', rateLimitByUser(10, 60_000))
 
 blogAiAssistRoutes.post('/', async (c) => {
   let json: unknown
@@ -215,7 +215,7 @@ blogAiAssistRoutes.post('/', async (c) => {
     }
 
     // Text-rendering models (Gemini) for needsText, cheaper Grok otherwise
-    const imageModel = needsText ? MODEL_IMAGE_NANOBANANA : MODEL_IMAGE_GROK
+    const imageModel = needsText ? MODEL_IMAGE_GEMINI : MODEL_IMAGE_GROK
 
     try {
       const imageGen = await generateImage({

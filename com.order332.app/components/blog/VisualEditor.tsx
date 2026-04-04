@@ -19,6 +19,7 @@ import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { DOMParser as PmDOMParser, Slice } from '@tiptap/pm/model'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Table from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
@@ -617,21 +618,30 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
         const sel = ed.state.selection
         const rangeFrom = from ?? sel.from
         const rangeTo = to ?? sel.to
-        // Parse as block-level markdown (bypasses tiptap-markdown's inline:true override).
+        // tiptap-markdown's parser.parse() returns an HTML string, not a ProseMirror Node.
+        // Parse that HTML via ProseMirror's DOMParser to get real PM nodes, then replace:
+        //   - single textblock output → replace inline content directly (clean, precise)
+        //   - multi-block output → use replaceRange with an open slice
+        // This avoids tiptap-markdown's insertContentAt override (which uses inline:true and
+        // can strip block structure or delete content when it produces an empty inline result).
         try {
-          const mdStorage = ed.storage.markdown as {
-            parser: { parse(content: string): { content: unknown } }
-          }
-          const parsedDoc = mdStorage.parser.parse(text)
+          const html = (ed.storage.markdown as { parser: { parse(s: string): string } }).parser.parse(text)
+          const wrapper = document.createElement('div')
+          wrapper.innerHTML = html
+          const pmDoc = PmDOMParser.fromSchema(ed.schema).parse(wrapper)
           const { tr } = ed.state
-          // replaceWith throws RangeError if the fragment doesn't fit; catch and fall back.
-          tr.replaceWith(rangeFrom, rangeTo, parsedDoc.content as never)
+          if (pmDoc.childCount === 1 && pmDoc.firstChild?.isTextblock) {
+            // Single paragraph: replace the text range with the paragraph's inline content
+            tr.replaceWith(rangeFrom, rangeTo, pmDoc.firstChild.content)
+          } else {
+            // Multi-block: let replaceRange fit the blocks into the document
+            tr.replaceRange(rangeFrom, rangeTo, Slice.maxOpen(pmDoc.content))
+          }
           ed.view.dispatch(tr)
-          return
-        } catch {
-          /* fall through to inline insertion */
+          ed.view.focus()
+        } catch (err) {
+          console.error('[VisualEditor] replaceSelection error:', err)
         }
-        ed.chain().focus().insertContentAt({ from: rangeFrom, to: rangeTo }, text).run()
       },
       insertAfterSelection: (markdown: string, at?: number) => {
         const ed = editorRef.current

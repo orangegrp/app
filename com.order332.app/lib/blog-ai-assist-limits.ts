@@ -1,12 +1,12 @@
 /** Hard caps (UTF-16 code units) for user-supplied text per blog AI feature — short-snippet scope. */
 export const BLOG_AI_MAX_INPUT_CHARS = {
   proofread: 6_000,
-  rephrase: 6_000,
-  expand: 6_000,
-  condense: 6_000,
-  translate: 6_000,
-  quickDraft: 8_000,
-  createImage: 2_000,
+  rephrase: 2_000,
+  expand: 2_000,
+  condense: 2_000,
+  translate: 2_000,
+  quickDraft: 2_000,
+  createImage: 1_00,
 } as const
 
 export type BlogAiAssistActionName = keyof typeof BLOG_AI_MAX_INPUT_CHARS

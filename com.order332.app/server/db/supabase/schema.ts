@@ -174,6 +174,21 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       );
     `,
   },
+  blog_ai_usage: {
+    columns: ['id', 'created_at', 'user_id', 'action', 'input_chars'],
+    sql: `
+      CREATE TABLE IF NOT EXISTS blog_ai_usage (
+        id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+        created_at  TIMESTAMPTZ DEFAULT now()             NOT NULL,
+        user_id     TEXT                                  NOT NULL,
+        action      TEXT                                  NOT NULL,
+        input_chars INTEGER                               NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS blog_ai_usage_created_at_idx ON blog_ai_usage (created_at DESC);
+      CREATE INDEX IF NOT EXISTS blog_ai_usage_user_id_idx    ON blog_ai_usage (user_id);
+      CREATE INDEX IF NOT EXISTS blog_ai_usage_action_idx     ON blog_ai_usage (action);
+    `,
+  },
 }
 
 export async function validateAndMigrateSchema(): Promise<void> {

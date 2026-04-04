@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, KeyRound, Shield, Sparkles } from 'lucide-react'
+import { ArrowLeft, BarChart2, KeyRound, Shield, Sparkles } from 'lucide-react'
 import { PageBackground } from '@/components/layout/PageBackground'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -91,6 +91,20 @@ export default function AdminHubPage() {
               <p className="text-sm tracking-widest text-foreground mb-1">User permissions</p>
               <p className="text-xs text-muted-foreground tracking-wider">
                 Assign app and admin permissions to members
+              </p>
+            </Link>
+          )}
+
+          {canManagePermissions && (
+            <Link
+              href="/admin/ai-usage"
+              className="glass-card rounded-2xl p-6 hover:-translate-y-0.5 transition-transform"
+              style={{ background: 'oklch(1 0 0 / 5%)' }}
+            >
+              <BarChart2 className="mb-3 text-muted-foreground" size={22} strokeWidth={1.5} />
+              <p className="text-sm tracking-widest text-foreground mb-1">AI usage</p>
+              <p className="text-xs text-muted-foreground tracking-wider">
+                Monitor blog AI assist requests by user and action
               </p>
             </Link>
           )}

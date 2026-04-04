@@ -17,6 +17,7 @@ import {
   wrapUserSnippetForPrompt,
   type BlogAiTextStreamAction,
 } from '@/server/lib/blog-ai-assist-guards'
+import { trackAiUsage } from '@/server/lib/blog-ai-usage-tracker'
 import type { HonoEnv } from '@/server/lib/types'
 import { BLOG_TRANSLATE_LANGUAGE_OPTIONS } from '@/lib/blog-translate-languages'
 
@@ -205,9 +206,10 @@ blogAiAssistRoutes.post('/', async (c) => {
   }
 
   const promptBlock = wrapUserSnippetForPrompt(trimmed)
+  const user = c.get('user')
+  trackAiUsage(user.id, action, trimmed.length)
 
   if (action === 'createImage') {
-    const user = c.get('user')
     const imgLimit = checkRateLimit(`createImage:user:${user.id}`, 10, 60 * 60_000)
     if (imgLimit.limited) {
       c.header('Retry-After', String(imgLimit.retryAfter))
@@ -294,7 +296,6 @@ blogAiAssistRoutes.post('/', async (c) => {
   }
 
   if (action === 'rephrase' || action === 'expand') {
-    const user = c.get('user')
     const haikuLimit = checkRateLimit(`haiku:user:${user.id}`, 30, 60 * 60_000)
     if (haikuLimit.limited) {
       c.header('Retry-After', String(haikuLimit.retryAfter))

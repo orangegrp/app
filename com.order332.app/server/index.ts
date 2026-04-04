@@ -16,6 +16,7 @@ import { accountRoutes } from '@/server/routes/auth/account'
 import { devLoginRoutes } from '@/server/routes/auth/dev-login'
 import { adminInviteRoutes } from '@/server/routes/admin/invites'
 import { adminUserRoutes } from '@/server/routes/admin/users'
+import { adminAiUsageRoutes } from '@/server/routes/admin/ai-usage'
 import { blogPostRoutes } from '@/server/routes/blog/posts'
 import { blogImageRoutes } from '@/server/routes/blog/images'
 import { blogAiAssistRoutes } from '@/server/routes/blog/ai-assist'
@@ -309,6 +310,9 @@ app.route('/admin/invites', adminInviteRoutes)
 // GET   /admin/users       — list users (requires admin.permissions.manage)
 // PATCH /admin/users/:id   — profile / permissions / freeze / delete (same gate)
 app.route('/admin/users', adminUserRoutes)
+
+// GET /admin/ai-usage      — AI usage log + stats (requires admin.permissions.manage)
+app.route('/admin/ai-usage', adminAiUsageRoutes)
 
 // ── Blog routes ───────────────────────────────────────────────────────────────
 

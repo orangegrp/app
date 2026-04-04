@@ -43,11 +43,17 @@ export function useMusicContext(): MusicContextValue {
   return ctx
 }
 
+/** Returns null when called outside MusicProvider — for optional consumers. */
+export function useOptionalMusicContext(): MusicContextValue | null {
+  return useContext(MusicContext)
+}
+
 export function MusicProvider({ children }: { children: ReactNode }) {
   const player = useAudioPlayer<MusicTrackMeta>()
   const user = useAuthStore((s) => s.user)
   const isMobile = useIsMobile()
   const isCreator = user ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC_UPLOAD) : false
+  const hasMusic = user ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC) : false
 
   const [tracks, setTracks] = useState<MusicTrackMeta[]>([])
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null)
@@ -61,6 +67,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => { tracksRef.current = tracks }, [tracks])
 
   useEffect(() => {
+    // Only fetch if user has music access; skip otherwise to avoid unnecessary requests
+    if (!user) return
+    if (!hasMusic) { setLoading(false); return }
     fetchMusicTracks()
       .then(({ tracks: fetched }) => {
         setTracks(fetched)
@@ -68,7 +77,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load tracks"))
       .finally(() => setLoading(false))
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMusic, !!user])
 
   const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
 

@@ -639,6 +639,15 @@ export function AudioPlayerVolume({
 }) {
   const player = useAudioPlayer()
 
+  // Safari / WebKit does not support programmatic volume control on iOS
+  // and has inconsistent support on macOS — hide the slider on those browsers.
+  const [isWebKit, setIsWebKit] = useState(false)
+  useEffect(() => {
+    const ua = navigator.userAgent
+    setIsWebKit(/Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgA/i.test(ua))
+  }, [])
+  if (isWebKit) return null
+
   return (
     <div className={cn("flex items-center gap-2", className)}>
       {showIcon && (

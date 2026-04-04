@@ -15,14 +15,74 @@ import { DashboardPageTransition } from '@/components/layout/DashboardPageTransi
 import { Spinner } from '@/components/ui/spinner'
 import { PageBackground } from '@/components/layout/PageBackground'
 import { ProductImprovementAnalyticsNotice } from '@/components/consent/ProductImprovementAnalyticsNotice'
+import { AudioPlayerProvider } from '@/components/ui/audio-player'
+import { MusicProvider, useMusicContext } from '@/components/music/MusicContext'
+import { MusicPlayerBar } from '@/components/music/MusicPlayerBar'
+import { NowPlayingSheet } from '@/components/music/NowPlayingSheet'
+import { MediaSessionSync } from '@/components/music/MediaSessionSync'
+import { SidebarMusicMini } from '@/components/layout/SidebarMusicMini'
+
+/**
+ * Inner shell — must be a child of AudioPlayerProvider + MusicProvider so it can
+ * consume both contexts for the persistent player bar and now-playing sheet.
+ */
+function DashboardShell({ children }: { children: React.ReactNode }) {
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed)
+  const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed)
+  const user = useAuthStore((s) => s.user)
+  const { nowPlayingOpen, openNowPlaying, closeNowPlaying } = useMusicContext()
+
+  return (
+    <div className="min-h-screen">
+      <ProductImprovementAnalyticsNotice />
+      <UpdatePrompt />
+      {user?.welcomeWizardCompleted === false ? <WelcomeWizardDialog /> : null}
+
+      {/* Syncs navigator.mediaSession with the current track + player state */}
+      <MediaSessionSync />
+
+      <AppSidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        musicWidget={
+          <SidebarMusicMini
+            collapsed={sidebarCollapsed}
+            onOpenNowPlaying={openNowPlaying}
+          />
+        }
+      />
+      <FloatingNavControls sidebarWidth={sidebarCollapsed ? 60 : 224} />
+
+      {/* Desktop main content */}
+      <main
+        className={[
+          'transition-[padding-left] duration-200 ease-in-out',
+          'hidden sm:block',
+          sidebarCollapsed ? 'sm:pl-[60px]' : 'sm:pl-56',
+        ].join(' ')}
+      >
+        <DashboardPageTransition>{children}</DashboardPageTransition>
+      </main>
+
+      {/* Mobile main content */}
+      <div className="sm:hidden">
+        <DashboardPageTransition>{children}</DashboardPageTransition>
+      </div>
+
+      {/* Persistent player — visible on all pages while music is playing */}
+      <MusicPlayerBar onOpenNowPlaying={openNowPlaying} />
+      <NowPlayingSheet open={nowPlayingOpen} onClose={closeNowPlaying} />
+
+      <MobileTabBar />
+      <InstallPrompt />
+    </div>
+  )
+}
 
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
   const store = useAuthStore()
-  const user = useAuthStore((s) => s.user)
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(() => !useAuthStore.getState().accessToken)
-  const sidebarCollapsed = useSidebarStore((s) => s.collapsed)
-  const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed)
 
   useEffect(() => {
     if (store.accessToken) {
@@ -72,26 +132,10 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="min-h-screen">
-      <ProductImprovementAnalyticsNotice />
-      <UpdatePrompt />
-      {user?.welcomeWizardCompleted === false ? <WelcomeWizardDialog /> : null}
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      <FloatingNavControls sidebarWidth={sidebarCollapsed ? 60 : 224} />
-      <main
-        className={[
-          'transition-[padding-left] duration-200 ease-in-out',
-          'hidden sm:block',
-          sidebarCollapsed ? 'sm:pl-[60px]' : 'sm:pl-56',
-        ].join(' ')}
-      >
-        <DashboardPageTransition>{children}</DashboardPageTransition>
-      </main>
-      <div className="sm:hidden">
-        <DashboardPageTransition>{children}</DashboardPageTransition>
-      </div>
-      <MobileTabBar />
-      <InstallPrompt />
-    </div>
+    <AudioPlayerProvider>
+      <MusicProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </MusicProvider>
+    </AudioPlayerProvider>
   )
 }

@@ -19,6 +19,8 @@ export const SIDEBAR_COLLAPSED_WIDTH = 'w-[60px]'
 interface AppSidebarProps {
   collapsed: boolean
   onToggle: () => void
+  /** Optional widget rendered between the nav and profile trigger (e.g. music miniplayer). */
+  musicWidget?: React.ReactNode
 }
 
 type NavItem = {
@@ -29,7 +31,7 @@ type NavItem = {
   hardNav: boolean
 }
 
-export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
+export function AppSidebar({ collapsed, onToggle, musicWidget }: AppSidebarProps) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -171,6 +173,9 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           )
         })}
       </nav>
+
+      {/* Music mini-player (injected from root layout) */}
+      {musicWidget}
 
       {/* Profile trigger */}
       <div className="relative border-t border-white/5 p-2">

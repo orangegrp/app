@@ -18,6 +18,9 @@ import {
   type BlogAiTextStreamAction,
 } from '@/server/lib/blog-ai-assist-guards'
 import type { HonoEnv } from '@/server/lib/types'
+import { BLOG_TRANSLATE_LANGUAGE_OPTIONS } from '@/lib/blog-translate-languages'
+
+const ALLOWED_TARGET_LANGUAGES = new Set(BLOG_TRANSLATE_LANGUAGE_OPTIONS.map((o) => o.value))
 
 const aiAssistActionSchema = z.enum([
   'proofread',
@@ -43,6 +46,12 @@ const bodySchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'targetLanguage is required for translate',
+          path: ['targetLanguage'],
+        })
+      } else if (!ALLOWED_TARGET_LANGUAGES.has(data.targetLanguage.trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'targetLanguage is not an allowed value',
           path: ['targetLanguage'],
         })
       }
@@ -105,7 +114,7 @@ const MODEL_TEXT_NANO = 'openai/gpt-5.4-nano' as const                      // r
 const MODEL_TEXT_HAIKU = 'anthropic/claude-3-haiku' as const                // fast, cheap, good for short generative tasks
 const MODEL_TEXT_GROK = 'xai/grok-4.1-fast-non-reasoning' as const          // cheapest non-reasoning, best style/quality
 
-const MODEL_IMAGE_NANOBANANA = 'google/gemini-3.1-flash-image-preview' as const     // 0.04$ per image
+const MODEL_IMAGE_NANOBANANA = 'google/imagen-4.0-fast-generate-001' as const     // 0.02$ per image
 const MODEL_IMAGE_GROK = 'xai/grok-imagine-image' as const                          // 0.02$ per image
 
 // switch these over to grok once openai credits expire

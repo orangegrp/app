@@ -12,6 +12,17 @@ interface Bucket {
 // protection in development and against single-instance bursts in production.
 const buckets = new Map<string, Bucket>()
 
+/** Prune all expired buckets. Called periodically to bound Map size. */
+function pruneExpiredBuckets(): void {
+  const now = Date.now()
+  for (const [key, bucket] of buckets) {
+    if (now >= bucket.resetAt) buckets.delete(key)
+  }
+}
+
+// Prune every 5 minutes so the Map doesn't grow unboundedly across many unique keys.
+setInterval(pruneExpiredBuckets, 5 * 60_000).unref()
+
 /**
  * Imperative rate-limit check — use inside route handlers when middleware can't
  * inspect the request body (e.g. action-specific limits).

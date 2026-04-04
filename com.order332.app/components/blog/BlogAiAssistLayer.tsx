@@ -55,6 +55,13 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 
 export interface BlogAiEditorHandle {
@@ -318,7 +325,7 @@ export function BlogAiAssistLayer({
   const [translateLang, setTranslateLang] = useState(BLOG_TRANSLATE_LANGUAGE_OPTIONS[0].value)
   const [imageDialogOpen, setImageDialogOpen] = useState(false)
   const [imagePromptText, setImagePromptText] = useState('')
-  const [imageNeedsText, setImageNeedsText] = useState(false)
+  const [imageModel, setImageModel] = useState<'grok' | 'gemini'>('grok')
   const translateSourceRef = useRef<string | null>(null)
   const translateFromRef = useRef<number | null>(null)
   const translateToRef = useRef<number | null>(null)
@@ -528,7 +535,7 @@ export function BlogAiAssistLayer({
     imageGlowBoundsRef.current = selectionGlowBounds(ed!)
     imageSelToRef.current = meta.to
     setImagePromptText(meta.text)
-    setImageNeedsText(false)
+    setImageModel('grok')
     setAiMenuOpen(false)
     setImageDialogOpen(true)
   }, [])
@@ -553,7 +560,7 @@ export function BlogAiAssistLayer({
 
     try {
       const doImageRequest = async (sig: AbortSignal) =>
-        blogAiAssistCreateImage(prompt, imageNeedsText, sig)
+        blogAiAssistCreateImage(prompt, imageModel === 'gemini', sig)
 
       let result: { url: string; alt: string }
       const [sig0, clear0] = makeTimeoutSignal(ac.signal, AI_IMAGE_TIMEOUT_MS)
@@ -586,7 +593,8 @@ export function BlogAiAssistLayer({
       try {
         parsedUrl = new URL(result!.url)
       } catch { return }
-      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') return
+      if (parsedUrl.protocol !== 'https:') return
+      if (!parsedUrl.hostname.endsWith('.supabase.co')) return
       ed.insertAfterSelection(`\n\n![${safeAlt}](${parsedUrl.href})\n`, insertAt)
       const fr = ed.getSelectionRect()
       if (fr) setFlashRect(fr)
@@ -602,7 +610,7 @@ export function BlogAiAssistLayer({
       abortRef.current = null
       onAiActionComplete?.()
     }
-  }, [imagePromptText, imageNeedsText, onAiActionComplete, setLoadingState])
+  }, [imagePromptText, imageModel, onAiActionComplete, setLoadingState])
 
   const applyFormat = useCallback(
     (fn: () => void) => {
@@ -805,18 +813,18 @@ export function BlogAiAssistLayer({
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="blog-translate-lang">Target language</Label>
-              <select
-                id="blog-translate-lang"
-                value={translateLang}
-                onChange={(e) => setTranslateLang(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-white/10 bg-background px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                {BLOG_TRANSLATE_LANGUAGE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={translateLang} onValueChange={(v) => { if (v) setTranslateLang(v) }}>
+                <SelectTrigger id="blog-translate-lang" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BLOG_TRANSLATE_LANGUAGE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">
               <Button type="button" variant="outline" onClick={() => setTranslateDialogOpen(false)}>
@@ -848,18 +856,18 @@ export function BlogAiAssistLayer({
                 placeholder="Describe the image you want to generate…"
               />
             </div>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={imageNeedsText}
-                onChange={(e) => setImageNeedsText(e.target.checked)}
-                className="h-4 w-4 rounded border border-white/20 bg-background accent-white"
-              />
-              <span className="text-sm text-muted-foreground leading-tight">
-                Image needs to contain readable text
-                <span className="block text-xs text-muted-foreground/60 mt-0.5">Uses a different model optimised for text rendering</span>
-              </span>
-            </label>
+            <div className="space-y-1.5">
+              <Label>Model</Label>
+              <Select value={imageModel} onValueChange={(v) => setImageModel(v as 'grok' | 'gemini')}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="grok">Grok</SelectItem>
+                  <SelectItem value="gemini">Gemini — text rendering</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <DialogFooter className="gap-2 sm:gap-2">
               <Button type="button" variant="outline" onClick={() => setImageDialogOpen(false)}>
                 Cancel

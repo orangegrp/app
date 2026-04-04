@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { ChevronDown, Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react"
+import { ChevronDown, Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useAudioPlayer, useAudioPlayerTime, AudioPlayerSpeed, AudioPlayerTime, AudioPlayerDuration } from "@/components/ui/audio-player"
+import { useAudioPlayer, useAudioPlayerTime, AudioPlayerSpeed, AudioPlayerTime, AudioPlayerDuration, AudioPlayerVolume } from "@/components/ui/audio-player"
 import {
   ScrubBarContainer,
   ScrubBarProgress,
@@ -60,30 +60,6 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
   }, [currentTrack?.id, currentTrack?.lyricsUrl])
 
   if (!currentTrack) return null
-
-  const VolumeSlider = () => (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={player.toggleMute}
-        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-        aria-label={player.isMuted ? "Unmute" : "Mute"}
-      >
-        {player.isMuted || player.volume === 0
-          ? <VolumeX className="h-4 w-4" />
-          : <Volume2 className="h-4 w-4" />}
-      </button>
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.02}
-        value={player.isMuted ? 0 : player.volume}
-        onChange={(e) => player.setVolume(Number(e.target.value))}
-        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-foreground/15 accent-foreground"
-        aria-label="Volume"
-      />
-    </div>
-  )
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -234,9 +210,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
 
           {/* Volume + speed row */}
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex-1">
-              <VolumeSlider />
-            </div>
+            <AudioPlayerVolume className="flex-1" />
             <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
           </div>
 

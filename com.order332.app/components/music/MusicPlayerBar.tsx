@@ -1,12 +1,13 @@
 "use client"
 
-import { Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react"
+import { Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   useAudioPlayer,
   useAudioPlayerTime,
   AudioPlayerTime,
   AudioPlayerDuration,
+  AudioPlayerVolume,
 } from "@/components/ui/audio-player"
 import {
   ScrubBarContainer,
@@ -108,29 +109,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
             <span>/</span>
             <AudioPlayerDuration />
           </div>
-
-          {/* Volume */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={player.toggleMute}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={player.isMuted ? "Unmute" : "Mute"}
-            >
-              {player.isMuted || player.volume === 0
-                ? <VolumeX className="h-3.5 w-3.5" />
-                : <Volume2 className="h-3.5 w-3.5" />}
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.02}
-              value={player.isMuted ? 0 : player.volume}
-              onChange={(e) => player.setVolume(Number(e.target.value))}
-              className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-foreground/15 accent-foreground"
-              aria-label="Volume"
-            />
-          </div>
+          <AudioPlayerVolume className="w-28" />
         </div>
       </div>
     </div>
@@ -138,8 +117,13 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
 
   return (
     <>
-      {/* Mobile bar — sits above MobileTabBar (bottom-14 ≈ h-14 tab bar height) */}
-      <div className="fixed inset-x-0 bottom-14 z-40 sm:hidden">{barContent}</div>
+      {/* Mobile bar — sits flush above MobileTabBar, accounting for safe-area-inset-bottom */}
+      <div
+        className="fixed inset-x-0 z-40 sm:hidden"
+        style={{ bottom: 'calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))' }}
+      >
+        {barContent}
+      </div>
 
       {/* Desktop bar — sits at bottom with sidebar offset */}
       <div

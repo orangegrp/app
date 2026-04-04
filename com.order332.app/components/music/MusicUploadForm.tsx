@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
+import { parseBlob } from "music-metadata"
 import { CloudUpload, FileMusic, Music2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { uploadMusicTrack, type MusicTrackMeta } from "@/lib/music-api"
@@ -44,23 +45,64 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  const handleAudioFile = useCallback((file: File) => {
+  const handleAudioFile = useCallback(async (file: File) => {
     if (!AUDIO_MIME_TYPES.has(file.type) && !file.name.match(/\.(mp3|ogg|wav|flac|aac|m4a)$/i)) {
       setError("Unsupported audio format.")
       return
     }
     setAudioFile(file)
     setError(null)
-    if (!title) setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
 
-    // Auto-detect duration
-    const objectUrl = URL.createObjectURL(file)
-    const audio = new Audio(objectUrl)
-    audio.addEventListener("loadedmetadata", () => {
-      setDurationSec(Math.round(audio.duration) || 0)
-      URL.revokeObjectURL(objectUrl)
-    })
-  }, [title])
+    // Parse embedded metadata (ID3, Vorbis, etc.) using music-metadata browser build
+    try {
+      const meta = await parseBlob(file)
+      const { common, format } = meta
+
+      if (common.title?.trim()) setTitle(common.title.trim())
+      else setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
+
+      if (common.artist?.trim()) setArtist(common.artist.trim())
+      else if (common.albumartist?.trim()) setArtist(common.albumartist.trim())
+
+      if (common.genre?.[0]?.trim()) setGenre(common.genre[0].trim())
+
+      if (format.duration) setDurationSec(Math.round(format.duration))
+
+      // Extract embedded cover art — normalise to PNG via canvas for cross-browser safety
+      if (common.picture?.length) {
+        const pic = common.picture[0]
+        const srcBlob = new Blob([pic.data.buffer.slice(pic.data.byteOffset, pic.data.byteOffset + pic.data.byteLength) as ArrayBuffer], { type: pic.format || "image/jpeg" })
+        const srcUrl = URL.createObjectURL(srcBlob)
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement("canvas")
+          canvas.width = img.naturalWidth
+          canvas.height = img.naturalHeight
+          canvas.getContext("2d")?.drawImage(img, 0, 0)
+          URL.revokeObjectURL(srcUrl)
+          canvas.toBlob((pngBlob) => {
+            if (!pngBlob) return
+            const pngFile = new File([pngBlob], "cover.png", { type: "image/png" })
+            setCoverFile(pngFile)
+            const reader = new FileReader()
+            reader.onload = (e) => setCoverPreview(e.target?.result as string)
+            reader.readAsDataURL(pngFile)
+          }, "image/png")
+        }
+        img.onerror = () => URL.revokeObjectURL(srcUrl)
+        img.src = srcUrl
+      }
+    } catch {
+      // Fallback: just use filename for title and Web Audio for duration
+      setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
+      const objectUrl = URL.createObjectURL(file)
+      const audio = new Audio(objectUrl)
+      audio.addEventListener("loadedmetadata", () => {
+        setDurationSec(Math.round(audio.duration) || 0)
+        URL.revokeObjectURL(objectUrl)
+      })
+    }
+  }, [])
 
   const handleCoverFile = useCallback((file: File) => {
     setCoverFile(file)

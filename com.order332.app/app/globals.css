@@ -142,6 +142,10 @@
 /* ── Design Tokens ───────────────────────────────────────────────── */
 
 :root {
+  /* Mobile tab bar content height (py-4 × 2 + 28px icon + gap + text ≈ 82px).
+     The bar also adds env(safe-area-inset-bottom) padding separately. */
+  --mobile-nav-height: 5.25rem;
+
   /* Backgrounds — lower alpha = more liquid glass (backdrop shows through) */
   --glass-bg-card:      oklch(1 0 0 / 5%);
   --glass-bg-overlay:   oklch(0.12 0 0 / 48%);

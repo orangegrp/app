@@ -120,7 +120,12 @@ export function AudioPlayerProvider<TData = unknown>({
     null
   )
   const [paused, setPaused] = useState(true)
-  const [playbackRate, setPlaybackRateState] = useState<number>(1)
+  const [playbackRate, setPlaybackRateState] = useState<number>(() => {
+    if (typeof window === "undefined") return 1
+    const saved = localStorage.getItem("audio:playbackRate")
+    const parsed = saved ? parseFloat(saved) : NaN
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+  })
   const [volume, setVolumeState] = useState<number>(1)
   const [isMuted, setIsMutedState] = useState<boolean>(false)
   const prevVolumeRef = useRef<number>(1)
@@ -214,6 +219,7 @@ export function AudioPlayerProvider<TData = unknown>({
     if (!audioRef.current) return
     audioRef.current.playbackRate = rate
     setPlaybackRateState(rate)
+    localStorage.setItem("audio:playbackRate", String(rate))
   }, [])
 
   const setVolume = useCallback((v: number) => {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Drawer as DrawerPrimitive } from "vaul"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { AlignLeft, Music2, Pause, Play, SkipBack, SkipForward, X } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -58,24 +59,14 @@ function NowPlayingScrubBar() {
   )
 }
 
-// ── Player controls ─────────────────────────────────────────────────────────
-// Module-scope component → stable identity across re-renders of the parent.
-// NowPlayingSheet no longer re-renders at 60 fps, so this tree is stable.
-interface PlayerControlsProps {
-  hasLyrics: boolean
-  showLyrics: boolean
-  onToggleLyrics: () => void
-}
-
-function PlayerControls({ hasLyrics, showLyrics, onToggleLyrics }: PlayerControlsProps) {
+// ── Transport controls: scrubber + prev / play / next ───────────────────────
+// Module-scope → stable identity. Only NowPlayingScrubBar re-renders at 60 fps.
+function TransportControls() {
   const { playNext, playPrev } = useMusicContext()
   const player = useAudioPlayer()
-  const isMobile = useIsMobile()
-
   return (
-    <div className="shrink-0">
+    <div>
       <NowPlayingScrubBar />
-
       <div className="my-3 flex items-center justify-center gap-4">
         <button
           onClick={playPrev}
@@ -98,24 +89,47 @@ function PlayerControls({ hasLyrics, showLyrics, onToggleLyrics }: PlayerControl
           <SkipForward className="h-5 w-5" />
         </button>
       </div>
+    </div>
+  )
+}
 
+// ── Settings row: volume + speed + optional lyrics toggle ───────────────────
+interface SettingsRowProps {
+  hasLyrics: boolean
+  showLyrics: boolean
+  onToggleLyrics: () => void
+}
+function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics }: SettingsRowProps) {
+  return (
+    <div className="flex items-center gap-3">
+      <AudioPlayerVolume className="flex-1" />
+      <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+      {hasLyrics && (
+        <button
+          onClick={onToggleLyrics}
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
+            showLyrics
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+          aria-label={showLyrics ? "Show artwork" : "Show lyrics"}
+        >
+          <AlignLeft className="h-5 w-5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Desktop player controls: transport + settings (no lyrics toggle) ─────────
+function PlayerControls() {
+  return (
+    <div className="shrink-0">
+      <TransportControls />
       <div className="flex items-center gap-3">
         <AudioPlayerVolume className="flex-1" />
         <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
-        {isMobile && hasLyrics && (
-          <button
-            onClick={onToggleLyrics}
-            className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
-              showLyrics
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            aria-label={showLyrics ? "Show artwork" : "Show lyrics"}
-          >
-            <AlignLeft className="h-5 w-5" />
-          </button>
-        )}
       </div>
     </div>
   )
@@ -131,11 +145,19 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
 
   const [lyricsContent, setLyricsContent] = useState<string | null>(null)
   const [lyricsType, setLyricsType] = useState<LyricsType>("txt")
-  const [showLyrics, setShowLyrics] = useState(false)
 
-  useEffect(() => {
-    setShowLyrics(false)
-  }, [currentTrack?.id])
+  // Persist lyrics-view preference across songs and sessions
+  const [showLyrics, setShowLyrics] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem("music:showLyrics") === "true"
+  })
+
+  const toggleLyrics = () =>
+    setShowLyrics((v) => {
+      const next = !v
+      localStorage.setItem("music:showLyrics", String(next))
+      return next
+    })
 
   useEffect(() => {
     if (!currentTrack?.lyricsUrl || !currentTrack.id) {
@@ -155,33 +177,30 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
   const hasLyrics = !!lyricsContent
   const handleSeek = (t: number) => player.seek(t)
 
-  return (
-    <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogPrimitive.Portal>
-        {/* Backdrop */}
-        <DialogPrimitive.Backdrop
-          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm transition-opacity duration-200 data-starting-style:opacity-0 data-ending-style:opacity-0"
-        />
-
-        {/* ── MOBILE: full-height bottom sheet ── */}
-        {isMobile && (
-          <DialogPrimitive.Popup
-            className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-2xl transition-transform duration-300 data-starting-style:translate-y-full data-ending-style:translate-y-full"
-            style={{ height: "95dvh", ...glassBg }}
+  // ── MOBILE: full-screen vaul drawer with swipe-to-dismiss ──────────────────
+  if (isMobile) {
+    return (
+      <DrawerPrimitive.Root
+        open={open}
+        onOpenChange={(o) => { if (!o) onClose() }}
+        direction="bottom"
+        shouldScaleBackground={false}
+      >
+        <DrawerPrimitive.Portal>
+          <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" />
+          <DrawerPrimitive.Content
+            className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-2xl outline-none"
+            style={{ height: "100dvh", ...glassBg }}
           >
-            {/* Drag handle */}
+            {/* Drag handle — vaul attaches its touch listeners to the content root,
+                so grabbing anywhere near the top also works, but the visible handle
+                gives users an obvious affordance. */}
             <div className="flex shrink-0 items-center px-4 pt-3 pb-1">
-              <button
-                onClick={onClose}
-                className="mx-auto flex h-5 items-start justify-center"
-                aria-label="Close"
-              >
-                <div className="h-1 w-10 rounded-full bg-foreground/20" />
-              </button>
+              <div className="mx-auto h-1 w-10 rounded-full bg-foreground/20" />
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col">
-              {/* Sliding panels */}
+              {/* Sliding panels — flex-1 absorbs all spare space */}
               <div className="relative min-h-0 flex-1">
                 {/* Art panel */}
                 <div
@@ -193,7 +212,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                   )}
                 >
                   <div className="flex min-h-full flex-col items-center justify-center px-5 py-4">
-                    <div className="mb-5 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
+                    <div className="mb-5 h-64 w-64 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                       {currentTrack.coverUrl ? (
                         <img
                           src={currentTrack.coverUrl}
@@ -257,93 +276,103 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 </div>
               </div>
 
-              {/* Controls */}
-              <div className="shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
-                <PlayerControls
+              {/* Transport controls — sit directly below the sliding panels */}
+              <div className="shrink-0 px-5 pt-4 pb-6">
+                <TransportControls />
+              </div>
+
+              {/* Settings row — pinned at the very bottom with safe-area inset */}
+              <div className="shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1">
+                <SettingsRow
                   hasLyrics={hasLyrics}
                   showLyrics={showLyrics}
-                  onToggleLyrics={() => setShowLyrics((v) => !v)}
+                  onToggleLyrics={toggleLyrics}
                 />
               </div>
             </div>
-          </DialogPrimitive.Popup>
-        )}
+          </DrawerPrimitive.Content>
+        </DrawerPrimitive.Portal>
+      </DrawerPrimitive.Root>
+    )
+  }
 
-        {/* ── DESKTOP: centered dialog ── */}
-        {!isMobile && (
-          <DialogPrimitive.Popup
-            className="fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl transition-all duration-150 data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0"
-            style={{ width: "min(90vw, 1080px)", height: "82vh", ...glassBg }}
+  // ── DESKTOP: centered base-ui dialog ───────────────────────────────────────
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogPrimitive.Portal>
+        {/* Backdrop */}
+        <DialogPrimitive.Backdrop
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm transition-opacity duration-200 data-starting-style:opacity-0 data-ending-style:opacity-0"
+        />
+
+        <DialogPrimitive.Popup
+          className="fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl transition-all duration-150 data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0"
+          style={{ width: "min(90vw, 1080px)", height: "82vh", ...glassBg }}
+        >
+          <button
+            onClick={onClose}
+            className="absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-muted-foreground transition-colors hover:bg-foreground/15 hover:text-foreground"
+            aria-label="Close"
           >
-            <button
-              onClick={onClose}
-              className="absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-muted-foreground transition-colors hover:bg-foreground/15 hover:text-foreground"
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <X className="h-4 w-4" />
+          </button>
 
-            <div className="flex h-full w-full overflow-hidden">
-              {/* Left: player */}
-              <div className="flex w-[360px] shrink-0 flex-col items-center justify-center overflow-y-auto scrollbar-hide border-r border-foreground/8 px-10 py-8">
-                <div className="mb-6 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
-                  {currentTrack.coverUrl ? (
-                    <img
-                      src={currentTrack.coverUrl}
-                      alt={`${currentTrack.title} cover`}
-                      className={cn(
-                        "h-full w-full object-cover transition-transform duration-1000",
-                        player.isPlaying && "scale-105",
-                      )}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Music2 className="h-14 w-14 text-muted-foreground/20" />
-                    </div>
-                  )}
-                </div>
-                <div className="mb-5 w-full text-center">
-                  <h3 className="text-xl font-semibold tracking-wide text-foreground">
-                    {currentTrack.title}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{currentTrack.artist}</p>
-                  {currentTrack.genre && (
-                    <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
-                      {currentTrack.genre}
-                    </span>
-                  )}
-                </div>
-                <div className="w-full">
-                  <PlayerControls
-                    hasLyrics={hasLyrics}
-                    showLyrics={showLyrics}
-                    onToggleLyrics={() => setShowLyrics((v) => !v)}
+          <div className="flex h-full w-full overflow-hidden">
+            {/* Left: player */}
+            <div className="flex w-[360px] shrink-0 flex-col items-center justify-center overflow-y-auto scrollbar-hide border-r border-foreground/8 px-10 py-8">
+              <div className="mb-6 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
+                {currentTrack.coverUrl ? (
+                  <img
+                    src={currentTrack.coverUrl}
+                    alt={`${currentTrack.title} cover`}
+                    className={cn(
+                      "h-full w-full object-cover transition-transform duration-1000",
+                      player.isPlaying && "scale-105",
+                    )}
                   />
-                </div>
-              </div>
-
-              {/* Right: lyrics */}
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                {hasLyrics ? (
-                  <div className="flex-1 overflow-y-auto scrollbar-hide px-12 py-8">
-                    <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
-                      LYRICS
-                    </p>
-                    <LyricsDisplay
-                      lyricsContent={lyricsContent}
-                      lyricsType={lyricsType}
-                      onSeek={handleSeek}
-                    />
-                  </div>
                 ) : (
-                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground/40">
-                    No lyrics available
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Music2 className="h-14 w-14 text-muted-foreground/20" />
                   </div>
                 )}
               </div>
+              <div className="mb-5 w-full text-center">
+                <h3 className="text-xl font-semibold tracking-wide text-foreground">
+                  {currentTrack.title}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">{currentTrack.artist}</p>
+                {currentTrack.genre && (
+                  <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
+                    {currentTrack.genre}
+                  </span>
+                )}
+              </div>
+              <div className="w-full">
+                <PlayerControls />
+              </div>
             </div>
-          </DialogPrimitive.Popup>
-        )}
+
+            {/* Right: lyrics */}
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {hasLyrics ? (
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-12 py-8">
+                  <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                    LYRICS
+                  </p>
+                  <LyricsDisplay
+                    lyricsContent={lyricsContent!}
+                    lyricsType={lyricsType}
+                    onSeek={handleSeek}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground/40">
+                  No lyrics available
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )

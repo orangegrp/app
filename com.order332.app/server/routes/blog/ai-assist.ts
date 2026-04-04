@@ -85,7 +85,8 @@ const SYSTEM_ALT = withSecurity(
 )
 
 function systemTranslate(targetLanguage: string): string {
-  const lang = targetLanguage.trim()
+  // Sanitize: allow only letters, spaces, hyphens, and parentheses (valid for language names)
+  const lang = targetLanguage.trim().replace(/[^a-zA-Z\s\-()]/g, '').trim() || 'the target language'
   return withSecurity(
     `Output only the translated text: no markdown fences around the entire answer, no surrounding quotes, no preamble or postscript. Translate the snippet into ${lang}. Preserve markdown structure (headings ATX/SETEXT, bullet/numbered lists, links, inline code, fenced code blocks). Preserve meaning, tone, and register. Do not translate code identifiers inside code spans or fences unless the user text clearly requires it. Output only the translated text.`,
   )

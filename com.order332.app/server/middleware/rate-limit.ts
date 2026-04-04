@@ -85,6 +85,7 @@ export function rateLimit(max: number, windowMs: number) {
 export function rateLimitByUser(max: number, windowMs: number) {
   return createMiddleware<HonoEnv>(async (c, next) => {
     const user = c.get('user')
+    if (!user) return next()
     const key = `${c.req.path}:user:${user.id}`
     const now = Date.now()
 

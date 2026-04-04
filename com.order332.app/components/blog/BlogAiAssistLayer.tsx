@@ -34,6 +34,7 @@ import {
   consumeBlogAiTextStream,
   type BlogAiAssistAction,
 } from '@/lib/blog-ai-api'
+import { BLOG_AI_MAX_INPUT_CHARS } from '@/lib/blog-ai-assist-limits'
 import type { MarkdownEditorHandle } from '@/components/blog/MarkdownEditor'
 import {
   roundedRectInnerMetrics,
@@ -150,22 +151,22 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
           <clipPath id={clipId}>
             <rect x={0} y={0} width={w} height={h} rx={r} ry={r} />
           </clipPath>
-          <filter id={filterTrailId} x="-55%" y="-55%" width="210%" height="210%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="4.75" result="blur" />
+          <filter id={filterTrailId} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
             <feComponentTransfer in="blur" result="boosted">
-              <feFuncR type="linear" slope="1.22" intercept="0.03" />
-              <feFuncG type="linear" slope="1.22" intercept="0.03" />
-              <feFuncB type="linear" slope="1.22" intercept="0.03" />
-              <feFuncA type="linear" slope="1.22" intercept="0" />
+              <feFuncR type="linear" slope="1.4" intercept="0" />
+              <feFuncG type="linear" slope="1.4" intercept="0" />
+              <feFuncB type="linear" slope="1.4" intercept="0" />
+              <feFuncA type="linear" slope="1.4" intercept="0" />
             </feComponentTransfer>
           </filter>
-          <filter id={filterHeadId} x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="1.85" result="blur" />
+          <filter id={filterHeadId} x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
             <feComponentTransfer in="blur" result="boosted">
-              <feFuncR type="linear" slope="1.18" intercept="0.03" />
-              <feFuncG type="linear" slope="1.18" intercept="0.03" />
-              <feFuncB type="linear" slope="1.18" intercept="0.03" />
-              <feFuncA type="linear" slope="1.2" intercept="0" />
+              <feFuncR type="linear" slope="1.5" intercept="0" />
+              <feFuncG type="linear" slope="1.5" intercept="0" />
+              <feFuncB type="linear" slope="1.5" intercept="0" />
+              <feFuncA type="linear" slope="1.5" intercept="0" />
             </feComponentTransfer>
           </filter>
         </defs>
@@ -183,7 +184,7 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
               attributeName="stroke-dashoffset"
               from="0"
               to={-P}
-              dur="2.35s"
+              dur="1.4s"
               repeatCount="indefinite"
             />
           </path>
@@ -203,7 +204,7 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
               attributeName="stroke-dashoffset"
               from="0"
               to={-P}
-              dur="2.35s"
+              dur="1.4s"
               repeatCount="indefinite"
             />
           </path>
@@ -211,7 +212,7 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
             d={pathD}
             fill="none"
             stroke="#ffffff"
-            strokeWidth={2}
+            strokeWidth={3}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray={dashArray}
@@ -221,7 +222,7 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
               attributeName="stroke-dashoffset"
               from="0"
               to={-P}
-              dur="2.35s"
+              dur="1.4s"
               repeatCount="indefinite"
             />
           </path>
@@ -308,6 +309,7 @@ export function BlogAiAssistLayer({
     if (!ed) return
     const meta = ed.getSelectionMeta()
     if (!meta || meta.inCodeBlock || !meta.text.trim()) return
+    if (meta.text.length > BLOG_AI_MAX_INPUT_CHARS[action]) return
 
     abortRef.current?.abort()
     const ac = new AbortController()
@@ -316,6 +318,8 @@ export function BlogAiAssistLayer({
     const bounds = selectionGlowBounds(ed)
     setGlowRects(bounds ? [bounds] : [])
     setLoading(true)
+    // Deselect text so selection highlight doesn't show through the glow animation
+    window.getSelection()?.removeAllRanges()
 
     try {
       if (action === 'createImage') {
@@ -397,6 +401,8 @@ export function BlogAiAssistLayer({
     const bounds = selectionGlowBounds(ed)
     setGlowRects(bounds ? [bounds] : [])
     setLoading(true)
+    // Deselect text so selection highlight doesn't show through the glow animation
+    window.getSelection()?.removeAllRanges()
 
     try {
       const res = await blogAiAssistRequest('translate', text, {
@@ -532,32 +538,38 @@ export function BlogAiAssistLayer({
           >
             <AiMenuTextRow
               label="Expand"
+
               icon={<UnfoldHorizontal className="size-3.5 shrink-0 opacity-80" aria-hidden />}
               onClick={() => void runAction('expand')}
             />
             <AiMenuTextRow
               label="Rephrase"
+
               icon={<Wand2 className="size-3.5 shrink-0 opacity-80" aria-hidden />}
               onClick={() => void runAction('rephrase')}
             />
             <AiMenuTextRow
               label="Proofread"
+
               icon={<CheckSquare className="size-3.5 shrink-0 opacity-80" aria-hidden />}
               onClick={() => void runAction('proofread')}
             />
             <AiMenuTextRow
               label="Condense"
+
               icon={<FoldHorizontal className="size-3.5 shrink-0 opacity-80" aria-hidden />}
               onClick={() => void runAction('condense')}
             />
             <AiMenuTextRow
               label="Translate…"
+
               icon={<Languages className="size-3.5 shrink-0 opacity-80" aria-hidden />}
               onClick={openTranslateDialog}
             />
             <Separator className="my-0.5 bg-white/10" />
             <AiMenuTextRow
-              label="Create image"
+              label="Create image from text"
+
               icon={<ImagePlus className="size-3.5 shrink-0 opacity-80" aria-hidden />}
               onClick={() => void runAction('createImage')}
             />

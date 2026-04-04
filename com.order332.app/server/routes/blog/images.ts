@@ -2,6 +2,7 @@ import 'server-only'
 import { Hono } from 'hono'
 import { requireAuth } from '@/server/middleware/auth'
 import { requirePermission } from '@/server/middleware/rbac'
+import { rateLimit } from '@/server/middleware/rate-limit'
 import { PERMISSIONS } from '@/lib/permissions'
 import {
   BLOG_IMAGE_ALLOWED_TYPES,
@@ -17,7 +18,7 @@ export const blogImageRoutes = new Hono<HonoEnv>()
 blogImageRoutes.use('*', requireAuth, requirePermission(PERMISSIONS.APP_BLOG))
 
 // POST /blog/images — upload a blog image, returns public URL
-blogImageRoutes.post('/', async (c) => {
+blogImageRoutes.post('/', rateLimit(20, 60_000), async (c) => {
   let formData: FormData
   try {
     formData = await c.req.formData()
@@ -109,6 +110,11 @@ blogImageRoutes.delete('/', async (c) => {
   }
   // Strip any query string
   const key = url.slice(idx + marker.length).split('?')[0]
+
+  // Reject path traversal sequences
+  if (key.includes('..') || key.includes('//')) {
+    return c.json({ error: 'Invalid image URL' }, 400)
+  }
 
   // Only allow deleting own images
   const user = c.get('user')

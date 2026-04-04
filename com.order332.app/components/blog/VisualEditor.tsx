@@ -120,7 +120,7 @@ function ResizableImageView({ node, updateAttributes, selected, deleteNode }: No
       const delta = dx !== 0
         ? (ev.clientX - startX) * dx
         : (ev.clientY - startY) * dy
-      updateAttributes({ width: Math.max(MIN_IMAGE_WIDTH, Math.round(startWidth + delta)) })
+      updateAttributes({ width: Math.min(2000, Math.max(MIN_IMAGE_WIDTH, Math.round(startWidth + delta))) })
     }
     const onMouseUp = () => {
       window.removeEventListener('mousemove', onMouseMove)
@@ -246,7 +246,7 @@ const ResizableImage = Image.extend({
           state: { write: (s: string) => void },
           node: { attrs: Record<string, unknown> },
         ) {
-          const src = (node.attrs.src as string) ?? ''
+          const src = ((node.attrs.src as string) ?? '').replace(/"/g, '&quot;')
           const alt = ((node.attrs.alt as string) ?? '').replace(/"/g, '&quot;')
           if (node.attrs.width) {
             state.write(`<img src="${src}" alt="${alt}" width="${node.attrs.width as number}" />`)
@@ -496,15 +496,28 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
     if (!ed) return
     if (!linkUrl || linkUrl === 'https://') {
       ed.chain().focus().extendMarkRange('link').unsetLink().run()
-    } else if (linkHasSelection) {
-      ed.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run()
     } else {
-      const text = linkText.trim() || linkUrl
-      ed
-        .chain()
-        .focus()
-        .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href: linkUrl } }] })
-        .run()
+      // Validate URL scheme — reject javascript:, data:, etc.
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(linkUrl)
+      } catch {
+        return
+      }
+      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+        return
+      }
+      const safeUrl = parsedUrl.href
+      if (linkHasSelection) {
+        ed.chain().focus().extendMarkRange('link').setLink({ href: safeUrl }).run()
+      } else {
+        const text = linkText.trim() || safeUrl
+        ed
+          .chain()
+          .focus()
+          .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href: safeUrl } }] })
+          .run()
+      }
     }
     setLinkOpen(false)
   }

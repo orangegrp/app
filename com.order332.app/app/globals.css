@@ -1899,16 +1899,16 @@ input[type="number"]::-webkit-outer-spin-button:hover {
 @keyframes blog-ai-glow-trail-pulse-opacity {
   0%,
   100% {
-    opacity: 0.92;
+    opacity: 0.25;
   }
   50% {
-    opacity: 0.98;
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .blog-ai-glow-snake-svg .blog-ai-glow-trail-pulse {
-    animation: blog-ai-glow-trail-pulse-opacity 2.2s ease-in-out infinite;
+    animation: blog-ai-glow-trail-pulse-opacity 1.3s ease-in-out infinite;
   }
 }
 

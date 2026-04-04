@@ -222,7 +222,14 @@ export function FrontmatterPanel({ data, onChange, onInsertImage }: Props) {
                   {onInsertImage && (
                     <button
                       type="button"
-                      onClick={() => onInsertImage(img.url)}
+                      onClick={() => {
+                        try {
+                          const p = new URL(img.url)
+                          if (p.protocol === 'https:' || p.protocol === 'http:') {
+                            onInsertImage(img.url)
+                          }
+                        } catch { /* invalid URL, no-op */ }
+                      }}
                       title="Insert into post"
                       className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors"
                     >

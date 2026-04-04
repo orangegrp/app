@@ -426,7 +426,10 @@ function VtDialog({ open, onClose, onDownload, status, stats, vtUrl }: VtDialogP
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onClose}>
+          <AlertDialogCancel
+            onClick={onClose}
+            className={!onDownload ? "col-span-2" : undefined}
+          >
             {onDownload ? "Cancel" : "Close"}
           </AlertDialogCancel>
           {onDownload && (

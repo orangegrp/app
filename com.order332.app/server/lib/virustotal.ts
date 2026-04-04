@@ -73,22 +73,21 @@ export async function getVtAnalysis(
     throw new Error(`VT analysis fetch failed: ${res.status}`)
   }
 
+  // VT API v3: `meta` is top-level, not inside `data`
   const json = await res.json() as {
     data: {
-      attributes: {
-        status: string
-        stats: VtScanStats
-      }
+      attributes: { status: string; stats: VtScanStats }
       links: { item?: string }
-      meta?: { file_info?: { sha256?: string } }
     }
+    meta?: { file_info?: { sha256?: string } }
   }
 
   const { status, stats } = json.data.attributes
 
-  // Prefer SHA256-based GUI permalink; fall back to extracting from the API item URL
+  // data.links.item is the API URL: https://www.virustotal.com/api/v3/files/{sha256}
+  // Extract the sha256 (last path segment) to build the public GUI URL.
   const sha256 =
-    json.data.meta?.file_info?.sha256 ??
+    json.meta?.file_info?.sha256 ??
     json.data.links.item?.split('/').pop()
   const vtUrl = sha256
     ? `https://www.virustotal.com/gui/file/${sha256}`

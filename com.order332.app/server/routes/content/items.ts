@@ -216,6 +216,73 @@ contentItemRoutes.delete(
   }
 )
 
+// PATCH /content/items/:id — move item to a different folder (or root)
+contentItemRoutes.patch(
+  '/:id',
+  requirePermission(PERMISSIONS.APP_CONTENT_UPLOAD),
+  async (c) => {
+    const id = c.req.param('id')
+    const user = c.get('user')
+
+    let body: { folderId?: string | null }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Expected JSON body' }, 400)
+    }
+
+    if (!('folderId' in body)) {
+      return c.json({ error: 'Nothing to update' }, 400)
+    }
+
+    const folderId = body.folderId ?? null
+
+    // Validate target folder exists if non-null
+    if (folderId !== null) {
+      const { data: folder, error: folderErr } = await supabase
+        .from('content_folders')
+        .select('id')
+        .eq('id', folderId)
+        .single()
+      if (folderErr || !folder) {
+        return c.json({ error: 'Folder not found' }, 404)
+      }
+    }
+
+    // Check ownership
+    const { data: existing, error: fetchErr } = await supabase
+      .from('content_items')
+      .select('uploaded_by, storage_key')
+      .eq('id', id)
+      .single()
+
+    if (fetchErr || !existing) {
+      return c.json({ error: 'Item not found' }, 404)
+    }
+
+    const isSuperuser = user.permissions === '*'
+    if (!isSuperuser && existing.uploaded_by !== user.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from('content_items')
+      .update({ folder_id: folderId, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (updateErr || !updated) {
+      console.error('[content/items] move error:', updateErr)
+      return c.json({ error: 'Move failed' }, 500)
+    }
+
+    const signedPublicUrl = await signUrl(CONTENT_LIBRARY_BUCKET, updated.storage_key as string)
+    const item = rowToContentItem(updated)
+    return c.json({ item: { ...item, publicUrl: signedPublicUrl || item.publicUrl } })
+  }
+)
+
 // POST /content/items/:id/retry-scan — re-submit a failed VT scan
 contentItemRoutes.post(
   '/:id/retry-scan',

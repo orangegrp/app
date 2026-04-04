@@ -29,6 +29,7 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [vtOpen, setVtOpen] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   // When set, the VT dialog shows a "Download anyway" CTA for flagged files
   const [vtDownloadFn, setVtDownloadFn] = useState<(() => void) | null>(null)
 
@@ -52,7 +53,12 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
   }
 
   return (
-    <div className="glass-card group relative flex flex-col overflow-hidden rounded-xl">
+    <div
+      className={cn("glass-card group relative flex flex-col overflow-hidden rounded-xl cursor-grab active:cursor-grabbing", isDragging && "opacity-50")}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData('application/x-content-item-id', item.id); e.dataTransfer.effectAllowed = 'move'; setIsDragging(true) }}
+      onDragEnd={() => setIsDragging(false)}
+    >
       {/* Creator delete button */}
       {isCreator && (
         <button

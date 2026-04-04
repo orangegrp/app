@@ -158,6 +158,26 @@ export async function pollVtScans(): Promise<{ updated: number; stillPending: nu
   return apiPost<{ updated: number; stillPending: number }>('/content/scans/check', {})
 }
 
+export async function moveContentItem(
+  id: string,
+  folderId: string | null,
+): Promise<{ item: ContentItemMeta }> {
+  const accessToken = useAuthStore.getState().accessToken
+  const res = await fetch(`/api/content/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify({ folderId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(err.error ?? 'Failed to move item')
+  }
+  return res.json() as Promise<{ item: ContentItemMeta }>
+}
+
 export async function retryVtScan(id: string): Promise<{ item: ContentItemMeta }> {
   return apiPost<{ item: ContentItemMeta }>(`/content/items/${encodeURIComponent(id)}/retry-scan`, {})
 }

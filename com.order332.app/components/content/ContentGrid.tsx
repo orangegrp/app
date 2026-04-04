@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { FolderPlus } from "lucide-react"
+import { FolderOpen, FolderPlus } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { AudioPlayerProvider } from "@/components/ui/audio-player"
 import { ContentItemCard } from "./ContentItemCard"
 import { FolderCard } from "./FolderCard"
@@ -21,7 +22,8 @@ interface ContentGridProps {
   isCreator: boolean
   onDelete: (id: string) => void
   onUpdate: (item: ContentItemMeta) => void
-  onNavigateFolder: (id: string) => void
+  onMove: (itemId: string, folderId: string | null) => void
+  onNavigateFolder: (id: string | null) => void
   onFoldersChange: (folders: ContentFolder[]) => void
 }
 
@@ -32,6 +34,7 @@ export function ContentGrid({
   isCreator,
   onDelete,
   onUpdate,
+  onMove,
   onNavigateFolder,
   onFoldersChange,
 }: ContentGridProps) {
@@ -74,16 +77,26 @@ export function ContentGrid({
     }
   }
 
-  const isEmpty = currentFolders.length === 0 && items.length === 0
+  const parentFolderId = currentFolderId
+    ? (folders.find((f) => f.id === currentFolderId)?.parentId ?? null)
+    : null
+  const isEmpty = currentFolders.length === 0 && items.length === 0 && !currentFolderId
 
   return (
     <>
       <div className="space-y-6">
         {/* Folders section */}
-        {(currentFolders.length > 0 || isCreator) && (
+        {(currentFolders.length > 0 || isCreator || currentFolderId) && (
           <div>
             <p className="card-label mb-3">Folders</p>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 items-start">
+              {/* Virtual ".." card — drop target to move items to parent; also navigates up */}
+              {currentFolderId && (
+                <ParentFolderCard
+                  onNavigate={() => onNavigateFolder(parentFolderId)}
+                  onDrop={(itemId) => onMove(itemId, parentFolderId)}
+                />
+              )}
               {isCreator && (
                 <button
                   onClick={() => setCreateOpen(true)}
@@ -103,6 +116,7 @@ export function ContentGrid({
                   onOpen={() => onNavigateFolder(folder.id)}
                   onRename={() => { setRenamingFolder(folder); setRenameValue(folder.name) }}
                   onDelete={() => void handleDeleteFolder(folder)}
+                  onDrop={(itemId) => onMove(itemId, folder.id)}
                 />
               ))}
             </div>
@@ -112,7 +126,7 @@ export function ContentGrid({
         {/* Items section — CSS columns for natural card heights (masonry feel) */}
         {items.length > 0 && (
           <div>
-            {currentFolders.length > 0 && <p className="card-label mb-3">Files</p>}
+            {(currentFolders.length > 0 || currentFolderId) && <p className="card-label mb-3">Files</p>}
             <AudioPlayerProvider>
               <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
                 {items.map((item) => (
@@ -182,6 +196,47 @@ export function ContentGrid({
         </div>
       )}
     </>
+  )
+}
+
+function ParentFolderCard({ onNavigate, onDrop }: { onNavigate: () => void; onDrop: (itemId: string) => void }) {
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('application/x-content-item-id')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const itemId = e.dataTransfer.getData('application/x-content-item-id')
+    if (itemId) onDrop(itemId)
+  }
+
+  return (
+    <div
+      className={cn(
+        "glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-shadow",
+        isDragOver && "ring-2 ring-foreground/40 bg-foreground/5",
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <button onClick={onNavigate} className="flex flex-col items-start gap-3 p-4 text-left w-full">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/5">
+          <FolderOpen className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-muted-foreground">..</p>
+      </button>
+    </div>
   )
 }
 

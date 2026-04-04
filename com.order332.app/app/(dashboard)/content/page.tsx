@@ -12,6 +12,7 @@ import {
   fetchContentItems,
   fetchContentFolders,
   deleteContentItem,
+  moveContentItem,
   pollVtScans,
   type ContentItemMeta,
   type ContentItemType,
@@ -138,6 +139,18 @@ export default function ContentPage() {
     setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)))
   }, [])
 
+  const handleMove = useCallback(async (itemId: string, folderId: string | null) => {
+    // Optimistically remove from current view (item is moving to a different folder)
+    setItems((prev) => prev.filter((i) => i.id !== itemId))
+    try {
+      await moveContentItem(itemId, folderId)
+    } catch (err) {
+      console.error('[content] move error:', err)
+      // Re-fetch on failure to restore correct state
+      void loadItems(currentFolderId)
+    }
+  }, [currentFolderId, loadItems])
+
   return (
     <div className="page-root relative min-h-screen px-6 pb-32 pt-8 sm:pt-10">
       <PageBackground />
@@ -212,6 +225,7 @@ export default function ContentPage() {
             isCreator={isCreatorMode}
             onDelete={handleDelete}
             onUpdate={handleUpdate}
+            onMove={handleMove}
             onNavigateFolder={navigateFolder}
             onFoldersChange={setFolders}
           />

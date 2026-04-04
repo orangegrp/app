@@ -38,7 +38,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     href: '/content',
     icon: Library,
     label: 'Library',
-    soon: true,
+    soon: false,
     hardNav: false,
     desc: 'Media and assets',
     permission: PERMISSIONS.APP_CONTENT,
@@ -51,6 +51,16 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     hardNav: false,
     desc: 'Playlists and audio',
     permission: PERMISSIONS.APP_MUSIC,
+  },
+  {
+    href: '/webpc',
+    icon: Terminal,
+    label: 'Web PC',
+    soon: false,
+    // hardNav: never use Next Link to /webpc/:id/console — full document load is required for COEP/COOP.
+    hardNav: true,
+    desc: 'Virtual Linux in the browser',
+    permission: PERMISSIONS.APP_WEBPC,
   },
   {
     href: '/room',
@@ -69,16 +79,6 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     hardNav: false,
     desc: 'Experiments and courses',
     permission: PERMISSIONS.APP_LABS,
-  },
-  {
-    href: '/webpc',
-    icon: Terminal,
-    label: 'Web PC',
-    soon: false,
-    // hardNav: never use Next Link to /webpc/:id/console — full document load is required for COEP/COOP.
-    hardNav: true,
-    desc: 'Virtual Linux in the browser',
-    permission: PERMISSIONS.APP_WEBPC,
   },
 ]
 

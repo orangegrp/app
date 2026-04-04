@@ -145,9 +145,11 @@ export default function ContentPage() {
         <p className="section-label">Content Library</p>
 
         <div className="mb-8 flex items-start justify-between gap-4">
-          <h2 className="text-4xl tracking-widest text-foreground">
-            Content Library<span className="blink-cursor">_</span>
-          </h2>
+          <div className="flex items-center">
+            <h2 className="text-4xl tracking-widest text-foreground flex items-center">
+              Content Library<span className="blink-cursor">_</span>
+            </h2>
+          </div>
           {isCreator && (
             <button
               onClick={() => setIsCreatorMode((v) => !v)}
@@ -159,6 +161,24 @@ export default function ContentPage() {
               Creator mode
             </button>
           )}
+        </div>
+
+        <div className="rounded-2xl px-5 py-4 mb-10 border border-blue-500/30 bg-blue-400/10 flex items-start gap-3 backdrop-blur-md">
+          <svg className="mt-0.5 h-4 w-4 shrink-0 text-blue-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div>
+            <p className="card-label mb-1 text-blue-400/80">Disclaimer</p>
+            <p className="text-xs text-blue-200/60 tracking-wider leading-relaxed">
+              Uploaded files are automatically scanned for malware and other threats using multiple engines powered by VirusTotal. However, absolute safety cannot be guaranteed.<br />
+              <span className="font-medium text-blue-300/80">Be cautious</span> when downloading or opening content, especially if the file has been flagged. Always follow best security practices when studying malware or downloading untrusted content.
+            </p>
+            <p className="mt-2 text-xs text-blue-200/60 font-bold tracking-wider leading-relaxed">
+            Neither 332 nor the operator of this service is or can be held responsible for any damage or loss associated with any content on this service.
+            </p>
+          </div>
         </div>
 
         <FolderBreadcrumb

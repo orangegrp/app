@@ -127,20 +127,16 @@ const BLOG_AI_GLOW_PATH_INSET = 0.75
 /** ~one line of text; larger P → longer visible arc along perimeter */
 const BLOG_AI_SNAKE_PERIMETER_REF = 900
 
-/** Perimeter trail: solid line + blurred white sweep; dash length scales with selection size. */
+/** Perimeter trail: solid line + blurred white sweep; dash length scales with selection size.
+ *  GPU-composited: CSS @keyframes for stroke-dashoffset, CSS filter: blur() for glow layers. */
 function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }) {
-  const idSuffix = useId().replace(/:/g, '')
-  const filterTrailId = `blog-ai-glow-trail-${idSuffix}`
-  const filterHeadId = `blog-ai-glow-head-${idSuffix}`
-  const clipId = `blog-ai-glow-inward-${idSuffix}`
+  const id = useId().replace(/:/g, '')
 
   const w = rect.width + glowPad * 2
   const h = rect.height + glowPad * 2
   const r = Math.min(12, w / 2, h / 2)
   const minDim = Math.min(w, h)
-  if (w < 2 || h < 2) {
-    return null
-  }
+  if (w < 2 || h < 2) return null
 
   const pathD = roundedRectPathD(w, h, r, BLOG_AI_GLOW_PATH_INSET)
   const { w: iw, h: ih, r: ir } = roundedRectInnerMetrics(w, h, r, BLOG_AI_GLOW_PATH_INSET)
@@ -154,10 +150,29 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
   const dashDraw = snakeFrac * P
   const dashGap = P - dashDraw
   const dashArray = `${dashDraw} ${dashGap}`
+  const kfName = `blog-ai-orbit-${id}`
 
-  if (!pathD || P < 4) {
-    return null
+  if (!pathD || P < 4) return null
+
+  const svgStyle: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    overflow: 'visible',
+    pointerEvents: 'none',
   }
+
+  const sharedPath = (stroke: string, strokeWidth: number) => (
+    <path
+      d={pathD}
+      fill="none"
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeDasharray={dashArray}
+      className={kfName}
+    />
+  )
 
   return (
     <div
@@ -168,96 +183,42 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
         width: w,
         height: h,
         borderRadius: r,
+        transform: 'translateZ(0)',
       }}
       aria-hidden
     >
+      {/* Per-instance keyframe: exact P value baked in — no CSS variable interpolation needed */}
+      <style>{`@keyframes ${kfName}{to{stroke-dashoffset:${-P}}}.${kfName}{animation:${kfName} 1.4s linear infinite}`}</style>
+
+      {/* Layer 1: diffuse glow — CSS blur is GPU-composited (vs SVG feGaussianBlur which is CPU) */}
+      <div
+        className="blog-ai-glow-blur blog-ai-glow-trail-pulse"
+        style={{ filter: 'blur(6px) brightness(1.4)', willChange: 'filter' }}
+      >
+        <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} style={svgStyle} aria-hidden>
+          {sharedPath('#ffffff', 5.25)}
+        </svg>
+      </div>
+
+      {/* Layer 2: tight bright head */}
+      <div
+        className="blog-ai-glow-blur blog-ai-glow-trail-pulse"
+        style={{ filter: 'blur(3px) brightness(1.5)', willChange: 'filter' }}
+      >
+        <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} style={svgStyle} aria-hidden>
+          {sharedPath('#ffffff', 3)}
+        </svg>
+      </div>
+
+      {/* Layer 3: sharp solid trail */}
       <svg
         className="blog-ai-glow-snake-svg"
         viewBox={`0 0 ${w} ${h}`}
-        width="100%"
-        height="100%"
+        width={w}
+        height={h}
         aria-hidden
       >
-        <defs>
-          <clipPath id={clipId}>
-            <rect x={0} y={0} width={w} height={h} rx={r} ry={r} />
-          </clipPath>
-          <filter id={filterTrailId} x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-            <feComponentTransfer in="blur" result="boosted">
-              <feFuncR type="linear" slope="1.4" intercept="0" />
-              <feFuncG type="linear" slope="1.4" intercept="0" />
-              <feFuncB type="linear" slope="1.4" intercept="0" />
-              <feFuncA type="linear" slope="1.4" intercept="0" />
-            </feComponentTransfer>
-          </filter>
-          <filter id={filterHeadId} x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-            <feComponentTransfer in="blur" result="boosted">
-              <feFuncR type="linear" slope="1.5" intercept="0" />
-              <feFuncG type="linear" slope="1.5" intercept="0" />
-              <feFuncB type="linear" slope="1.5" intercept="0" />
-              <feFuncA type="linear" slope="1.5" intercept="0" />
-            </feComponentTransfer>
-          </filter>
-        </defs>
-        <g clipPath={`url(#${clipId})`}>
-          <path
-            d={pathD}
-            fill="none"
-            stroke="rgba(255,255,255,0.3)"
-            strokeWidth={1.15}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray={dashArray}
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              from="0"
-              to={-P}
-              dur="1.4s"
-              repeatCount="indefinite"
-            />
-          </path>
-        </g>
-        <g className="blog-ai-glow-trail-pulse" clipPath={`url(#${clipId})`}>
-          <path
-            d={pathD}
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth={5.25}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray={dashArray}
-            filter={`url(#${filterTrailId})`}
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              from="0"
-              to={-P}
-              dur="1.4s"
-              repeatCount="indefinite"
-            />
-          </path>
-          <path
-            d={pathD}
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeDasharray={dashArray}
-            filter={`url(#${filterHeadId})`}
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              from="0"
-              to={-P}
-              dur="1.4s"
-              repeatCount="indefinite"
-            />
-          </path>
-        </g>
+        {sharedPath('rgba(255,255,255,0.3)', 1.15)}
       </svg>
     </div>
   )

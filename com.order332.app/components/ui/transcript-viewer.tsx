@@ -307,9 +307,10 @@ type RenderChildren = (state: { isPlaying: boolean }) => ReactNode
 
 type TranscriptViewerPlayPauseButtonProps = Omit<
   ComponentPropsWithoutRef<typeof Button>,
-  "children"
+  "children" | "onClick"
 > & {
   children?: ReactNode | RenderChildren
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
 }
 
 function TranscriptViewerPlayPauseButton({

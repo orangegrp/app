@@ -36,12 +36,18 @@ export interface MarkdownEditorHandle {
   getSelectionRect: () => DOMRect | null
   /** One rect per visual line in the selection (for AI glow). */
   getSelectionRects: () => DOMRect[]
+  /** True when the entire document is selected. */
+  isAllSelected: () => boolean
+  /** Bounding rect of the editor's scroll container (for glow when all selected). */
+  getEditorContainerRect: () => DOMRect | null
   /** Wrap the current selection with prefix/suffix (empty selection inserts both at cursor). */
   wrapSelection: (before: string, after: string) => void
   /** Set ATX heading on the current line (# or ##), replacing any existing heading prefix. */
   prefixHeadingLine: (level: 1 | 2) => void
-  replaceSelection: (text: string) => void
-  insertAfterSelection: (markdown: string) => void
+  /** Replace selection. Optional from/to override the CodeMirror selection (needed after deselect). */
+  replaceSelection: (text: string, from?: number, to?: number) => void
+  /** Insert after the selection. Optional at overrides the current cursor position. */
+  insertAfterSelection: (markdown: string, at?: number) => void
   toggleWordWrap: () => void
 }
 
@@ -177,6 +183,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
           if (!view) return []
           return rectsFromCmSelection(view)
         },
+        isAllSelected: (): boolean => {
+          const view = viewRef.current
+          if (!view) return false
+          const main = view.state.selection.main
+          return main.from === 0 && main.to === view.state.doc.length
+        },
+        getEditorContainerRect: (): DOMRect | null => {
+          const view = viewRef.current
+          if (!view) return null
+          return view.scrollDOM.getBoundingClientRect()
+        },
         wrapSelection: (before: string, after: string) => {
           const view = viewRef.current
           if (!view) return
@@ -195,16 +212,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
             changes: { from: line.from, to: line.to, insert: prefix + content },
           })
         },
-        replaceSelection: (text: string) => {
+        replaceSelection: (text: string, from?: number, to?: number) => {
           const view = viewRef.current
           if (!view) return
-          const { from, to } = view.state.selection.main
-          view.dispatch({ changes: { from, to, insert: text } })
+          const main = view.state.selection.main
+          const rangeFrom = from ?? main.from
+          const rangeTo = to ?? main.to
+          view.dispatch({ changes: { from: rangeFrom, to: rangeTo, insert: text } })
         },
-        insertAfterSelection: (md: string) => {
+        insertAfterSelection: (md: string, at?: number) => {
           const view = viewRef.current
           if (!view) return
-          const pos = view.state.selection.main.to
+          const pos = at ?? view.state.selection.main.to
           view.dispatch({ changes: { from: pos, insert: md } })
         },
         toggleWordWrap: handleToggleWordWrap,

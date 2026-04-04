@@ -119,6 +119,7 @@ export function BlogEditor({ author, slug }: Props) {
   const visualEditorRef = useRef<VisualEditorHandle>(null)
 
   const [aiSelRevision, setAiSelRevision] = useState(0)
+  const [aiLoading, setAiLoading] = useState(false)
   const bumpAiSelection = useCallback(() => setAiSelRevision((n) => n + 1), [])
 
   // Warn on unsaved changes
@@ -494,10 +495,11 @@ export function BlogEditor({ author, slug }: Props) {
         </span>
 
         {/* Mode toggle */}
-        <div className="hidden sm:flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5 text-xs">
+        <div className={`hidden sm:flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5 text-xs ${aiLoading ? 'pointer-events-none opacity-50' : ''}`}>
           <button
             type="button"
             onClick={() => setEditorMode('raw')}
+            disabled={aiLoading}
             className={`rounded-md px-3 py-1 tracking-wide transition-colors ${
               editorMode === 'raw' ? 'bg-white/15 text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -507,6 +509,7 @@ export function BlogEditor({ author, slug }: Props) {
           <button
             type="button"
             onClick={() => setEditorMode('visual')}
+            disabled={aiLoading}
             className={`rounded-md px-3 py-1 tracking-wide transition-colors ${
               editorMode === 'visual' ? 'bg-white/15 text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -706,7 +709,7 @@ export function BlogEditor({ author, slug }: Props) {
 
             {/* Editor */}
             <Panel defaultSize={showPreview ? 38 : 76} minSize={15}>
-              <div className="flex h-full flex-col">
+              <div className="relative flex h-full flex-col">
                 {editorMode === 'raw' ? (
                   <MarkdownEditor
                     ref={markdownEditorRef}
@@ -722,6 +725,14 @@ export function BlogEditor({ author, slug }: Props) {
                     onChange={handleBodyChange}
                     onImageUpload={handleImageUpload}
                     onSelectionChange={canBlogAi ? bumpAiSelection : undefined}
+                  />
+                )}
+                {/* Freeze overlay: blocks scroll and pointer interaction during AI operations */}
+                {aiLoading && (
+                  <div
+                    className="absolute inset-0 z-10 cursor-wait"
+                    aria-hidden
+                    onWheel={(e) => e.preventDefault()}
                   />
                 )}
               </div>
@@ -747,6 +758,7 @@ export function BlogEditor({ author, slug }: Props) {
           formatActions={selectionFormatActions}
           onFormatApplied={bumpAiSelection}
           onAiActionComplete={bumpAiSelection}
+          onLoadingChange={setAiLoading}
         />
       )}
 

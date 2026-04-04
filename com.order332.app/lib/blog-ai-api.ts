@@ -83,10 +83,21 @@ export async function consumeBlogAiTextStream(
 }
 
 export async function blogAiAssistCreateImage(
-  text: string,
+  prompt: string,
+  needsText: boolean,
   signal?: AbortSignal,
 ): Promise<{ url: string; alt: string }> {
-  const res = await blogAiAssistRequest('createImage', text, { signal })
+  const { accessToken } = useAuthStore.getState()
+  const res = await fetch('/api/blog/ai-assist', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify({ action: 'createImage', text: prompt, needsText }),
+    credentials: 'include',
+    signal,
+  })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({ error: 'Image generation failed' }))) as { error?: string }
     throw new Error(err.error ?? 'Image generation failed')

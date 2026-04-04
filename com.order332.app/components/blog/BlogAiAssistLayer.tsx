@@ -57,14 +57,15 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 
-export type BlogAiEditorHandle = Pick<
-  MarkdownEditorHandle,
-  | 'getSelectionMeta'
-  | 'getSelectionRect'
-  | 'getSelectionRects'
-  | 'replaceSelection'
-  | 'insertAfterSelection'
->
+export interface BlogAiEditorHandle {
+  getSelectionMeta: () => import('@/lib/blog-editor-ai-types').BlogEditorSelectionMeta | null
+  getSelectionRect: () => DOMRect | null
+  getSelectionRects: () => DOMRect[]
+  isAllSelected: () => boolean
+  getEditorContainerRect: () => DOMRect | null
+  replaceSelection: (text: string, from?: number, to?: number) => void
+  insertAfterSelection: (markdown: string, at?: number) => void
+}
 
 export type BlogSelectionFormatActions = {
   bold: () => void
@@ -80,15 +81,38 @@ function escapeMdAlt(alt: string): string {
   return alt.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]')
 }
 
-/** Single merged bounds for one Siri-style perimeter glow (not per line). */
+function clipRectToViewport(rect: DOMRect): DOMRect {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const left = Math.max(rect.left, 0)
+  const top = Math.max(rect.top, 0)
+  const right = Math.min(rect.right, vw)
+  const bottom = Math.min(rect.bottom, vh)
+  if (right - left < 1 || bottom - top < 1) return rect
+  return new DOMRect(left, top, right - left, bottom - top)
+}
+
+/** Single merged bounds for one Siri-style perimeter glow (not per line).
+ *  When the whole document is selected, uses the editor container rect instead of
+ *  the text-content rect so the trail follows the editor edges. */
 function selectionGlowBounds(ed: BlogAiEditorHandle): DOMRect | null {
+  if (ed.isAllSelected()) {
+    const editorRect = ed.getEditorContainerRect()
+    if (editorRect && editorRect.width >= 1 && editorRect.height >= 1) {
+      return clipRectToViewport(editorRect)
+    }
+  }
   const lineRects = ed.getSelectionRects()
   if (lineRects.length > 0) {
     const merged = mergeDomRects(lineRects)
-    if (merged && merged.width >= 1 && merged.height >= 1) return merged
+    if (merged && merged.width >= 1 && merged.height >= 1) {
+      return clipRectToViewport(merged)
+    }
   }
   const fallback = ed.getSelectionRect()
-  if (fallback && fallback.width >= 1 && fallback.height >= 1) return fallback
+  if (fallback && fallback.width >= 1 && fallback.height >= 1) {
+    return clipRectToViewport(fallback)
+  }
   return null
 }
 
@@ -242,6 +266,37 @@ interface Props {
   onFormatApplied?: () => void
   /** Called after an AI action finishes so the parent can refresh selection rects. */
   onAiActionComplete?: () => void
+  /** Called when the AI loading state changes — used to freeze the editor. */
+  onLoadingChange?: (loading: boolean) => void
+}
+
+const AI_TIMEOUT_MS = 10_000
+const AI_IMAGE_TIMEOUT_MS = 30_000
+
+/** Returns a signal that aborts after `ms` ms, or immediately when `parent` aborts. */
+function makeTimeoutSignal(
+  parent: AbortSignal,
+  ms: number,
+): [AbortSignal, () => void] {
+  const ctrl = new AbortController()
+  if (parent.aborted) {
+    ctrl.abort(new DOMException('Aborted', 'AbortError'))
+    return [ctrl.signal, () => {}]
+  }
+  const id = setTimeout(
+    () => ctrl.abort(new DOMException('signal timed out', 'TimeoutError')),
+    ms,
+  )
+  const onParentAbort = () => {
+    clearTimeout(id)
+    ctrl.abort(new DOMException('Aborted', 'AbortError'))
+  }
+  parent.addEventListener('abort', onParentAbort, { once: true })
+  const clear = () => {
+    clearTimeout(id)
+    parent.removeEventListener('abort', onParentAbort)
+  }
+  return [ctrl.signal, clear]
 }
 
 export function BlogAiAssistLayer({
@@ -251,6 +306,7 @@ export function BlogAiAssistLayer({
   formatActions,
   onFormatApplied,
   onAiActionComplete,
+  onLoadingChange,
 }: Props) {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
   const [floatingPos, setFloatingPos] = useState<{ left: number; top: number } | null>(null)
@@ -260,11 +316,23 @@ export function BlogAiAssistLayer({
   const [aiMenuOpen, setAiMenuOpen] = useState(false)
   const [translateDialogOpen, setTranslateDialogOpen] = useState(false)
   const [translateLang, setTranslateLang] = useState(BLOG_TRANSLATE_LANGUAGE_OPTIONS[0].value)
+  const [imageDialogOpen, setImageDialogOpen] = useState(false)
+  const [imagePromptText, setImagePromptText] = useState('')
+  const [imageNeedsText, setImageNeedsText] = useState(false)
   const translateSourceRef = useRef<string | null>(null)
+  const translateFromRef = useRef<number | null>(null)
+  const translateToRef = useRef<number | null>(null)
+  const imageGlowBoundsRef = useRef<DOMRect | null>(null)
+  const imageSelToRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const getEditorRef = useRef(getEditor)
   getEditorRef.current = getEditor
   const toolbarRef = useRef<HTMLDivElement>(null)
+
+  const setLoadingState = useCallback((val: boolean) => {
+    setLoading(val)
+    onLoadingChange?.(val)
+  }, [onLoadingChange])
 
   useLayoutEffect(() => {
     if (!enabled) {
@@ -311,73 +379,78 @@ export function BlogAiAssistLayer({
     if (!meta || meta.inCodeBlock || !meta.text.trim()) return
     if (meta.text.length > BLOG_AI_MAX_INPUT_CHARS[action]) return
 
+    // Capture positions before deselect / async gap
+    const selFrom = meta.from
+    const selTo = meta.to
+
     abortRef.current?.abort()
     const ac = new AbortController()
     abortRef.current = ac
 
     const bounds = selectionGlowBounds(ed)
     setGlowRects(bounds ? [bounds] : [])
-    setLoading(true)
+    setLoadingState(true)
     // Deselect text so selection highlight doesn't show through the glow animation
     window.getSelection()?.removeAllRanges()
 
     try {
-      if (action === 'createImage') {
-        const { url, alt } = await blogAiAssistCreateImage(meta.text, ac.signal)
-        if (!url.trim()) {
-          return
-        }
-        const safeAlt = escapeMdAlt(alt.trim() || 'Illustration')
-        let parsedUrl: URL
+      const res0 = await blogAiAssistRequest(action, meta.text, { signal: (() => { const [s] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS); return s })() })
+      const text = await consumeBlogAiTextStream(res0, () => {})
+      if (!text.trim()) return
+      ed.replaceSelection(text, selFrom, selTo)
+      const fr = ed.getSelectionRect()
+      if (fr) setFlashRect(fr)
+      setTimeout(() => setFlashRect(null), 700)
+    } catch (firstErr) {
+      if (firstErr instanceof Error && firstErr.name === 'AbortError') return
+      if (firstErr instanceof DOMException && firstErr.name === 'TimeoutError') {
+        if (ac.signal.aborted) return
+        const toastId = toast.loading('Hang on…')
         try {
-          parsedUrl = new URL(url)
+          const [sig, clearSig] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
+          const res1 = await blogAiAssistRequest(action, meta.text, { signal: sig })
+          const text = await consumeBlogAiTextStream(res1, () => {})
+          clearSig()
+          toast.dismiss(toastId)
+          if (!text.trim()) return
+          ed.replaceSelection(text, selFrom, selTo)
+          const fr = ed.getSelectionRect()
+          if (fr) setFlashRect(fr)
+          setTimeout(() => setFlashRect(null), 700)
         } catch {
-          return
+          toast.dismiss(toastId)
+          // second failure → silent, no edit
         }
-        if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
-          return
-        }
-        ed.insertAfterSelection(`\n\n![${safeAlt}](${parsedUrl.href})\n`)
-        const fr = ed.getSelectionRect()
-        if (fr) setFlashRect(fr)
-        setTimeout(() => setFlashRect(null), 700)
-      } else {
-        const res = await blogAiAssistRequest(action, meta.text, { signal: ac.signal })
-        const text = await consumeBlogAiTextStream(res, () => {
-          /* streaming progress optional */
-        })
-        if (!text.trim()) {
-          return
-        }
-        ed.replaceSelection(text)
-        const fr = ed.getSelectionRect()
-        if (fr) setFlashRect(fr)
-        setTimeout(() => setFlashRect(null), 700)
+        return
       }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      toast.error(err instanceof Error ? err.message : 'AI request failed')
+      toast.error(firstErr instanceof Error ? firstErr.message : 'AI request failed')
     } finally {
-      setLoading(false)
+      setLoadingState(false)
       setGlowRects(null)
       setAiMenuOpen(false)
       abortRef.current = null
       onAiActionComplete?.()
     }
-  }, [onAiActionComplete])
+  }, [onAiActionComplete, setLoadingState])
 
   const openTranslateDialog = useCallback(() => {
     const ed = getEditorRef.current()
     const meta = ed?.getSelectionMeta()
     if (!meta?.text.trim()) return
     translateSourceRef.current = meta.text
+    translateFromRef.current = meta.from
+    translateToRef.current = meta.to
     setAiMenuOpen(false)
     setTranslateDialogOpen(true)
   }, [])
 
   const onTranslateDialogOpenChange = useCallback((open: boolean) => {
     setTranslateDialogOpen(open)
-    if (!open) translateSourceRef.current = null
+    if (!open) {
+      translateSourceRef.current = null
+      translateFromRef.current = null
+      translateToRef.current = null
+    }
   }, [])
 
   const runTranslate = useCallback(async () => {
@@ -388,6 +461,8 @@ export function BlogAiAssistLayer({
     }
     const targetLanguage = translateLang.trim()
     if (!targetLanguage) return
+    const selFrom = translateFromRef.current
+    const selTo = translateToRef.current
 
     const ed = getEditorRef.current()
     if (!ed) return
@@ -400,36 +475,134 @@ export function BlogAiAssistLayer({
 
     const bounds = selectionGlowBounds(ed)
     setGlowRects(bounds ? [bounds] : [])
-    setLoading(true)
-    // Deselect text so selection highlight doesn't show through the glow animation
+    setLoadingState(true)
     window.getSelection()?.removeAllRanges()
 
     try {
-      const res = await blogAiAssistRequest('translate', text, {
-        targetLanguage,
-        signal: ac.signal,
-      })
-      const out = await consumeBlogAiTextStream(res, () => {
-        /* streaming progress optional */
-      })
-      if (!out.trim()) {
+      const [sig0, clear0] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
+      const res0 = await blogAiAssistRequest('translate', text, { targetLanguage, signal: sig0 })
+      const out = await consumeBlogAiTextStream(res0, () => {})
+      clear0()
+      if (!out.trim()) return
+      ed.replaceSelection(out, selFrom ?? undefined, selTo ?? undefined)
+      const fr = ed.getSelectionRect()
+      if (fr) setFlashRect(fr)
+      setTimeout(() => setFlashRect(null), 700)
+    } catch (firstErr) {
+      if (firstErr instanceof Error && firstErr.name === 'AbortError') return
+      if (firstErr instanceof DOMException && firstErr.name === 'TimeoutError') {
+        if (ac.signal.aborted) return
+        const toastId = toast.loading('Hang on…')
+        try {
+          const [sig1, clear1] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
+          const res1 = await blogAiAssistRequest('translate', text, { targetLanguage, signal: sig1 })
+          const out = await consumeBlogAiTextStream(res1, () => {})
+          clear1()
+          toast.dismiss(toastId)
+          if (!out.trim()) return
+          ed.replaceSelection(out, selFrom ?? undefined, selTo ?? undefined)
+          const fr = ed.getSelectionRect()
+          if (fr) setFlashRect(fr)
+          setTimeout(() => setFlashRect(null), 700)
+        } catch {
+          toast.dismiss(toastId)
+        }
         return
       }
-      ed.replaceSelection(out)
+      toast.error(firstErr instanceof Error ? firstErr.message : 'AI request failed')
+    } finally {
+      setLoadingState(false)
+      setGlowRects(null)
+      translateSourceRef.current = null
+      translateFromRef.current = null
+      translateToRef.current = null
+      abortRef.current = null
+      onAiActionComplete?.()
+    }
+  }, [onAiActionComplete, translateLang, setLoadingState])
+
+  const openImageDialog = useCallback(() => {
+    const ed = getEditorRef.current()
+    const meta = ed?.getSelectionMeta()
+    if (!meta?.text.trim()) return
+    imageGlowBoundsRef.current = selectionGlowBounds(ed!)
+    imageSelToRef.current = meta.to
+    setImagePromptText(meta.text)
+    setImageNeedsText(false)
+    setAiMenuOpen(false)
+    setImageDialogOpen(true)
+  }, [])
+
+  const runImageCreate = useCallback(async () => {
+    const ed = getEditorRef.current()
+    if (!ed) return
+    const prompt = imagePromptText.trim()
+    if (!prompt) return
+    const insertAt = imageSelToRef.current ?? undefined
+
+    setImageDialogOpen(false)
+
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+
+    const bounds = imageGlowBoundsRef.current
+    setGlowRects(bounds ? [bounds] : [])
+    setLoadingState(true)
+    window.getSelection()?.removeAllRanges()
+
+    try {
+      const doImageRequest = async (sig: AbortSignal) =>
+        blogAiAssistCreateImage(prompt, imageNeedsText, sig)
+
+      let result: { url: string; alt: string }
+      const [sig0, clear0] = makeTimeoutSignal(ac.signal, AI_IMAGE_TIMEOUT_MS)
+      try {
+        result = await doImageRequest(sig0)
+        clear0()
+      } catch (firstErr) {
+        clear0()
+        if (firstErr instanceof Error && firstErr.name === 'AbortError') return
+        if (firstErr instanceof DOMException && firstErr.name === 'TimeoutError') {
+          if (ac.signal.aborted) return
+          const toastId = toast.loading('Hang on…')
+          try {
+            const [sig1, clear1] = makeTimeoutSignal(ac.signal, AI_IMAGE_TIMEOUT_MS)
+            result = await doImageRequest(sig1)
+            clear1()
+            toast.dismiss(toastId)
+          } catch {
+            toast.dismiss(toastId)
+            return
+          }
+        } else {
+          throw firstErr
+        }
+      }
+
+      if (!result!.url.trim()) return
+      const safeAlt = escapeMdAlt(result!.alt.trim() || 'Illustration')
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(result!.url)
+      } catch { return }
+      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') return
+      ed.insertAfterSelection(`\n\n![${safeAlt}](${parsedUrl.href})\n`, insertAt)
       const fr = ed.getSelectionRect()
       if (fr) setFlashRect(fr)
       setTimeout(() => setFlashRect(null), 700)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      toast.error(err instanceof Error ? err.message : 'AI request failed')
+      toast.error(err instanceof Error ? err.message : 'Image generation failed')
     } finally {
-      setLoading(false)
+      setLoadingState(false)
       setGlowRects(null)
-      translateSourceRef.current = null
+      imageGlowBoundsRef.current = null
+      imageSelToRef.current = null
       abortRef.current = null
       onAiActionComplete?.()
     }
-  }, [onAiActionComplete, translateLang])
+  }, [imagePromptText, imageNeedsText, onAiActionComplete, setLoadingState])
 
   const applyFormat = useCallback(
     (fn: () => void) => {
@@ -571,7 +744,7 @@ export function BlogAiAssistLayer({
               label="Create image from text"
 
               icon={<ImagePlus className="size-3.5 shrink-0 opacity-80" aria-hidden />}
-              onClick={() => void runAction('createImage')}
+              onClick={openImageDialog}
             />
           </PopoverContent>
         </Popover>
@@ -651,6 +824,48 @@ export function BlogAiAssistLayer({
               </Button>
               <Button type="button" onClick={() => void runTranslate()}>
                 Translate
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image generation dialog */}
+      <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
+        <DialogContent overlayClassName="z-[110]" className="z-[110] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate image</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="blog-image-prompt">Image prompt</Label>
+              <textarea
+                id="blog-image-prompt"
+                value={imagePromptText}
+                onChange={(e) => setImagePromptText(e.target.value)}
+                rows={4}
+                className="flex w-full rounded-md border border-white/10 bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none"
+                placeholder="Describe the image you want to generate…"
+              />
+            </div>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={imageNeedsText}
+                onChange={(e) => setImageNeedsText(e.target.checked)}
+                className="h-4 w-4 rounded border border-white/20 bg-background accent-white"
+              />
+              <span className="text-sm text-muted-foreground leading-tight">
+                Image needs to contain readable text
+                <span className="block text-xs text-muted-foreground/60 mt-0.5">Uses a different model optimised for text rendering</span>
+              </span>
+            </label>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button type="button" variant="outline" onClick={() => setImageDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={() => void runImageCreate()} disabled={!imagePromptText.trim()}>
+                Generate
               </Button>
             </DialogFooter>
           </div>

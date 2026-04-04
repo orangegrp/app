@@ -293,8 +293,14 @@ export interface VisualEditorHandle {
   getSelectionMeta: () => BlogEditorSelectionMeta | null
   getSelectionRect: () => DOMRect | null
   getSelectionRects: () => DOMRect[]
-  replaceSelection: (text: string) => void
-  insertAfterSelection: (markdown: string) => void
+  /** True when the entire document is selected. */
+  isAllSelected: () => boolean
+  /** Bounding rect of the editor scroll container (for glow when all selected). */
+  getEditorContainerRect: () => DOMRect | null
+  /** Replace selection. Optional from/to override the TipTap selection (needed after deselect). */
+  replaceSelection: (text: string, from?: number, to?: number) => void
+  /** Insert after the selection. Optional at overrides the current cursor position. */
+  insertAfterSelection: (markdown: string, at?: number) => void
   insertImage: (url: string, alt?: string) => void
 }
 
@@ -565,8 +571,21 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
         if (!ed) return null
         const { from, to } = ed.state.selection
         if (from === to) return null
-        const text = ed.state.doc.textBetween(from, to, '\n')
         const inCodeBlock = selectionInTipTapCodeBlock(ed)
+        // Serialize the selection to markdown so the AI sees the actual structure.
+        let text = ed.state.doc.textBetween(from, to, '\n')
+        try {
+          const slice = ed.state.doc.slice(from, to)
+          const tempDoc = ed.state.schema.topNodeType.createAndFill(null, slice.content)
+          if (tempDoc) {
+            const mdStorage = ed.storage.markdown as {
+              serializer: { serialize(doc: unknown): string }
+            }
+            text = mdStorage.serializer.serialize(tempDoc).trim()
+          }
+        } catch {
+          /* fallback to plain text already set above */
+        }
         return { from, to, text, inCodeBlock }
       },
       getSelectionRect: () => {
@@ -579,16 +598,45 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
         if (!ed) return []
         return rectsFromPmSelection(ed)
       },
-      replaceSelection: (text: string) => {
+      isAllSelected: (): boolean => {
         const ed = editorRef.current
-        if (!ed) return
+        if (!ed) return false
         const { from, to } = ed.state.selection
-        ed.chain().focus().insertContentAt({ from, to }, text).run()
+        return from <= 1 && to >= ed.state.doc.content.size
       },
-      insertAfterSelection: (markdown: string) => {
+      getEditorContainerRect: (): DOMRect | null => {
+        const ed = editorRef.current
+        if (!ed) return null
+        const pm = ed.view.dom as HTMLElement
+        const scrollEl = pm.closest('.overflow-y-auto') as HTMLElement | null
+        return (scrollEl ?? pm).getBoundingClientRect()
+      },
+      replaceSelection: (text: string, from?: number, to?: number) => {
         const ed = editorRef.current
         if (!ed) return
-        const pos = ed.state.selection.to
+        const sel = ed.state.selection
+        const rangeFrom = from ?? sel.from
+        const rangeTo = to ?? sel.to
+        // Parse as block-level markdown (bypasses tiptap-markdown's inline:true override).
+        try {
+          const mdStorage = ed.storage.markdown as {
+            parser: { parse(content: string): { content: unknown } }
+          }
+          const parsedDoc = mdStorage.parser.parse(text)
+          const { tr } = ed.state
+          // replaceWith throws RangeError if the fragment doesn't fit; catch and fall back.
+          tr.replaceWith(rangeFrom, rangeTo, parsedDoc.content as never)
+          ed.view.dispatch(tr)
+          return
+        } catch {
+          /* fall through to inline insertion */
+        }
+        ed.chain().focus().insertContentAt({ from: rangeFrom, to: rangeTo }, text).run()
+      },
+      insertAfterSelection: (markdown: string, at?: number) => {
+        const ed = editorRef.current
+        if (!ed) return
+        const pos = at ?? ed.state.selection.to
         ed.chain().focus().insertContentAt(pos, markdown).run()
       },
     }),

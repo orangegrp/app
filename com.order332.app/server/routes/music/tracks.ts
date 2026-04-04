@@ -1,5 +1,6 @@
 import 'server-only'
 import { Hono } from 'hono'
+import { parseBuffer } from 'music-metadata'
 import { requireAuth } from '@/server/middleware/auth'
 import { requirePermission } from '@/server/middleware/rbac'
 import { rateLimitByUser } from '@/server/middleware/rate-limit'
@@ -70,22 +71,11 @@ musicTrackRoutes.post(
       return c.json({ error: 'Audio file exceeds 100 MB limit' }, 400)
     }
 
+    // Read form meta fields (may be overridden by embedded tags below)
     const titleRaw = formData.get('title')
-    if (typeof titleRaw !== 'string' || !titleRaw.trim()) {
-      return c.json({ error: 'Missing title' }, 400)
-    }
     const artistRaw = formData.get('artist')
-    if (typeof artistRaw !== 'string' || !artistRaw.trim()) {
-      return c.json({ error: 'Missing artist' }, 400)
-    }
-
-    const title = titleRaw.trim().slice(0, 200)
-    const artist = artistRaw.trim().slice(0, 200)
     const genreRaw = formData.get('genre')
-    const genre = typeof genreRaw === 'string' && genreRaw.trim() ? genreRaw.trim().slice(0, 100) : null
     const durationRaw = formData.get('duration_sec')
-    const durationSec = typeof durationRaw === 'string' ? Math.max(0, Math.round(Number(durationRaw))) : 0
-
     const coverFile = formData.get('cover')
     const lyricsFile = formData.get('lyrics')
 
@@ -118,8 +108,43 @@ musicTrackRoutes.post(
     const uploadedStorageKeys: string[] = []
 
     try {
-      // Upload audio (required)
+      // Read audio into buffer (needed for both metadata extraction and upload)
       const audioBuffer = await audioFile.arrayBuffer()
+
+      // --- Extract embedded metadata (ID3 / Vorbis / etc.) ---
+      let embeddedTitle: string | null = null
+      let embeddedArtist: string | null = null
+      let embeddedGenre: string | null = null
+      let embeddedDuration: number | null = null
+      let embeddedCoverBuffer: Buffer | null = null
+      let embeddedCoverMime: string | null = null
+
+      try {
+        const meta = await parseBuffer(Buffer.from(audioBuffer), { mimeType: audioFile.type })
+        embeddedTitle = meta.common.title?.trim() || null
+        embeddedArtist = (meta.common.artist || meta.common.albumartist)?.trim() || null
+        embeddedGenre = meta.common.genre?.[0]?.trim() || null
+        embeddedDuration = meta.format.duration ? Math.round(meta.format.duration) : null
+        if (meta.common.picture?.length) {
+          const pic = meta.common.picture[0]
+          embeddedCoverBuffer = Buffer.from(pic.data)
+          embeddedCoverMime = pic.format
+        }
+      } catch (metaErr) {
+        console.warn('[music/tracks] metadata parse warning:', metaErr)
+      }
+
+      // Form values take priority; embedded tags fill gaps; filename is last resort for title
+      const titleFromForm = typeof titleRaw === 'string' && titleRaw.trim() ? titleRaw.trim() : null
+      const artistFromForm = typeof artistRaw === 'string' && artistRaw.trim() ? artistRaw.trim() : null
+      const genreFromForm = typeof genreRaw === 'string' && genreRaw.trim() ? genreRaw.trim() : null
+      const durationFromForm = typeof durationRaw === 'string' ? Math.max(0, Math.round(Number(durationRaw))) : 0
+
+      const title = (titleFromForm || embeddedTitle || audioFile.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')).slice(0, 200)
+      const artist = (artistFromForm || embeddedArtist || 'Unknown Artist').slice(0, 200)
+      const genre = (genreFromForm || embeddedGenre)?.slice(0, 100) ?? null
+      const durationSec = durationFromForm || embeddedDuration || 0
+
       const { storageKey: audioKey, publicUrl: audioUrl } = await uploadMusicAudio({
         userId: user.id,
         buffer: audioBuffer,
@@ -128,7 +153,7 @@ musicTrackRoutes.post(
       })
       uploadedStorageKeys.push(audioKey)
 
-      // Upload cover (optional)
+      // Upload cover (form file takes priority, then embedded tag art)
       let coverKey: string | null = null
       let coverUrl: string | null = null
       if (coverFile instanceof File) {
@@ -138,6 +163,16 @@ musicTrackRoutes.post(
           buffer: coverBuffer,
           contentType: coverFile.type,
           filenameHint: coverFile.name,
+        })
+        coverKey = result.storageKey
+        coverUrl = result.publicUrl
+        uploadedStorageKeys.push(coverKey)
+      } else if (embeddedCoverBuffer && embeddedCoverMime && MUSIC_COVER_ALLOWED_TYPES.has(embeddedCoverMime)) {
+        const result = await uploadMusicCover({
+          userId: user.id,
+          buffer: embeddedCoverBuffer.buffer as ArrayBuffer,
+          contentType: embeddedCoverMime,
+          filenameHint: 'cover',
         })
         coverKey = result.storageKey
         coverUrl = result.publicUrl

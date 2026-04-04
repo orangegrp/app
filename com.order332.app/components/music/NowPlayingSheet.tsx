@@ -1,14 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { ChevronDown, Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { ChevronDown, Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAudioPlayer, useAudioPlayerTime, AudioPlayerSpeed, AudioPlayerTime, AudioPlayerDuration } from "@/components/ui/audio-player"
 import {
   ScrubBarContainer,
   ScrubBarProgress,
   ScrubBarThumb,
-  ScrubBarTimeLabel,
   ScrubBarTrack,
 } from "@/components/ui/scrub-bar"
 import { Matrix } from "@/components/ui/matrix"
@@ -34,13 +33,13 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
   // Media element analyser bridge
   const stream = useMediaElementAnalyser(player.ref, player.isPlaying)
 
-  // Multiband volume for Matrix VU (16 columns)
+  // Multiband volume for Matrix VU — cover bass through treble (bins 2–480)
   const MATRIX_COLS = 16
   const bandLevels = useMultibandVolume(stream, {
     bands: MATRIX_COLS,
-    loPass: 40,
-    hiPass: 300,
-    analyserOptions: { fftSize: 2048, smoothingTimeConstant: 0.8 },
+    loPass: 2,
+    hiPass: 480,
+    analyserOptions: { fftSize: 2048, smoothingTimeConstant: 0.55 },
   })
 
   // Lyrics state
@@ -62,6 +61,30 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
 
   if (!currentTrack) return null
 
+  const VolumeSlider = () => (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={player.toggleMute}
+        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+        aria-label={player.isMuted ? "Unmute" : "Mute"}
+      >
+        {player.isMuted || player.volume === 0
+          ? <VolumeX className="h-4 w-4" />
+          : <Volume2 className="h-4 w-4" />}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.02}
+        value={player.isMuted ? 0 : player.volume}
+        onChange={(e) => player.setVolume(Number(e.target.value))}
+        className="h-1 w-full cursor-pointer appearance-none rounded-full bg-foreground/15 accent-foreground"
+        aria-label="Volume"
+      />
+    </div>
+  )
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent
@@ -70,19 +93,20 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
         className={cn(
           "flex flex-col overflow-hidden p-0",
           isMobile
-            ? "h-[92dvh] rounded-t-2xl"
-            : "w-full max-w-sm",
+            ? "h-[95dvh] rounded-t-2xl"
+            : "w-96 max-w-[96vw]",
         )}
         style={{
           backdropFilter: "var(--glass-blur-sheet)",
           background: "var(--glass-bg-overlay)",
         }}
       >
-        {/* Close handle (mobile) */}
+        {/* Drag handle (mobile) */}
         {isMobile && (
           <button
             onClick={onClose}
-            className="mx-auto mt-3 flex h-5 w-full items-start justify-center"
+            className="mx-auto mt-3 flex h-5 w-full shrink-0 items-start justify-center"
+            aria-label="Close"
           >
             <div className="h-1 w-10 rounded-full bg-foreground/20" />
           </button>
@@ -92,32 +116,36 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
         {!isMobile && (
           <button
             onClick={onClose}
-            className="absolute left-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            className="absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-muted-foreground hover:bg-foreground/15 hover:text-foreground transition-colors"
           >
             <ChevronDown className="h-4 w-4 rotate-90" />
           </button>
         )}
 
-        <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-8 pt-4">
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3">
+
           {/* Matrix VU visualizer */}
-          <div className="mb-6 flex justify-center">
+          <div className="mb-4 flex justify-center">
             <Matrix
               rows={7}
               cols={MATRIX_COLS}
               mode="vu"
               levels={bandLevels}
-              size={10}
+              size={isMobile ? 9 : 10}
               gap={2}
               palette={{
-                on: "oklch(0.9 0 0 / 90%)",
-                off: "oklch(0.9 0 0 / 8%)",
+                on: "oklch(0.9 0 0 / 85%)",
+                off: "oklch(0.9 0 0 / 7%)",
               }}
               className="rounded-lg"
             />
           </div>
 
           {/* Cover art */}
-          <div className="mx-auto mb-6 h-48 w-48 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-lg">
+          <div className={cn(
+            "mx-auto mb-4 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl",
+            isMobile ? "h-44 w-44" : "h-52 w-52",
+          )}>
             {currentTrack.coverUrl ? (
               <img
                 src={currentTrack.coverUrl}
@@ -135,8 +163,8 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
           </div>
 
           {/* Track info */}
-          <div className="mb-4 text-center">
-            <h3 className="text-lg font-semibold tracking-wide text-foreground">
+          <div className="mb-3 text-center">
+            <h3 className="text-base font-semibold tracking-wide text-foreground">
               {currentTrack.title}
             </h3>
             <p className="text-sm text-muted-foreground">{currentTrack.artist}</p>
@@ -148,36 +176,38 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
           </div>
 
           {/* Bar visualizer */}
-          <div className="mb-4 h-12 overflow-hidden">
+          <div className="mb-3 h-10 overflow-hidden rounded-lg">
             <BarVisualizer
               mediaStream={stream}
               state={player.isPlaying ? "speaking" : "listening"}
-              barCount={20}
+              barCount={24}
               minHeight={5}
               maxHeight={100}
               centerAlign
-              className="h-full w-full"
+              multibandOptions={{ loPass: 2, hiPass: 480, analyserOptions: { fftSize: 2048, smoothingTimeConstant: 0.55 } }}
+              className="h-full w-full bg-transparent"
             />
           </div>
 
-          {/* Scrub bar */}
+          {/* Scrub bar + time */}
           <ScrubBarContainer
             duration={player.duration ?? 0}
             value={currentTime}
             onScrub={(t) => player.seek(t)}
+            className="mb-1 flex-col items-stretch gap-0"
           >
-            <ScrubBarTrack className="mb-1">
+            <ScrubBarTrack className="h-1.5">
               <ScrubBarProgress />
-              <ScrubBarThumb />
+              <ScrubBarThumb className="h-3.5 w-3.5" />
             </ScrubBarTrack>
-            <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
+            <div className="mt-1 flex justify-between text-xs tabular-nums text-muted-foreground">
               <AudioPlayerTime />
               <AudioPlayerDuration />
             </div>
           </ScrubBarContainer>
 
-          {/* Controls */}
-          <div className="my-4 flex items-center justify-center gap-4">
+          {/* Playback controls */}
+          <div className="my-2 flex items-center justify-center gap-4">
             <button
               onClick={playPrev}
               className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
@@ -202,15 +232,18 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
             </button>
           </div>
 
-          {/* Playback rate */}
-          <div className="mb-6 flex justify-center">
-            <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} />
+          {/* Volume + speed row */}
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex-1">
+              <VolumeSlider />
+            </div>
+            <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
           </div>
 
           {/* Lyrics */}
           {lyricsContent && (
-            <div className="rounded-xl bg-foreground/3 p-4">
-              <p className="mb-3 text-xs tracking-widest text-muted-foreground">LYRICS</p>
+            <div className="rounded-xl bg-foreground/4 p-4">
+              <p className="mb-3 text-xs tracking-widest text-muted-foreground/60">LYRICS</p>
               <LyricsDisplay lyricsContent={lyricsContent} lyricsType={lyricsType} />
             </div>
           )}

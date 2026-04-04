@@ -67,12 +67,16 @@ interface AudioPlayerApi<TData = unknown> {
   isPlaying: boolean
   isBuffering: boolean
   playbackRate: number
+  volume: number
+  isMuted: boolean
   isItemActive: (id: string | number | null) => boolean
   setActiveItem: (item: AudioPlayerItem<TData> | null) => Promise<void>
   play: (item?: AudioPlayerItem<TData> | null) => Promise<void>
   pause: () => void
   seek: (time: number) => void
   setPlaybackRate: (rate: number) => void
+  setVolume: (v: number) => void
+  toggleMute: () => void
 }
 
 const AudioPlayerContext = createContext<AudioPlayerApi<unknown> | null>(null)
@@ -117,6 +121,9 @@ export function AudioPlayerProvider<TData = unknown>({
   )
   const [paused, setPaused] = useState(true)
   const [playbackRate, setPlaybackRateState] = useState<number>(1)
+  const [volume, setVolumeState] = useState<number>(1)
+  const [isMuted, setIsMutedState] = useState<boolean>(false)
+  const prevVolumeRef = useRef<number>(1)
 
   const setActiveItem = useCallback(
     async (item: AudioPlayerItem<TData> | null) => {
@@ -209,6 +216,29 @@ export function AudioPlayerProvider<TData = unknown>({
     setPlaybackRateState(rate)
   }, [])
 
+  const setVolume = useCallback((v: number) => {
+    if (!audioRef.current) return
+    const clamped = Math.min(1, Math.max(0, v))
+    audioRef.current.volume = clamped
+    audioRef.current.muted = false
+    setVolumeState(clamped)
+    setIsMutedState(false)
+    prevVolumeRef.current = clamped > 0 ? clamped : prevVolumeRef.current
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    if (!audioRef.current) return
+    if (audioRef.current.muted || audioRef.current.volume === 0) {
+      audioRef.current.muted = false
+      audioRef.current.volume = prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8
+      setIsMutedState(false)
+    } else {
+      prevVolumeRef.current = audioRef.current.volume
+      audioRef.current.muted = true
+      setIsMutedState(true)
+    }
+  }, [])
+
   const isItemActive = useCallback(
     (id: string | number | null) => {
       return activeItem?.id === id
@@ -226,6 +256,8 @@ export function AudioPlayerProvider<TData = unknown>({
       setPaused(audioRef.current.paused)
       setError(audioRef.current.error)
       setPlaybackRateState(audioRef.current.playbackRate)
+      setVolumeState(audioRef.current.volume)
+      setIsMutedState(audioRef.current.muted)
     }
   })
 
@@ -243,12 +275,16 @@ export function AudioPlayerProvider<TData = unknown>({
       isBuffering,
       activeItem,
       playbackRate,
+      volume,
+      isMuted,
       isItemActive,
       setActiveItem,
       play,
       pause,
       seek,
       setPlaybackRate,
+      setVolume,
+      toggleMute,
     }),
     [
       audioRef,
@@ -258,12 +294,16 @@ export function AudioPlayerProvider<TData = unknown>({
       isBuffering,
       activeItem,
       playbackRate,
+      volume,
+      isMuted,
       isItemActive,
       setActiveItem,
       play,
       pause,
       seek,
       setPlaybackRate,
+      setVolume,
+      toggleMute,
     ]
   )
 

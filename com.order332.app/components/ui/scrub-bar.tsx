@@ -11,7 +11,6 @@ import {
 } from "react"
 
 import { cn } from "@/lib/utils"
-import { Progress } from "@/components/ui/progress"
 
 function formatTimestamp(value: number) {
   if (!Number.isFinite(value) || value < 0) return "0:00"
@@ -138,7 +137,7 @@ function ScrubBarTrack({ className, children, ...props }: ScrubBarTrackProps) {
       ref={trackRef}
       data-slot="scrub-bar-track"
       className={cn(
-        "bg-secondary relative h-2 w-full grow cursor-pointer touch-none rounded-full transition-none select-none",
+        "relative h-2 w-full grow cursor-pointer touch-none rounded-full transition-none select-none bg-foreground/15",
         className
       )}
       onPointerDown={handlePointerDown}
@@ -154,16 +153,16 @@ function ScrubBarTrack({ className, children, ...props }: ScrubBarTrackProps) {
 }
 ScrubBarTrack.displayName = "ScrubBarTrack"
 
-type ScrubBarProgressProps = Omit<ComponentProps<typeof Progress>, "value">
+type ScrubBarProgressProps = React.HTMLAttributes<HTMLDivElement>
 
 function ScrubBarProgress({ className, ...props }: ScrubBarProgressProps) {
   const { progress } = useScrubBarContext()
 
   return (
-    <Progress
+    <div
       data-slot="scrub-bar-progress"
-      value={progress}
-      className={cn("absolute h-full [&>div]:transition-none", className)}
+      className={cn("bg-foreground/80 absolute inset-y-0 left-0 rounded-full", className)}
+      style={{ width: `${progress}%` }}
       {...props}
     />
   )

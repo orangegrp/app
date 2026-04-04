@@ -1,20 +1,25 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
-import { CloudUpload, Music2, X } from "lucide-react"
+import { CloudUpload, FileMusic, Music2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { uploadMusicTrack, type MusicTrackMeta } from "@/lib/music-api"
 import { Button } from "@/components/ui/button"
 
-const AUDIO_TYPES = ["audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/x-m4a"].join(",")
+const AUDIO_MIME_TYPES = new Set(["audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/x-m4a"])
+const AUDIO_TYPES = [...AUDIO_MIME_TYPES].join(",")
 const COVER_TYPES = ["image/jpeg", "image/png", "image/webp"].join(",")
-const LYRICS_TYPES = ".lrc,.txt,text/plain"
+const LYRICS_EXTS = new Set([".lrc", ".txt"])
 
 const GENRES = ["Pop", "Rock", "Hip-Hop", "Electronic", "Jazz", "Classical", "R&B", "Country", "Folk", "Ambient", "Metal", "Punk", "Indie", "Soul", "Reggae"]
 
 interface MusicUploadFormProps {
   onUploadComplete: (track: MusicTrackMeta) => void
   onCancel: () => void
+}
+
+function isLyricsFile(file: File) {
+  return LYRICS_EXTS.has(file.name.slice(file.name.lastIndexOf(".")).toLowerCase())
 }
 
 export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormProps) {
@@ -32,11 +37,18 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
   const [genre, setGenre] = useState("")
   const [durationSec, setDurationSec] = useState(0)
 
+  const [audioDragging, setAudioDragging] = useState(false)
+  const [lyricsDragging, setLyricsDragging] = useState(false)
+
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   const handleAudioFile = useCallback((file: File) => {
+    if (!AUDIO_MIME_TYPES.has(file.type) && !file.name.match(/\.(mp3|ogg|wav|flac|aac|m4a)$/i)) {
+      setError("Unsupported audio format.")
+      return
+    }
     setAudioFile(file)
     setError(null)
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
@@ -56,6 +68,35 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
     reader.onload = (e) => setCoverPreview(e.target?.result as string)
     reader.readAsDataURL(file)
   }, [])
+
+  const handleLyricsFile = useCallback((file: File) => {
+    if (!isLyricsFile(file)) {
+      setError("Lyrics must be a .lrc or .txt file.")
+      return
+    }
+    setLyricsFile(file)
+    setError(null)
+  }, [])
+
+  // Audio drop zone handlers
+  const onAudioDragOver = (e: React.DragEvent) => { e.preventDefault(); setAudioDragging(true) }
+  const onAudioDragLeave = () => setAudioDragging(false)
+  const onAudioDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setAudioDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleAudioFile(file)
+  }
+
+  // Lyrics drop zone handlers
+  const onLyricsDragOver = (e: React.DragEvent) => { e.preventDefault(); setLyricsDragging(true) }
+  const onLyricsDragLeave = () => setLyricsDragging(false)
+  const onLyricsDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setLyricsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleLyricsFile(file)
+  }
 
   const handleUpload = async () => {
     if (!audioFile || !title.trim() || !artist.trim()) return
@@ -154,32 +195,55 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
               </datalist>
             </Field>
 
+            {/* Lyrics file — supports drag-and-drop */}
             <Field label="Lyrics file">
-              <button
-                type="button"
+              <div
                 onClick={() => lyricsInputRef.current?.click()}
-                className="input-glass flex items-center gap-2 text-left text-sm text-muted-foreground"
+                onDragOver={onLyricsDragOver}
+                onDragLeave={onLyricsDragLeave}
+                onDrop={onLyricsDrop}
+                className={cn(
+                  "input-glass flex cursor-pointer items-center gap-2 text-left text-sm transition-colors",
+                  lyricsDragging && "border-foreground/40 bg-foreground/8",
+                )}
               >
                 {lyricsFile ? (
-                  <span className="truncate text-foreground">{lyricsFile.name}</span>
+                  <>
+                    <FileMusic className="h-3.5 w-3.5 shrink-0 text-foreground/60" />
+                    <span className="truncate text-foreground">{lyricsFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setLyricsFile(null) }}
+                      className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
                 ) : (
-                  <span>Choose .lrc or .txt</span>
+                  <span className="text-muted-foreground">
+                    {lyricsDragging ? "Drop .lrc or .txt here" : "Drop or choose .lrc / .txt"}
+                  </span>
                 )}
-              </button>
-              <input ref={lyricsInputRef} type="file" accept={LYRICS_TYPES} onChange={(e) => { const f = e.target.files?.[0]; if (f) setLyricsFile(f) }} className="hidden" />
+              </div>
+              <input ref={lyricsInputRef} type="file" accept=".lrc,.txt,text/plain" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLyricsFile(f) }} className="hidden" />
             </Field>
           </div>
         </div>
       </div>
 
-      {/* Audio file picker */}
+      {/* Audio file drop zone */}
       <div
         onClick={() => !audioFile && audioInputRef.current?.click()}
+        onDragOver={onAudioDragOver}
+        onDragLeave={onAudioDragLeave}
+        onDrop={onAudioDrop}
         className={cn(
           "mt-4 flex min-h-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed transition-all",
           audioFile
             ? "cursor-default border-foreground/10 bg-foreground/2"
-            : "border-foreground/10 hover:border-foreground/20",
+            : audioDragging
+              ? "border-foreground/40 bg-foreground/8"
+              : "border-foreground/10 hover:border-foreground/20",
         )}
       >
         <input ref={audioInputRef} type="file" accept={AUDIO_TYPES} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAudioFile(f) }} className="hidden" />
@@ -199,7 +263,7 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
             <CloudUpload className="h-6 w-6" />
-            <span className="text-sm">Choose audio file</span>
+            <span className="text-sm">{audioDragging ? "Drop audio file here" : "Drop or choose audio file"}</span>
             <span className="text-xs opacity-60">MP3, FLAC, WAV, OGG, AAC · max 100 MB</span>
           </div>
         )}

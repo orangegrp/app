@@ -14,6 +14,7 @@ import { fetchMusicTracks, type MusicTrackMeta } from "@/lib/music-api"
 import { hasPermission } from "@/lib/permissions"
 import { useAuthStore } from "@/lib/auth-store"
 import { PERMISSIONS } from "@/lib/permissions"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface MusicContextValue {
   tracks: MusicTrackMeta[]
@@ -29,6 +30,9 @@ interface MusicContextValue {
   isCreator: boolean
   loading: boolean
   error: string | null
+  nowPlayingOpen: boolean
+  openNowPlaying: () => void
+  closeNowPlaying: () => void
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null)
@@ -42,6 +46,7 @@ export function useMusicContext(): MusicContextValue {
 export function MusicProvider({ children }: { children: ReactNode }) {
   const player = useAudioPlayer<MusicTrackMeta>()
   const user = useAuthStore((s) => s.user)
+  const isMobile = useIsMobile()
   const isCreator = user ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC_UPLOAD) : false
 
   const [tracks, setTracks] = useState<MusicTrackMeta[]>([])
@@ -49,6 +54,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [isCreatorMode, setCreatorMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false)
 
   // Keep a stable ref to tracks so callbacks don't stale-close
   const tracksRef = useRef(tracks)
@@ -71,7 +77,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!track) return
     setCurrentTrackId(id)
     player.play({ id: track.id, src: track.audioUrl, data: track })
-  }, [player])
+    if (isMobile) setNowPlayingOpen(true)
+  }, [player, isMobile])
 
   const playNext = useCallback(() => {
     const list = tracksRef.current
@@ -108,6 +115,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       addTrack, removeTrack,
       isCreatorMode, setCreatorMode, isCreator,
       loading, error,
+      nowPlayingOpen,
+      openNowPlaying: () => setNowPlayingOpen(true),
+      closeNowPlaying: () => setNowPlayingOpen(false),
     }}>
       {children}
     </MusicContext.Provider>

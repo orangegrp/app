@@ -33,7 +33,16 @@ function createAudioAnalyser(
 
   source.connect(analyser)
 
+  // Connect through a silent gain node to force the browser to run the audio
+  // graph. Without this, some browsers skip processing since nothing consumes
+  // the output, resulting in flat frequency data.
+  const silentGain = audioContext.createGain()
+  silentGain.gain.value = 0
+  analyser.connect(silentGain)
+  silentGain.connect(audioContext.destination)
+
   const cleanup = () => {
+    silentGain.disconnect()
     source.disconnect()
     audioContext.close()
   }
@@ -347,6 +356,8 @@ export interface BarVisualizerProps
   demo?: boolean
   /** Align bars from center instead of bottom */
   centerAlign?: boolean
+  /** Override multiband analysis options (loPass/hiPass are bin indices) */
+  multibandOptions?: MultiBandVolumeOptions
 }
 
 const BarVisualizerComponent = React.forwardRef<
@@ -362,17 +373,20 @@ const BarVisualizerComponent = React.forwardRef<
       maxHeight = 100,
       demo = false,
       centerAlign = false,
+      multibandOptions,
       className,
       style,
       ...props
     },
     ref
   ) => {
-    // Audio processing
+    // Audio processing — default to broad frequency range covering bass through treble
     const realVolumeBands = useMultibandVolume(mediaStream, {
       bands: barCount,
-      loPass: 100,
-      hiPass: 200,
+      loPass: 2,
+      hiPass: 480,
+      analyserOptions: { fftSize: 2048, smoothingTimeConstant: 0.55 },
+      ...multibandOptions,
     })
 
     // Generate fake volume data for demo mode using refs to avoid state updates
@@ -529,6 +543,7 @@ const BarVisualizer = React.memo(
       prevProps.maxHeight === nextProps.maxHeight &&
       prevProps.demo === nextProps.demo &&
       prevProps.centerAlign === nextProps.centerAlign &&
+      prevProps.multibandOptions === nextProps.multibandOptions &&
       prevProps.className === nextProps.className &&
       JSON.stringify(prevProps.style) === JSON.stringify(nextProps.style)
     )

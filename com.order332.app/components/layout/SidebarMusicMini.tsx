@@ -1,6 +1,7 @@
 "use client"
 
 import { Music2, Pause, Play } from "lucide-react"
+import { usePathname } from "next/navigation"
 import { useAudioPlayer } from "@/components/ui/audio-player"
 import { useOptionalMusicContext } from "@/components/music/MusicContext"
 
@@ -12,9 +13,13 @@ interface SidebarMusicMiniProps {
 export function SidebarMusicMini({ collapsed, onOpenNowPlaying }: SidebarMusicMiniProps) {
   const ctx = useOptionalMusicContext()
   const player = useAudioPlayer()
+  const pathname = usePathname()
 
   const currentTrack = ctx?.currentTrack ?? null
-  if (!currentTrack) return null
+  const isOnMusicPage = pathname === '/music' || pathname.startsWith('/music/')
+
+  // Hide while the user is on the music page — the bottom player bar handles that
+  if (!currentTrack || isOnMusicPage) return null
 
   if (collapsed) {
     return (

@@ -1,6 +1,7 @@
 "use client"
 
 import { Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   useAudioPlayer,
@@ -27,8 +28,12 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
   const player = useAudioPlayer()
   const currentTime = useAudioPlayerTime()
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed)
+  const pathname = usePathname()
 
   if (!currentTrack) return null
+
+  // On desktop the sidebar mini player takes over on non-music pages
+  const isOnMusicPage = pathname === '/music' || pathname.startsWith('/music/')
 
   const barContent = (
     <div
@@ -125,16 +130,18 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
         {barContent}
       </div>
 
-      {/* Desktop bar — sits at bottom with sidebar offset */}
-      <div
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-40 hidden sm:block",
-          "transition-[padding-left] duration-200 ease-in-out",
-          sidebarCollapsed ? "sm:pl-[60px]" : "sm:pl-56",
-        )}
-      >
-        {barContent}
-      </div>
+      {/* Desktop bar — only on /music/* pages; sidebar mini player covers other pages */}
+      {isOnMusicPage && (
+        <div
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-40 hidden sm:block",
+            "transition-[padding-left] duration-200 ease-in-out",
+            sidebarCollapsed ? "sm:pl-[60px]" : "sm:pl-56",
+          )}
+        >
+          {barContent}
+        </div>
+      )}
     </>
   )
 }

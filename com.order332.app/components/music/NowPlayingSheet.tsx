@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/scrub-bar"
 import { useMusicContext } from "./MusicContext"
 import { LyricsDisplay } from "./LyricsDisplay"
+import { RemotePlaybackButton } from "./RemotePlaybackButton"
 import { fetchTrackLyrics, type LyricsType } from "@/lib/music-api"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -93,7 +94,8 @@ function TransportControls() {
   )
 }
 
-// ── Settings row: volume + speed + optional lyrics toggle ───────────────────
+// ── Settings row: volume + speed + cast + optional lyrics toggle ─────────────
+// Centered layout — volume has a fixed width so the row doesn't stretch.
 interface SettingsRowProps {
   hasLyrics: boolean
   showLyrics: boolean
@@ -101,9 +103,10 @@ interface SettingsRowProps {
 }
 function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics }: SettingsRowProps) {
   return (
-    <div className="flex items-center gap-3">
-      <AudioPlayerVolume className="flex-1" />
+    <div className="flex items-center justify-center gap-4">
+      <AudioPlayerVolume className="w-28 shrink-0" />
       <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+      <RemotePlaybackButton />
       {hasLyrics && (
         <button
           onClick={onToggleLyrics}
@@ -130,6 +133,7 @@ function PlayerControls() {
       <div className="flex items-center gap-3">
         <AudioPlayerVolume className="flex-1" />
         <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+        <RemotePlaybackButton />
       </div>
     </div>
   )

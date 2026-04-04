@@ -316,7 +316,8 @@ export function AudioPlayerProvider<TData = unknown>({
   return (
     <AudioPlayerContext.Provider value={api as AudioPlayerApi<unknown>}>
       <AudioPlayerTimeContext.Provider value={time}>
-        <audio ref={audioRef} className="hidden" crossOrigin="anonymous" />
+        {/* x-webkit-airplay enables AirPlay on Safari; Remote Playback API handles routing */}
+        <audio ref={audioRef} className="hidden" crossOrigin="anonymous" x-webkit-airplay="allow" />
         {children}
       </AudioPlayerTimeContext.Provider>
     </AudioPlayerContext.Provider>

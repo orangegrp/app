@@ -4,6 +4,16 @@ import { useState } from "react"
 import { Music2, Pause, Play, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDuration, type MusicTrackMeta } from "@/lib/music-api"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface MusicTrackCardProps {
   track: MusicTrackMeta
@@ -23,12 +33,12 @@ export function MusicTrackCard({
   onDelete,
 }: MusicTrackCardProps) {
   const [deleting, setDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const showingPlay = isActive && isPlaying
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm(`Delete "${track.title}"?`)) return
+  const handleDeleteConfirm = () => {
     setDeleting(true)
+    setConfirmOpen(false)
     onDelete(track.id)
   }
 
@@ -114,7 +124,7 @@ export function MusicTrackCard({
       {/* Creator delete button */}
       {isCreator && (
         <button
-          onClick={handleDelete}
+          onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
           disabled={deleting}
           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/80"
           aria-label="Delete track"
@@ -122,6 +132,26 @@ export function MusicTrackCard({
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete track?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{track.title}" will be permanently deleted and cannot be recovered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={(e) => { e.stopPropagation(); handleDeleteConfirm() }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

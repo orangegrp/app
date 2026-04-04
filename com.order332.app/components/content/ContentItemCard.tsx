@@ -7,6 +7,16 @@ import { formatFileSize, type ContentItemMeta } from "@/lib/content-api"
 import { AudioPlayerButton, AudioPlayerProgress, AudioPlayerTime, AudioPlayerDuration } from "@/components/ui/audio-player"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ContentItemCardProps {
   item: ContentItemMeta
@@ -17,11 +27,11 @@ interface ContentItemCardProps {
 export function ContentItemCard({ item, isCreator, onDelete }: ContentItemCardProps) {
   const [imageExpanded, setImageExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm(`Delete "${item.title}"?`)) return
+  const handleDeleteConfirm = () => {
     setDeleting(true)
+    setConfirmOpen(false)
     onDelete(item.id)
   }
 
@@ -30,7 +40,7 @@ export function ContentItemCard({ item, isCreator, onDelete }: ContentItemCardPr
       {/* Creator delete button */}
       {isCreator && (
         <button
-          onClick={handleDelete}
+          onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
           disabled={deleting}
           className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/80"
           aria-label="Delete item"
@@ -38,6 +48,23 @@ export function ContentItemCard({ item, isCreator, onDelete }: ContentItemCardPr
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{item.title}" will be permanently deleted and cannot be recovered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDeleteConfirm}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {item.itemType === "image" && <ImageCard item={item} onExpand={() => setImageExpanded(true)} />}
       {item.itemType === "audio" && <AudioCard item={item} />}

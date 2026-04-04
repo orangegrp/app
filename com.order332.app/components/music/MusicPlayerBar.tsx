@@ -19,21 +19,40 @@ import {
 import { useMusicContext } from "./MusicContext"
 import { useSidebarStore } from "@/lib/sidebar-store"
 
+// ── Isolated scrub bar ──────────────────────────────────────────────────────
+// Module-scope component — only this re-renders at 60 fps.
+// MusicPlayerBar itself stays stable and its buttons remain clickable.
+function MiniScrubBar() {
+  const player = useAudioPlayer()
+  const currentTime = useAudioPlayerTime()
+  return (
+    <ScrubBarContainer
+      duration={player.duration ?? 0}
+      value={currentTime}
+      onScrub={(t) => player.seek(t)}
+    >
+      <ScrubBarTrack className="mb-2 h-1">
+        <ScrubBarProgress />
+        <ScrubBarThumb className="h-3 w-3" />
+      </ScrubBarTrack>
+    </ScrubBarContainer>
+  )
+}
+
 interface MusicPlayerBarProps {
   onOpenNowPlaying: () => void
 }
 
+// Does NOT call useAudioPlayerTime() — re-renders only on real state changes.
 export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
   const { currentTrack, playNext, playPrev } = useMusicContext()
   const player = useAudioPlayer()
-  const currentTime = useAudioPlayerTime()
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed)
   const pathname = usePathname()
 
   if (!currentTrack) return null
 
-  // On desktop the sidebar mini player takes over on non-music pages
-  const isOnMusicPage = pathname === '/music' || pathname.startsWith('/music/')
+  const isOnMusicPage = pathname === "/music" || pathname.startsWith("/music/")
 
   const barContent = (
     <div
@@ -43,20 +62,10 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
         background: "var(--glass-bg-overlay)",
       }}
     >
-      {/* Scrub bar */}
-      <ScrubBarContainer
-        duration={player.duration ?? 0}
-        value={currentTime}
-        onScrub={(t) => player.seek(t)}
-      >
-        <ScrubBarTrack className="mb-2 h-1">
-          <ScrubBarProgress />
-          <ScrubBarThumb className="h-3 w-3" />
-        </ScrubBarTrack>
-      </ScrubBarContainer>
+      <MiniScrubBar />
 
       <div className="flex items-center gap-3">
-        {/* Track info → tap to open now playing */}
+        {/* Track info → opens now playing */}
         <button
           onClick={onOpenNowPlaying}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
@@ -76,7 +85,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
           </div>
         </button>
 
-        {/* Controls */}
+        {/* Playback controls */}
         <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={playPrev}
@@ -87,15 +96,13 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
           </button>
 
           <button
-            onClick={() => (player.isPlaying ? player.pause() : player.play())}
+            onClick={() => player.isPlaying ? player.pause() : player.play()}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
             aria-label={player.isPlaying ? "Pause" : "Play"}
           >
-            {player.isPlaying ? (
-              <Pause className="h-4 w-4 fill-current" />
-            ) : (
-              <Play className="ml-0.5 h-4 w-4 fill-current" />
-            )}
+            {player.isPlaying
+              ? <Pause className="h-4 w-4 fill-current" />
+              : <Play className="ml-0.5 h-4 w-4 fill-current" />}
           </button>
 
           <button
@@ -107,7 +114,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
           </button>
         </div>
 
-        {/* Time + volume (desktop only) */}
+        {/* Time + volume — desktop only */}
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
           <div className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
             <AudioPlayerTime />
@@ -122,15 +129,15 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
 
   return (
     <>
-      {/* Mobile bar — sits flush above MobileTabBar, accounting for safe-area-inset-bottom */}
+      {/* Mobile — above tab bar */}
       <div
         className="fixed inset-x-0 z-40 sm:hidden"
-        style={{ bottom: 'calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))' }}
+        style={{ bottom: "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))" }}
       >
         {barContent}
       </div>
 
-      {/* Desktop bar — only on /music/* pages; sidebar mini player covers other pages */}
+      {/* Desktop — only on /music/* pages */}
       {isOnMusicPage && (
         <div
           className={cn(

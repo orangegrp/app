@@ -101,8 +101,14 @@ export function BlogEditor({ author, slug }: Props) {
   const [bodyMarkdown, setBodyMarkdown] = useState('')
   const [frontmatter, setFrontmatter] = useState<FrontmatterData>(DEFAULT_FRONTMATTER)
   const [blobSha, setBlobSha] = useState('')
-  const [editorMode, setEditorMode] = useState<'raw' | 'visual'>('raw')
-  const [showPreview, setShowPreview] = useState(true)
+  const [editorMode, setEditorMode] = useState<'raw' | 'visual'>(() => {
+    if (typeof window === 'undefined') return 'raw'
+    return localStorage.getItem('blog-editor-mode') === 'visual' ? 'visual' : 'raw'
+  })
+  const [showPreview, setShowPreview] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('blog-editor-preview') !== '0'
+  })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -121,6 +127,10 @@ export function BlogEditor({ author, slug }: Props) {
   const [aiSelRevision, setAiSelRevision] = useState(0)
   const [aiLoading, setAiLoading] = useState(false)
   const bumpAiSelection = useCallback(() => setAiSelRevision((n) => n + 1), [])
+
+  // Persist editor preferences
+  useEffect(() => { localStorage.setItem('blog-editor-mode', editorMode) }, [editorMode])
+  useEffect(() => { localStorage.setItem('blog-editor-preview', showPreview ? '1' : '0') }, [showPreview])
 
   // Warn on unsaved changes
   useEffect(() => {

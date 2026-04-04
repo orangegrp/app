@@ -64,11 +64,13 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
     >
       <MiniScrubBar />
 
-      <div className="flex items-center gap-3">
-        {/* Track info → opens now playing */}
+      {/* Desktop: 3-column grid so controls are always centred.
+          Mobile: flex row (no time/volume column). */}
+      <div className="flex items-center gap-3 sm:grid sm:grid-cols-3 sm:gap-2">
+        {/* Left: track info */}
         <button
           onClick={onOpenNowPlaying}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left sm:flex-none"
         >
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-foreground/5">
             {currentTrack.coverUrl ? (
@@ -85,8 +87,8 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
           </div>
         </button>
 
-        {/* Playback controls */}
-        <div className="flex shrink-0 items-center gap-2">
+        {/* Centre: playback controls */}
+        <div className="flex shrink-0 items-center justify-center gap-2">
           <button
             onClick={playPrev}
             className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
@@ -114,8 +116,8 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
           </button>
         </div>
 
-        {/* Time + volume — desktop only */}
-        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+        {/* Right: time + volume — desktop only */}
+        <div className="hidden items-center justify-end gap-3 sm:flex">
           <div className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
             <AudioPlayerTime />
             <span>/</span>

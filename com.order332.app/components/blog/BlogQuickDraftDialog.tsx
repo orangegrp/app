@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { BLOG_AI_MAX_INPUT_CHARS } from '@/lib/blog-ai-assist-limits'
 import { blogAiAssistRequest, consumeBlogAiTextStream } from '@/lib/blog-ai-api'
 import { Button } from '@/components/ui/button'
 import {
@@ -65,7 +66,6 @@ export function BlogQuickDraftDialog({ open, onOpenChange, onInsert }: Props) {
         /* streaming progress optional */
       })
       if (!text.trim()) {
-        toast.error('No response from the model')
         return
       }
       const block = `\n\n${text.trim()}\n`
@@ -96,6 +96,7 @@ export function BlogQuickDraftDialog({ open, onOpenChange, onInsert }: Props) {
               onChange={(e) => setBraindump(e.target.value)}
               placeholder="Braindump notes, bullets, half-formed thoughts…"
               disabled={loading}
+              maxLength={BLOG_AI_MAX_INPUT_CHARS.quickDraft}
               className="min-h-[12rem] resize-y"
               autoFocus
             />

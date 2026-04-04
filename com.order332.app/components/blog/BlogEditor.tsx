@@ -364,6 +364,16 @@ export function BlogEditor({ author, slug }: Props) {
     { id: 'preview', label: 'Preview', icon: Eye },
   ]
 
+  const draftTitleBadge =
+    frontmatter.draft ? (
+      <span
+        className="shrink-0 rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200/90"
+        aria-label="Draft post"
+      >
+        Draft
+      </span>
+    ) : null
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header — mobile */}
@@ -376,9 +386,12 @@ export function BlogEditor({ author, slug }: Props) {
           <ArrowLeft size={18} strokeWidth={1.5} />
         </Link>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium tracking-wide text-foreground">
-            {frontmatter.title || displaySlug}
-          </p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="min-w-0 truncate text-sm font-medium tracking-wide text-foreground">
+              {frontmatter.title || displaySlug}
+            </p>
+            {draftTitleBadge}
+          </div>
           {isDirty ? (
             <p className="text-[10px] tracking-wider text-muted-foreground">Unsaved changes</p>
           ) : (
@@ -386,14 +399,24 @@ export function BlogEditor({ author, slug }: Props) {
           )}
         </div>
         {frontmatter.draft ? (
-          <button
-            type="button"
-            onClick={() => void handleSave(false)}
-            disabled={saving}
-            className="shrink-0 rounded-lg bg-white/90 px-3 py-2.5 text-xs font-medium tracking-wide text-black transition-colors hover:bg-white disabled:opacity-50 min-h-11"
-          >
-            {saving ? 'Saving…' : 'Publish'}
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2.5 text-[11px] font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 min-h-11"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSave(false)}
+              disabled={saving}
+              className="rounded-lg bg-white/90 px-2.5 py-2.5 text-[11px] font-medium tracking-wide text-black transition-colors hover:bg-white disabled:opacity-50 min-h-11"
+            >
+              {saving ? 'Saving…' : 'Publish'}
+            </button>
+          </div>
         ) : (
           <button
             type="button"
@@ -456,9 +479,10 @@ export function BlogEditor({ author, slug }: Props) {
           Posts
         </Link>
         <span className="text-white/20">|</span>
-        <span className="flex-1 text-sm tracking-wide text-foreground truncate">
-          {frontmatter.title || displaySlug}
-          {isDirty && <span className="ml-1.5 text-muted-foreground text-xs">•</span>}
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-sm tracking-wide text-foreground">
+          <span className="min-w-0 truncate">{frontmatter.title || displaySlug}</span>
+          {draftTitleBadge}
+          {isDirty && <span className="shrink-0 text-muted-foreground text-xs">•</span>}
         </span>
 
         {/* Mode toggle */}
@@ -527,14 +551,29 @@ export function BlogEditor({ author, slug }: Props) {
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           {frontmatter.draft ? (
-            <button
-              type="button"
-              onClick={() => handleSave(false)}
-              disabled={saving}
-              className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium tracking-wide text-black hover:bg-white disabled:opacity-50 transition-colors"
-            >
-              {saving ? 'Saving…' : 'Publish'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleSave()}
+                disabled={saving}
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+              >
+                {saving ? (
+                  <Spinner size="sm" />
+                ) : (
+                  <Save size={14} strokeWidth={1.75} className="shrink-0" aria-hidden />
+                )}
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave(false)}
+                disabled={saving}
+                className="rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium tracking-wide text-black hover:bg-white disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Saving…' : 'Publish'}
+              </button>
+            </>
           ) : (
             <>
               <button

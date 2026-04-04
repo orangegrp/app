@@ -266,7 +266,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
             EditorView.theme({
               '&': { height: '100%', fontSize: '13px', background: '#000 !important' },
               '&.cm-focused': { outline: 'none' },
-              '.cm-scroller': { overflow: 'auto', fontFamily: 'monospace' },
+              '.cm-scroller': {
+                overflow: 'auto',
+                fontFamily: 'monospace',
+                WebkitFontSmoothing: 'antialiased',
+              },
               '.cm-content': { padding: '12px 8px' },
               '.cm-gutters': { background: '#000 !important', borderRight: '1px solid rgba(255,255,255,0.06)' },
               '.cm-gutter': { background: '#000 !important' },
@@ -278,7 +282,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                 {
                   background: '#b8c0ce !important',
                   backgroundColor: '#b8c0ce !important',
-                  boxShadow: '0 0 0 1px rgba(255,255,255,0.92) !important',
+                  /* No hard stroke — avoids bracket/double-halo look under the AI glow overlay */
+                  boxShadow: 'none !important',
                 },
               '.cm-content ::selection': {
                 background: '#b8c0ce !important',

@@ -85,5 +85,16 @@ export async function blogAiAssistCreateImage(
     const err = (await res.json().catch(() => ({ error: 'Image generation failed' }))) as { error?: string }
     throw new Error(err.error ?? 'Image generation failed')
   }
-  return res.json() as Promise<{ url: string; alt: string }>
+  const ct = res.headers.get('content-type') ?? ''
+  if (!ct.includes('application/json')) {
+    return { url: '', alt: '' }
+  }
+  const data = (await res.json().catch(() => null)) as { url?: string; alt?: string } | null
+  if (!data || typeof data !== 'object') {
+    return { url: '', alt: '' }
+  }
+  return {
+    url: typeof data.url === 'string' ? data.url : '',
+    alt: typeof data.alt === 'string' ? data.alt : '',
+  }
 }

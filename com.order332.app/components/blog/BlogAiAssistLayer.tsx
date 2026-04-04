@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -34,7 +35,12 @@ import {
   type BlogAiAssistAction,
 } from '@/lib/blog-ai-api'
 import type { MarkdownEditorHandle } from '@/components/blog/MarkdownEditor'
-import { roundedRectPathD, roundedRectPerimeter } from '@/lib/blog-ai-glow-path'
+import {
+  roundedRectInnerMetrics,
+  roundedRectPathD,
+  roundedRectPerimeter,
+} from '@/lib/blog-ai-glow-path'
+import { mergeDomRects } from '@/lib/blog-editor-ai-types'
 import { computeToolbarPosition } from '@/lib/blog-selection-toolbar-position'
 import { BLOG_TRANSLATE_LANGUAGE_OPTIONS } from '@/lib/blog-translate-languages'
 import { cn } from '@/lib/utils'
@@ -73,15 +79,52 @@ function escapeMdAlt(alt: string): string {
   return alt.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]')
 }
 
+/** Single merged bounds for one Siri-style perimeter glow (not per line). */
+function selectionGlowBounds(ed: BlogAiEditorHandle): DOMRect | null {
+  const lineRects = ed.getSelectionRects()
+  if (lineRects.length > 0) {
+    const merged = mergeDomRects(lineRects)
+    if (merged && merged.width >= 1 && merged.height >= 1) return merged
+  }
+  const fallback = ed.getSelectionRect()
+  if (fallback && fallback.width >= 1 && fallback.height >= 1) return fallback
+  return null
+}
+
+const BLOG_AI_GLOW_PATH_INSET = 0.75
+const BLOG_AI_SNAKE_VISIBLE_FRACTION = 0.22
+
 function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }) {
   const w = rect.width + glowPad * 2
   const h = rect.height + glowPad * 2
-  const r = Math.min(10, w / 2, h / 2)
-  const P = roundedRectPerimeter(w, h, r)
-  const seg = Math.max(6, P * 0.16)
-  const gap = Math.max(0, P - seg)
-  const d = roundedRectPathD(w, h, r)
-  const durSec = Math.max(1.2, Math.min(5, P / 80))
+  const r = Math.min(12, w / 2, h / 2)
+  const filterId = `blog-ai-glow-blur-${useId().replace(/:/g, '')}`
+
+  const pathD = roundedRectPathD(w, h, r, BLOG_AI_GLOW_PATH_INSET)
+  const { w: iw, h: ih, r: ir } = roundedRectInnerMetrics(w, h, r, BLOG_AI_GLOW_PATH_INSET)
+  const P = roundedRectPerimeter(iw, ih, ir)
+  const dashDraw = BLOG_AI_SNAKE_VISIBLE_FRACTION * P
+  const dashGap = P - dashDraw
+  const dashArray = `${dashDraw} ${dashGap}`
+
+  if (!pathD || P < 4) {
+    return (
+      <div
+        className="blog-ai-glow-root"
+        style={{
+          left: rect.left - glowPad,
+          top: rect.top - glowPad,
+          width: w,
+          height: h,
+          borderRadius: r,
+        }}
+        aria-hidden
+      >
+        <div className="blog-ai-glow-fill" style={{ borderRadius: r }} />
+      </div>
+    )
+  }
+
   return (
     <div
       className="blog-ai-glow-root"
@@ -94,25 +137,56 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
       }}
       aria-hidden
     >
-      <div className="blog-ai-glow-soft" style={{ borderRadius: r }} />
+      <div className="blog-ai-glow-fill" style={{ borderRadius: r }} />
       <svg
         className="blog-ai-glow-snake-svg"
-        width={w}
-        height={h}
         viewBox={`0 0 ${w} ${h}`}
-        preserveAspectRatio="xMidYMid meet"
+        width="100%"
+        height="100%"
         aria-hidden
       >
+        <defs>
+          <filter id={filterId} x="-45%" y="-45%" width="190%" height="190%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="b" />
+          </filter>
+        </defs>
         <path
-          className="blog-ai-snake-dash"
-          d={d}
+          className="blog-ai-glow-snake-trail"
+          d={pathD}
           fill="none"
-          style={{
-            ['--blog-ai-p' as string]: String(P),
-            strokeDasharray: `${seg} ${gap}`,
-            animationDuration: `${durSec}s`,
-          }}
-        />
+          stroke="rgba(255,255,255,0.42)"
+          strokeWidth={4.25}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={dashArray}
+          filter={`url(#${filterId})`}
+        >
+          <animate
+            attributeName="stroke-dashoffset"
+            from="0"
+            to={-P}
+            dur="2.35s"
+            repeatCount="indefinite"
+          />
+        </path>
+        <path
+          className="blog-ai-glow-snake-head"
+          d={pathD}
+          fill="none"
+          stroke="rgba(255,255,255,0.92)"
+          strokeWidth={1.65}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={dashArray}
+        >
+          <animate
+            attributeName="stroke-dashoffset"
+            from="0"
+            to={-P}
+            dur="2.35s"
+            repeatCount="indefinite"
+          />
+        </path>
       </svg>
     </div>
   )
@@ -200,15 +274,17 @@ export function BlogAiAssistLayer({
     const ac = new AbortController()
     abortRef.current = ac
 
-    const lineRects = ed.getSelectionRects()
-    const merged = ed.getSelectionRect()
-    setGlowRects(lineRects.length > 0 ? lineRects : merged ? [merged] : [])
+    const bounds = selectionGlowBounds(ed)
+    setGlowRects(bounds ? [bounds] : [])
     setLoading(true)
 
     try {
       if (action === 'createImage') {
         const { url, alt } = await blogAiAssistCreateImage(meta.text, ac.signal)
-        const safeAlt = escapeMdAlt(alt || 'Illustration')
+        if (!url.trim()) {
+          return
+        }
+        const safeAlt = escapeMdAlt(alt.trim() || 'Illustration')
         ed.insertAfterSelection(`\n\n![${safeAlt}](${url})\n`)
         const fr = ed.getSelectionRect()
         if (fr) setFlashRect(fr)
@@ -220,7 +296,6 @@ export function BlogAiAssistLayer({
           /* streaming progress optional */
         })
         if (!text.trim()) {
-          toast.error('No response from the model')
           return
         }
         ed.replaceSelection(text)
@@ -273,9 +348,8 @@ export function BlogAiAssistLayer({
     const ac = new AbortController()
     abortRef.current = ac
 
-    const lineRects = ed.getSelectionRects()
-    const merged = ed.getSelectionRect()
-    setGlowRects(lineRects.length > 0 ? lineRects : merged ? [merged] : [])
+    const bounds = selectionGlowBounds(ed)
+    setGlowRects(bounds ? [bounds] : [])
     setLoading(true)
 
     try {
@@ -287,7 +361,6 @@ export function BlogAiAssistLayer({
         /* streaming progress optional */
       })
       if (!out.trim()) {
-        toast.error('No response from the model')
         return
       }
       ed.replaceSelection(out)
@@ -323,15 +396,12 @@ export function BlogAiAssistLayer({
 
   if (!enabled || typeof document === 'undefined') return null
 
-  const glowPad = 12
+  const glowPad = 2
   let glowEl: ReactNode = null
-  if (glowRects && glowRects.length > 0) {
+  const glowBounds = glowRects?.[0]
+  if (glowBounds) {
     glowEl = createPortal(
-      <>
-        {glowRects.map((glowRect, i) => (
-          <BlogAiGlowSegment key={i} rect={glowRect} glowPad={glowPad} />
-        ))}
-      </>,
+      <BlogAiGlowSegment rect={glowBounds} glowPad={glowPad} />,
       document.body,
     )
   }

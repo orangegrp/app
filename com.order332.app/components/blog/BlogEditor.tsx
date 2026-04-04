@@ -325,6 +325,14 @@ export function BlogEditor({ author, slug }: Props) {
     [getActiveAiEditor, bumpAiSelection],
   )
 
+  const handleInsertImageAsset = useCallback((url: string) => {
+    if (visualEditorRef.current && (editorMode === 'visual' || mobileTab === 'edit')) {
+      visualEditorRef.current.insertImage(url)
+    } else {
+      handleBodyChange(`${bodyMarkdown}\n\n![](${url})\n`)
+    }
+  }, [editorMode, mobileTab, bodyMarkdown, handleBodyChange])
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -672,7 +680,7 @@ export function BlogEditor({ author, slug }: Props) {
         {/* Mobile: active panel — bottom padding clears dashboard MobileTabBar only */}
         <div className="sm:hidden flex-1 min-h-0 overflow-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
           {mobileTab === 'attributes' && (
-            <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} />
+            <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} onInsertImage={handleInsertImageAsset} />
           )}
           {mobileTab === 'edit' && (
             <MarkdownEditor
@@ -691,7 +699,7 @@ export function BlogEditor({ author, slug }: Props) {
           <PanelGroup direction="horizontal" className="h-full">
             {/* Frontmatter sidebar */}
             <Panel defaultSize={24} minSize={20} maxSize={40} className="border-r border-white/10">
-              <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} />
+              <FrontmatterPanel data={frontmatter} onChange={handleFrontmatterChange} onInsertImage={handleInsertImageAsset} />
             </Panel>
 
             <PanelResizeHandle className="w-2 bg-white/5 hover:bg-white/15 transition-colors data-[resize-handle-state=drag]:bg-white/20" />

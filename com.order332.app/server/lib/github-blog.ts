@@ -198,6 +198,52 @@ async function fetchBlogFile(filePath: string): Promise<{ content: string; sha: 
 }
 
 /**
+ * Returns the raw file content of every blog MDX file.
+ * Used for stray-image detection — checks which images are referenced across ALL posts.
+ */
+export async function getAllBlogPostRawContents(): Promise<string[]> {
+  const cfg = getConfig()
+  const octokit = getOctokit()
+
+  const { data: branch } = await octokit.repos.getBranch({
+    owner: cfg.owner,
+    repo: cfg.repo,
+    branch: cfg.branch,
+  })
+
+  const { data: tree } = await octokit.git.getTree({
+    owner: cfg.owner,
+    repo: cfg.repo,
+    tree_sha: branch.commit.commit.tree.sha,
+    recursive: '1',
+  })
+
+  const normalizedBase = cfg.basePath.replace(/^\//, '')
+  const mdxFiles = (tree.tree ?? []).filter((item) => {
+    if (item.type !== 'blob' || !item.path?.startsWith(normalizedBase + '/') || !item.path.endsWith('.mdx')) return false
+    const relPath = item.path.slice(normalizedBase.length + 1)
+    return relPath.split('/').length === 2
+  })
+
+  const results = await Promise.all(
+    mdxFiles.map(async (file) => {
+      const pathParts = file.path!.split('/')
+      const rawSlug = pathParts[pathParts.length - 1].replace(/\.mdx$/, '')
+      const rawAuthor = (pathParts[pathParts.length - 2] ?? '').replace(/^\(|\)$/g, '')
+      if (!AUTHOR_RE.test(rawAuthor) || !SLUG_RE.test(rawSlug)) return null
+      try {
+        const { content } = await fetchBlogFile(buildBlogFilePath(rawAuthor, rawSlug))
+        return content
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  return results.filter((c): c is string => c !== null)
+}
+
+/**
  * Fetches a blog post by author + slug. Validates both before constructing path.
  */
 export async function getBlogPost(

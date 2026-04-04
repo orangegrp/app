@@ -1062,6 +1062,18 @@
   color: oklch(1 0 0) !important;
 }
 
+/* ── Number input spin buttons ────────────────────────────────────── */
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  filter: invert(1) opacity(0.5);
+}
+
+input[type="number"]::-webkit-inner-spin-button:hover,
+input[type="number"]::-webkit-outer-spin-button:hover {
+  filter: invert(1) opacity(1);
+}
+
 /* ── Spinner ──────────────────────────────────────────────────────── */
 
 [data-slot="spinner"] {

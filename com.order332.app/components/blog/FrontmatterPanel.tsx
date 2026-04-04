@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { X } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { X, Trash2, Loader2, PlusCircle } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { useAuthStore } from '@/lib/auth-store'
+import { toast } from 'sonner'
 
 export interface FrontmatterData {
   title: string
@@ -14,13 +16,49 @@ export interface FrontmatterData {
   draft: boolean
 }
 
+interface StrayImage {
+  name: string
+  url: string
+  size: number | null
+}
+
 interface Props {
   data: FrontmatterData
   onChange: (partial: Partial<FrontmatterData>) => void
+  onInsertImage?: (url: string) => void
 }
 
-export function FrontmatterPanel({ data, onChange }: Props) {
+export function FrontmatterPanel({ data, onChange, onInsertImage }: Props) {
   const [tagInput, setTagInput] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [strayImages, setStrayImages] = useState<StrayImage[]>([])
+  const [deletingUrl, setDeletingUrl] = useState<string | null>(null)
+  const hasMounted = useRef(false)
+
+  const scanStrayImages = useCallback(async () => {
+    setScanning(true)
+    try {
+      const { accessToken } = useAuthStore.getState()
+      const res = await fetch('/api/blog/images', {
+        headers: { ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Failed to fetch images')
+      const { images } = (await res.json()) as { images: StrayImage[] }
+      setStrayImages(images)
+    } catch {
+      // silent — stray panel is non-critical
+    } finally {
+      setScanning(false)
+    }
+  }, [])
+
+  // Scan on mount
+  useEffect(() => {
+    if (hasMounted.current) return
+    hasMounted.current = true
+    void scanStrayImages()
+  }, [scanStrayImages])
 
   const addTag = (raw: string) => {
     const parts = raw
@@ -35,6 +73,28 @@ export function FrontmatterPanel({ data, onChange }: Props) {
 
   const removeTag = (tag: string) => {
     onChange({ tags: data.tags.filter((t) => t !== tag) })
+  }
+
+  const deleteStrayImage = async (url: string) => {
+    setDeletingUrl(url)
+    try {
+      const { accessToken } = useAuthStore.getState()
+      const res = await fetch('/api/blog/images', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ url }),
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Delete failed')
+      setStrayImages((prev) => prev.filter((img) => img.url !== url))
+    } catch {
+      toast.error('Could not delete image')
+    } finally {
+      setDeletingUrl(null)
+    }
   }
 
   return (
@@ -129,6 +189,64 @@ export function FrontmatterPanel({ data, onChange }: Props) {
           checked={data.draft}
           onCheckedChange={(checked) => onChange({ draft: checked })}
         />
+      </div>
+
+      {/* ── Stray image assets ── */}
+      <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
+        <div className="flex items-center gap-2">
+          <Label className="text-xs tracking-wide text-muted-foreground flex-1">Unused CDN Images</Label>
+          {scanning && <Loader2 size={11} className="animate-spin text-muted-foreground/60" />}
+        </div>
+
+        {!scanning && strayImages.length === 0 && (
+          <p className="text-xs text-muted-foreground/50">No stray images.</p>
+        )}
+
+        {strayImages.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            {strayImages.map((img) => (
+              <div
+                key={img.url}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.url}
+                  alt={img.name}
+                  className="h-10 w-10 rounded object-cover shrink-0 bg-white/5"
+                />
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={img.name}>
+                  {img.name}
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {onInsertImage && (
+                    <button
+                      type="button"
+                      onClick={() => onInsertImage(img.url)}
+                      title="Insert into post"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors"
+                    >
+                      <PlusCircle size={11} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { void deleteStrayImage(img.url) }}
+                    disabled={deletingUrl === img.url}
+                    title="Delete from CDN"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                  >
+                    {deletingUrl === img.url ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={11} />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

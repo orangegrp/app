@@ -9,6 +9,7 @@ import {
   useImperativeHandle,
   type ReactNode,
 } from 'react'
+import { useAuthStore } from '@/lib/auth-store'
 import type { Editor } from '@tiptap/core'
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
@@ -43,6 +44,7 @@ import {
   Code2,
   Table as TableIcon,
   AlertCircle,
+  Trash2,
 } from 'lucide-react'
 import {
   Dialog,
@@ -74,18 +76,51 @@ const TrailingNode = Extension.create({
   },
 })
 
-// ── Resizable image NodeView ──────────────────────────────────────────────
-function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps) {
-  const imgRef = useRef<HTMLImageElement>(null)
+const MIN_IMAGE_WIDTH = 120
 
-  const startResize = (e: React.MouseEvent) => {
+// 8-handle resize config: dx/dy define direction (-1 = left/up, 0 = axis unused, 1 = right/down)
+const RESIZE_HANDLES = [
+  { id: 'tl', cls: 'absolute top-0 -translate-y-1/2 -left-1.5 cursor-nw-resize',                    dx: -1 as const, dy: -1 as const },
+  { id: 'tm', cls: 'absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 cursor-n-resize',     dx:  0 as const, dy: -1 as const },
+  { id: 'tr', cls: 'absolute top-0 -translate-y-1/2 -right-1.5 cursor-ne-resize',                   dx:  1 as const, dy: -1 as const },
+  { id: 'ml', cls: 'absolute top-1/2 -translate-y-1/2 -left-1.5 cursor-w-resize',                   dx: -1 as const, dy:  0 as const },
+  { id: 'mr', cls: 'absolute top-1/2 -translate-y-1/2 -right-1.5 cursor-e-resize',                  dx:  1 as const, dy:  0 as const },
+  { id: 'bl', cls: 'absolute bottom-0 translate-y-1/2 -left-1.5 cursor-sw-resize',                  dx: -1 as const, dy:  1 as const },
+  { id: 'bm', cls: 'absolute bottom-0 translate-y-1/2 left-1/2 -translate-x-1/2 cursor-s-resize',   dx:  0 as const, dy:  1 as const },
+  { id: 'br', cls: 'absolute bottom-0 translate-y-1/2 -right-1.5 cursor-se-resize',                 dx:  1 as const, dy:  1 as const },
+] as const
+
+// ── Resizable image NodeView ──────────────────────────────────────────────
+function ResizableImageView({ node, updateAttributes, selected, deleteNode }: NodeViewProps) {
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [confirming, setConfirming] = useState(false)
+
+  // Intercept Delete/Backspace when the image node is selected
+  useEffect(() => {
+    if (!selected || confirming) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        setConfirming(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => document.removeEventListener('keydown', handleKeyDown, true)
+  }, [selected, confirming])
+
+  const startResize = (e: React.MouseEvent, dx: -1 | 0 | 1, dy: -1 | 0 | 1) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
-    const startWidth = imgRef.current?.offsetWidth ?? (node.attrs.width as number | null) ?? 400
+    const startY = e.clientY
+    const startWidth = imgRef.current?.offsetWidth ?? (node.attrs.width as number | null) ?? MIN_IMAGE_WIDTH
 
     const onMouseMove = (ev: MouseEvent) => {
-      updateAttributes({ width: Math.max(40, Math.round(startWidth + ev.clientX - startX)) })
+      const delta = dx !== 0
+        ? (ev.clientX - startX) * dx
+        : (ev.clientY - startY) * dy
+      updateAttributes({ width: Math.max(MIN_IMAGE_WIDTH, Math.round(startWidth + delta)) })
     }
     const onMouseUp = () => {
       window.removeEventListener('mousemove', onMouseMove)
@@ -95,23 +130,99 @@ function ResizableImageView({ node, updateAttributes, selected }: NodeViewProps)
     window.addEventListener('mouseup', onMouseUp)
   }
 
+  const handleConfirmDelete = async () => {
+    const src = node.attrs.src as string
+    const { accessToken } = useAuthStore.getState()
+    try {
+      await fetch('/api/blog/images', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ url: src }),
+        credentials: 'include',
+      })
+    } catch {
+      // best-effort; still remove from editor
+    }
+    deleteNode()
+  }
+
+  const imgWidth = (node.attrs.width as number | null) ?? undefined
+  const displayWidth = imgWidth && imgWidth < MIN_IMAGE_WIDTH ? MIN_IMAGE_WIDTH : imgWidth
+
   return (
-    <NodeViewWrapper className="relative inline-block" style={{ maxWidth: '100%' }}>
-      <img
-        ref={imgRef}
-        src={node.attrs.src as string}
-        alt={(node.attrs.alt as string) ?? ''}
-        width={(node.attrs.width as number | null) ?? undefined}
-        style={{ display: 'block', maxWidth: '100%', borderRadius: '6px', margin: '0.5rem 0' }}
-        className={selected ? 'ring-2 ring-blue-400/60' : ''}
-      />
-      {selected && (
-        <div
-          onMouseDown={startResize}
-          className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm border border-blue-300/60 bg-blue-500/80"
-          title="Drag to resize"
+    // NodeViewWrapper provides block-level spacing; inner div is the exact positioning context
+    <NodeViewWrapper style={{ display: 'block', margin: '0.5rem 0', maxWidth: '100%' }}>
+      <div className="relative inline-block" style={{ maxWidth: '100%' }}>
+        <img
+          ref={imgRef}
+          src={node.attrs.src as string}
+          alt={(node.attrs.alt as string) ?? ''}
+          width={displayWidth}
+          style={{ display: 'block', maxWidth: '100%', minWidth: `${MIN_IMAGE_WIDTH}px`, borderRadius: '6px' }}
+          className={selected ? 'ring-2 ring-white/30' : ''}
         />
-      )}
+
+        {selected && !confirming && (
+          <>
+            {/* 8 resize handles */}
+            {RESIZE_HANDLES.map((h) => (
+              <div
+                key={h.id}
+                onMouseDown={(e) => startResize(e, h.dx, h.dy)}
+                className={`${h.cls} h-3 w-3 rounded-sm bg-white shadow-sm ring-1 ring-black/20`}
+              />
+            ))}
+            {/* Delete button — centered on the image */}
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setConfirming(true)}
+              title="Delete image"
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          </>
+        )}
+
+        {/* Inline delete confirmation overlay */}
+        {selected && confirming && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/65">
+            <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-popover p-4 shadow-xl">
+              <p className="text-xs text-foreground">Remove this image?</p>
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { void handleConfirmDelete() }}
+                  className="rounded-md bg-red-500/80 px-3 py-1.5 text-xs text-white hover:bg-red-500 transition-colors text-left"
+                >
+                  Delete — remove from post &amp; CDN
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => deleteNode()}
+                  className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-foreground hover:bg-white/10 transition-colors text-left"
+                >
+                  Keep but remove — remove from post only
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setConfirming(false)}
+                  className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </NodeViewWrapper>
   )
 }
@@ -184,6 +295,7 @@ export interface VisualEditorHandle {
   getSelectionRects: () => DOMRect[]
   replaceSelection: (text: string) => void
   insertAfterSelection: (markdown: string) => void
+  insertImage: (url: string, alt?: string) => void
 }
 
 function selectionInTipTapCodeBlock(editor: Editor): boolean {
@@ -268,10 +380,8 @@ function ToolbarButton({
   return (
     <button
       type="button"
-      onMouseDown={(e) => {
-        e.preventDefault()
-        onClick()
-      }}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
       title={title}
       className={`rounded p-1.5 transition-colors ${
         active
@@ -434,6 +544,9 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(function Visua
       openLinkDialog,
       openImagePicker: () => fileInputRef.current?.click(),
       openTableDialog,
+      insertImage: (url: string, alt = '') => {
+        editorRef.current?.chain().focus().setImage({ src: url, alt }).run()
+      },
       getSelectionMeta: (): BlogEditorSelectionMeta | null => {
         const ed = editorRef.current
         if (!ed) return null

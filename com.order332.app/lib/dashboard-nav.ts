@@ -47,7 +47,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     href: '/music',
     icon: Music2,
     label: 'Music',
-    soon: true,
+    soon: false,
     hardNav: false,
     desc: 'Playlists and audio',
     permission: PERMISSIONS.APP_MUSIC,

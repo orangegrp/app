@@ -95,7 +95,7 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()}>
+      <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()} className="z-[60]" overlayClassName="z-[60]">
         <DialogHeader>
           <DialogTitle>Share track</DialogTitle>
         </DialogHeader>

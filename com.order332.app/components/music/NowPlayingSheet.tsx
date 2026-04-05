@@ -253,6 +253,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
         onOpenChange={(o) => { if (!o) onClose() }}
         direction="bottom"
         shouldScaleBackground={false}
+        dismissible={!shareOpen}
       >
         <DrawerPrimitive.Portal>
           <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" />

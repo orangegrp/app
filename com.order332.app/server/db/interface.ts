@@ -9,6 +9,8 @@ import type {
   WebAuthnChallenge,
   PendingRegistration,
   MusicShareLink,
+  MusicPlaylist,
+  MusicPlaylistWithTracks,
 } from '@/server/lib/types'
 
 export interface CreateUserData {
@@ -97,6 +99,17 @@ export interface CreateMusicShareLinkData {
   trackId: string
   createdBy: string
   expiresAt: Date | null
+}
+
+export interface CreateMusicPlaylistData {
+  createdBy: string
+  name: string
+  description?: string | null
+}
+
+export interface UpdateMusicPlaylistData {
+  name?: string
+  description?: string | null
 }
 
 export interface DBAdapter {
@@ -188,4 +201,13 @@ export interface DBAdapter {
   // Music share links
   createMusicShareLink(data: CreateMusicShareLinkData): Promise<MusicShareLink>
   getMusicShareLinkByToken(token: string): Promise<MusicShareLink | null>
+
+  // Music playlists
+  listMusicPlaylists(): Promise<MusicPlaylist[]>
+  getMusicPlaylist(id: string): Promise<MusicPlaylistWithTracks | null>
+  createMusicPlaylist(data: CreateMusicPlaylistData): Promise<MusicPlaylist>
+  updateMusicPlaylist(id: string, data: UpdateMusicPlaylistData): Promise<MusicPlaylist>
+  deleteMusicPlaylist(id: string): Promise<void>
+  addTrackToPlaylist(playlistId: string, trackId: string): Promise<void>
+  removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void>
 }

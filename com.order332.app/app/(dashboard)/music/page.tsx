@@ -1,26 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ToggleLeft, ToggleRight } from 'lucide-react'
 import { PageBackground } from '@/components/layout/PageBackground'
 import { MusicTrackGrid } from '@/components/music/MusicTrackGrid'
 import { MusicUploadForm } from '@/components/music/MusicUploadForm'
+import { AlbumSection } from '@/components/music/AlbumSection'
+import { PlaylistSection } from '@/components/music/PlaylistSection'
 import { useMusicContext } from '@/components/music/MusicContext'
 
 export default function MusicPage() {
   const { isCreator, isCreatorMode, setCreatorMode, addTrack, loading, error, playTrack, openNowPlaying, tracks } = useMusicContext()
   const searchParams = useSearchParams()
+  const trackParam = searchParams.get('track')
+  const autoPlayedRef = useRef<string | null>(null)
 
-  // Auto-play a track linked from a share URL (?track=<id>)
+  // Auto-play a track linked from a share URL (?track=<id>).
+  // trackParam is included in deps so this re-fires when navigating to /music?track=UUID
+  // even if loading and tracks.length haven't changed.
   useEffect(() => {
-    const trackId = searchParams.get('track')
-    if (!trackId || loading || tracks.length === 0) return
-    const exists = tracks.some((t) => t.id === trackId)
+    if (!trackParam || loading || tracks.length === 0) return
+    if (autoPlayedRef.current === trackParam) return
+    const exists = tracks.some((t) => t.id === trackParam)
     if (!exists) return
-    playTrack(trackId)
+    autoPlayedRef.current = trackParam
+    playTrack(trackParam)
     openNowPlaying()
-  }, [loading, tracks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trackParam, loading, tracks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [showUploadForm, setShowUploadForm] = useState(false)
 
   return (
@@ -80,7 +88,14 @@ export default function MusicPage() {
             <p className="text-sm text-destructive">{error}</p>
           </div>
         ) : (
-          <MusicTrackGrid />
+          <>
+            <AlbumSection />
+            <PlaylistSection />
+            <div>
+              <p className="mb-4 text-[10px] tracking-[0.2em] text-muted-foreground/50">ALL TRACKS</p>
+              <MusicTrackGrid />
+            </div>
+          </>
         )}
       </div>
     </div>

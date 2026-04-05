@@ -36,6 +36,7 @@ function rowToMusicTrack(row: Record<string, unknown>): MusicTrack {
     uploadedBy: row.uploaded_by as string | null,
     title: row.title as string,
     artist: row.artist as string,
+    album: (row.album as string | null) ?? null,
     genre: row.genre as string | null,
     durationSec: row.duration_sec as number,
     audioKey: row.audio_key as string,

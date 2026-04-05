@@ -6,7 +6,10 @@ import { useMusicContext } from "./MusicContext"
 import { deleteMusicTrack, updateMusicTrack } from "@/lib/music-api"
 
 export function MusicTrackGrid() {
-  const { tracks, currentTrackId, playTrack, removeTrack, updateTrack, isCreatorMode } = useMusicContext()
+  const {
+    tracks, currentTrackId, playTrack, removeTrack, updateTrack, isCreatorMode,
+    addToQueue, playNextTrack, playlists, addTrackToPlaylist,
+  } = useMusicContext()
   const player = useAudioPlayer()
 
   if (tracks.length === 0) {
@@ -26,7 +29,7 @@ export function MusicTrackGrid() {
     }
   }
 
-  const handleUpdate = async (id: string, meta: { title: string; artist: string; genre?: string }) => {
+  const handleUpdate = async (id: string, meta: { title: string; artist: string; album?: string | null; genre?: string | null }) => {
     try {
       const { track } = await updateMusicTrack(id, meta)
       updateTrack(track)
@@ -56,6 +59,10 @@ export function MusicTrackGrid() {
             isCreator={isCreatorMode}
             onDelete={handleDelete}
             onEdit={handleUpdate}
+            onAddToQueue={addToQueue}
+            onPlayNext={playNextTrack}
+            playlists={playlists}
+            onAddToPlaylist={addTrackToPlaylist}
           />
         )
       })}

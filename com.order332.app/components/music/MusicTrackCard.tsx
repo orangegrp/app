@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Music2, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react"
+import { ListEnd, ListStart, Music2, Pause, Pencil, Play, Plus, Share2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatDuration, type MusicTrackMeta } from "@/lib/music-api"
+import { formatDuration, type MusicTrackMeta, type MusicPlaylistMeta } from "@/lib/music-api"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +33,11 @@ interface MusicTrackCardProps {
   onPlay: () => void
   isCreator: boolean
   onDelete: (id: string) => void
-  onEdit: (id: string, meta: { title: string; artist: string; genre?: string }) => Promise<void>
+  onEdit: (id: string, meta: { title: string; artist: string; album?: string | null; genre?: string | null }) => Promise<void>
+  onAddToQueue?: (id: string) => void
+  onPlayNext?: (id: string) => void
+  playlists?: MusicPlaylistMeta[]
+  onAddToPlaylist?: (playlistId: string, trackId: string) => Promise<void>
 }
 
 export function MusicTrackCard({
@@ -44,14 +48,20 @@ export function MusicTrackCard({
   isCreator,
   onDelete,
   onEdit,
+  onAddToQueue,
+  onPlayNext,
+  playlists,
+  onAddToPlaylist,
 }: MusicTrackCardProps) {
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [playlistOpen, setPlaylistOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editTitle, setEditTitle] = useState("")
   const [editArtist, setEditArtist] = useState("")
+  const [editAlbum, setEditAlbum] = useState("")
   const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
 
@@ -59,6 +69,7 @@ export function MusicTrackCard({
     e.stopPropagation()
     setEditTitle(track.title)
     setEditArtist(track.artist)
+    setEditAlbum(track.album ?? "")
     setEditGenre(track.genre ?? "")
     setEditOpen(true)
   }
@@ -70,7 +81,8 @@ export function MusicTrackCard({
       await onEdit(track.id, {
         title: editTitle.trim(),
         artist: editArtist.trim(),
-        genre: editGenre.trim() || undefined,
+        album: editAlbum.trim() || null,
+        genre: editGenre.trim() || null,
       })
       setEditOpen(false)
     } finally {
@@ -124,17 +136,14 @@ export function MusicTrackCard({
           </div>
         </div>
 
-        {/* Active indicator */}
+        {/* Active waveform indicator */}
         {isActive && (
           <div className="absolute bottom-2 left-2">
             <div className="flex items-end gap-0.5 h-4">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={cn(
-                    "w-1 rounded-full bg-white",
-                    isPlaying && "animate-bounce",
-                  )}
+                  className={cn("w-1 rounded-full bg-white", isPlaying && "animate-bounce")}
                   style={{
                     height: `${Math.random() * 50 + 50}%`,
                     animationDelay: `${i * 0.1}s`,
@@ -151,6 +160,9 @@ export function MusicTrackCard({
       <div className="flex flex-col gap-0.5 px-3 py-2.5">
         <p className="truncate text-sm font-medium text-foreground">{track.title}</p>
         <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+        {track.album && (
+          <p className="truncate text-xs text-muted-foreground/60 italic">{track.album}</p>
+        )}
         <div className="mt-1 flex items-center gap-2">
           {track.genre && (
             <span className="rounded-full bg-foreground/8 px-2 py-0.5 text-xs text-muted-foreground">
@@ -163,8 +175,38 @@ export function MusicTrackCard({
         </div>
       </div>
 
-      {/* Action buttons — share visible to all, edit/delete only for creators */}
+      {/* Action buttons */}
       <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {onPlayNext && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPlayNext(track.id) }}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+            aria-label="Play next"
+            title="Play next"
+          >
+            <ListStart className="h-3 w-3" />
+          </button>
+        )}
+        {onAddToQueue && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddToQueue(track.id) }}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+            aria-label="Add to queue"
+            title="Add to queue"
+          >
+            <ListEnd className="h-3 w-3" />
+          </button>
+        )}
+        {playlists && onAddToPlaylist && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setPlaylistOpen(true) }}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+            aria-label="Add to playlist"
+            title="Add to playlist"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); setShareOpen(true) }}
           className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
@@ -227,6 +269,19 @@ export function MusicTrackCard({
             </div>
             <div>
               <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
+                Album
+              </label>
+              <input
+                type="text"
+                value={editAlbum}
+                onChange={(e) => setEditAlbum(e.target.value)}
+                maxLength={200}
+                placeholder="e.g. Midnight Rain"
+                className="input-glass w-full"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
                 Genre
               </label>
               <input
@@ -253,6 +308,47 @@ export function MusicTrackCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add to playlist dialog */}
+      {playlists && onAddToPlaylist && (
+        <Dialog open={playlistOpen} onOpenChange={(o) => { if (!o) setPlaylistOpen(false) }}>
+          <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()}>
+            <DialogHeader>
+              <DialogTitle>Add to playlist</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+              {playlists.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">No playlists yet.</p>
+              ) : (
+                playlists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      await onAddToPlaylist(pl.id, track.id)
+                      setPlaylistOpen(false)
+                    }}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-foreground/8"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-foreground/8">
+                      <Music2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-foreground">{pl.name}</p>
+                      <p className="text-xs text-muted-foreground">{pl.trackCount} tracks</p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" size="sm" onClick={() => setPlaylistOpen(false)}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent size="sm">

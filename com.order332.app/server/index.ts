@@ -26,6 +26,7 @@ import { contentFolderRoutes } from '@/server/routes/content/folders'
 import { contentScanRoutes } from '@/server/routes/content/scans'
 import { musicTrackRoutes } from '@/server/routes/music/tracks'
 import { musicShareAuthRoutes, musicSharePublicRoutes } from '@/server/routes/music/share'
+import { musicPlaylistRoutes } from '@/server/routes/music/playlists'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -349,6 +350,15 @@ app.route('/music/tracks', musicShareAuthRoutes)
 
 // GET    /music/share/:token     — public: resolve share link, return track + signed URLs
 app.route('/music/share', musicSharePublicRoutes)
+
+// GET    /music/playlists           — list playlists (requires app.music)
+// POST   /music/playlists           — create playlist (requires app.music)
+// GET    /music/playlists/:id       — get playlist with tracks
+// PATCH  /music/playlists/:id       — rename/redescribe (creator or superuser)
+// DELETE /music/playlists/:id       — delete (creator or superuser)
+// POST   /music/playlists/:id/tracks      — add track (any app.music)
+// DELETE /music/playlists/:id/tracks/:tid — remove track (any app.music)
+app.route('/music/playlists', musicPlaylistRoutes)
 
 // ── Blog routes ───────────────────────────────────────────────────────────────
 

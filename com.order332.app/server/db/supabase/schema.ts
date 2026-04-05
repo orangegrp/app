@@ -334,6 +334,8 @@ export async function validateAndMigrateSchema(): Promise<void> {
     await ensureDisplayNameColumn(sql)
     await ensureWelcomeWizardColumn(sql)
     await ensureWebAuthnPendingRegistrationColumn(sql)
+    await ensureAlbumColumn(sql)
+    await ensureMusicPlaylistTables(sql)
 
     console.log('[DB] Schema validation complete')
   } finally {
@@ -368,4 +370,37 @@ async function ensureWebAuthnPendingRegistrationColumn(sql: postgres.Sql): Promi
     ALTER TABLE webauthn_challenges
     ADD COLUMN IF NOT EXISTS pending_registration_id UUID REFERENCES pending_registrations(id) ON DELETE CASCADE
   `)
+}
+
+/** Adds album field to music tracks. */
+async function ensureAlbumColumn(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe('ALTER TABLE music_tracks ADD COLUMN IF NOT EXISTS album TEXT')
+}
+
+/** Creates music playlist tables if they don't exist. */
+async function ensureMusicPlaylistTables(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS music_playlists (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      created_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL    DEFAULT now(),
+      created_by  UUID        REFERENCES users(id) ON DELETE SET NULL,
+      name        TEXT        NOT NULL,
+      description TEXT
+    )
+  `)
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlists_created_by_idx ON music_playlists (created_by)`)
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlists_created_at_idx ON music_playlists (created_at DESC)`)
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS music_playlist_tracks (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      playlist_id UUID        NOT NULL REFERENCES music_playlists(id) ON DELETE CASCADE,
+      track_id    UUID        NOT NULL REFERENCES music_tracks(id)    ON DELETE CASCADE,
+      position    INTEGER     NOT NULL DEFAULT 0,
+      added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(playlist_id, track_id)
+    )
+  `)
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlist_tracks_playlist_id_idx ON music_playlist_tracks (playlist_id)`)
+  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlist_tracks_track_id_idx   ON music_playlist_tracks (track_id)`)
 }

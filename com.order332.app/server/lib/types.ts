@@ -186,6 +186,7 @@ export interface MusicTrack {
   uploadedBy: string | null
   title: string
   artist: string
+  album?: string | null
   genre?: string | null
   durationSec: number
   audioKey: string
@@ -195,6 +196,20 @@ export interface MusicTrack {
   lyricsKey?: string | null
   lyricsUrl?: string | null
   lyricsType?: LyricsType | null
+}
+
+export interface MusicPlaylist {
+  id: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  name: string
+  description: string | null
+  trackCount: number
+}
+
+export interface MusicPlaylistWithTracks extends Omit<MusicPlaylist, 'trackCount'> {
+  tracks: MusicTrack[]
 }
 
 // Hono context variable bindings

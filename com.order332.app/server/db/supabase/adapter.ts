@@ -13,6 +13,8 @@ import type {
   CreateChallengeData,
   CreatePendingRegistrationData,
   CreateMusicShareLinkData,
+  CreateMusicPlaylistData,
+  UpdateMusicPlaylistData,
 } from '../interface'
 import type {
   User,
@@ -25,6 +27,9 @@ import type {
   WebAuthnChallenge,
   PendingRegistration,
   MusicShareLink,
+  MusicPlaylist,
+  MusicPlaylistWithTracks,
+  MusicTrack,
 } from '@/server/lib/types'
 
 function mapUser(row: Record<string, unknown>): User {
@@ -653,5 +658,154 @@ export class SupabaseAdapter implements DBAdapter {
       .single()
     if (error) { if (error.code === 'PGRST116') return null; dbErr('getMusicShareLinkByToken', error) }
     return mapMusicShareLink(data as Record<string, unknown>)
+  }
+
+  // ── Music playlists ────────────────────────────────────────────────────────
+
+  async listMusicPlaylists(): Promise<MusicPlaylist[]> {
+    const { data, error } = await supabase
+      .from('music_playlists')
+      .select('*, music_playlist_tracks(count)')
+      .order('created_at', { ascending: false })
+    if (error) dbErr('listMusicPlaylists', error)
+    return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+      id: row.id as string,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+      createdBy: (row.created_by as string | null) ?? null,
+      name: row.name as string,
+      description: (row.description as string | null) ?? null,
+      trackCount: (row.music_playlist_tracks as { count: number }[] | null)?.[0]?.count ?? 0,
+    }))
+  }
+
+  async getMusicPlaylist(id: string): Promise<MusicPlaylistWithTracks | null> {
+    const { data: playlist, error: plErr } = await supabase
+      .from('music_playlists')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (plErr) { if (plErr.code === 'PGRST116') return null; dbErr('getMusicPlaylist', plErr) }
+
+    const { data: ptRows, error: ptErr } = await supabase
+      .from('music_playlist_tracks')
+      .select('track_id, position, music_tracks(*)')
+      .eq('playlist_id', id)
+      .order('position', { ascending: true })
+    if (ptErr) dbErr('getMusicPlaylist:tracks', ptErr)
+
+    const tracks: MusicTrack[] = ((ptRows ?? []) as Record<string, unknown>[]).map((row) => {
+      const t = row.music_tracks as Record<string, unknown>
+      return {
+        id: t.id as string,
+        createdAt: t.created_at as string,
+        updatedAt: t.updated_at as string,
+        uploadedBy: (t.uploaded_by as string | null) ?? null,
+        title: t.title as string,
+        artist: t.artist as string,
+        album: (t.album as string | null) ?? null,
+        genre: (t.genre as string | null) ?? null,
+        durationSec: t.duration_sec as number,
+        audioKey: t.audio_key as string,
+        audioUrl: t.audio_url as string,
+        coverKey: (t.cover_key as string | null) ?? null,
+        coverUrl: (t.cover_url as string | null) ?? null,
+        lyricsKey: (t.lyrics_key as string | null) ?? null,
+        lyricsUrl: (t.lyrics_url as string | null) ?? null,
+        lyricsType: (t.lyrics_type as 'lrc' | 'txt' | null) ?? null,
+      }
+    })
+
+    const p = playlist as Record<string, unknown>
+    return {
+      id: p.id as string,
+      createdAt: p.created_at as string,
+      updatedAt: p.updated_at as string,
+      createdBy: (p.created_by as string | null) ?? null,
+      name: p.name as string,
+      description: (p.description as string | null) ?? null,
+      tracks,
+    }
+  }
+
+  async createMusicPlaylist(data: CreateMusicPlaylistData): Promise<MusicPlaylist> {
+    const { data: row, error } = await supabase
+      .from('music_playlists')
+      .insert({
+        created_by: data.createdBy,
+        name: data.name.trim().slice(0, 200),
+        description: data.description?.trim().slice(0, 1000) ?? null,
+      })
+      .select()
+      .single()
+    if (error) dbErr('createMusicPlaylist', error)
+    const r = row as Record<string, unknown>
+    return {
+      id: r.id as string,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+      createdBy: (r.created_by as string | null) ?? null,
+      name: r.name as string,
+      description: (r.description as string | null) ?? null,
+      trackCount: 0,
+    }
+  }
+
+  async updateMusicPlaylist(id: string, data: UpdateMusicPlaylistData): Promise<MusicPlaylist> {
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (data.name !== undefined) update.name = data.name.trim().slice(0, 200)
+    if (data.description !== undefined) update.description = data.description?.trim().slice(0, 1000) ?? null
+
+    const { data: row, error } = await supabase
+      .from('music_playlists')
+      .update(update)
+      .eq('id', id)
+      .select('*, music_playlist_tracks(count)')
+      .single()
+    if (error) dbErr('updateMusicPlaylist', error)
+    const r = row as Record<string, unknown>
+    return {
+      id: r.id as string,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+      createdBy: (r.created_by as string | null) ?? null,
+      name: r.name as string,
+      description: (r.description as string | null) ?? null,
+      trackCount: (r.music_playlist_tracks as { count: number }[] | null)?.[0]?.count ?? 0,
+    }
+  }
+
+  async deleteMusicPlaylist(id: string): Promise<void> {
+    const { error } = await supabase.from('music_playlists').delete().eq('id', id)
+    if (error) dbErr('deleteMusicPlaylist', error)
+  }
+
+  async addTrackToPlaylist(playlistId: string, trackId: string): Promise<void> {
+    const { data: existing } = await supabase
+      .from('music_playlist_tracks')
+      .select('position')
+      .eq('playlist_id', playlistId)
+      .order('position', { ascending: false })
+      .limit(1)
+    const maxPos = (existing?.[0] as { position: number } | undefined)?.position ?? -1
+
+    const { error } = await supabase
+      .from('music_playlist_tracks')
+      .upsert(
+        { playlist_id: playlistId, track_id: trackId, position: maxPos + 1 },
+        { onConflict: 'playlist_id,track_id', ignoreDuplicates: true }
+      )
+    if (error) dbErr('addTrackToPlaylist', error)
+    await supabase.from('music_playlists').update({ updated_at: new Date().toISOString() }).eq('id', playlistId)
+  }
+
+  async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
+    const { error } = await supabase
+      .from('music_playlist_tracks')
+      .delete()
+      .eq('playlist_id', playlistId)
+      .eq('track_id', trackId)
+    if (error) dbErr('removeTrackFromPlaylist', error)
+    await supabase.from('music_playlists').update({ updated_at: new Date().toISOString() }).eq('id', playlistId)
   }
 }

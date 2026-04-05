@@ -268,12 +268,13 @@ musicTrackRoutes.patch(
     const id = c.req.param('id')
     const user = c.get('user')
 
-    let body: { title?: unknown; artist?: unknown; genre?: unknown }
+    let body: { title?: unknown; artist?: unknown; genre?: unknown; album?: unknown }
     try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
 
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : ''
     const artist = typeof body.artist === 'string' ? body.artist.trim().slice(0, 200) : ''
     const genre = typeof body.genre === 'string' ? (body.genre.trim().slice(0, 100) || null) : null
+    const album = typeof body.album === 'string' ? (body.album.trim().slice(0, 200) || null) : null
 
     if (!title || !artist) return c.json({ error: 'title and artist are required' }, 400)
 
@@ -286,7 +287,7 @@ musicTrackRoutes.patch(
 
     const { data, error } = await supabase
       .from('music_tracks')
-      .update({ title, artist, genre, updated_at: new Date().toISOString() })
+      .update({ title, artist, album, genre, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
@@ -436,6 +437,7 @@ function rowToMusicTrack(row: Record<string, unknown>): MusicTrack {
     uploadedBy: row.uploaded_by as string | null,
     title: row.title as string,
     artist: row.artist as string,
+    album: (row.album as string | null) ?? null,
     genre: row.genre as string | null,
     durationSec: row.duration_sec as number,
     audioKey: row.audio_key as string,

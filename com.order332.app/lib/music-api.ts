@@ -2,6 +2,7 @@ import { apiGet, apiDelete, apiPatch, apiPost } from './api-client'
 import { useAuthStore } from './auth-store'
 
 export type LyricsType = 'lrc' | 'txt'
+export type LoopMode = 'none' | 'track' | 'all'
 
 export interface MusicTrackMeta {
   id: string
@@ -10,12 +11,27 @@ export interface MusicTrackMeta {
   uploadedBy: string | null
   title: string
   artist: string
+  album?: string | null
   genre?: string | null
   durationSec: number
   audioUrl: string
   coverUrl?: string | null
   lyricsUrl?: string | null
   lyricsType?: LyricsType | null
+}
+
+export interface MusicPlaylistMeta {
+  id: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+  name: string
+  description: string | null
+  trackCount: number
+}
+
+export interface MusicPlaylistWithTracks extends Omit<MusicPlaylistMeta, 'trackCount'> {
+  tracks: MusicTrackMeta[]
 }
 
 export async function fetchMusicTracks(genre?: string): Promise<{ tracks: MusicTrackMeta[] }> {
@@ -29,7 +45,7 @@ export async function deleteMusicTrack(id: string): Promise<{ ok: boolean }> {
 
 export async function updateMusicTrack(
   id: string,
-  meta: { title: string; artist: string; genre?: string },
+  meta: { title: string; artist: string; album?: string | null; genre?: string | null },
 ): Promise<{ track: MusicTrackMeta }> {
   return apiPatch<{ track: MusicTrackMeta }>(`/music/tracks/${encodeURIComponent(id)}`, meta)
 }
@@ -111,6 +127,47 @@ export async function createMusicShareLink(
   return apiPost<MusicShareLinkResult>(
     `/music/tracks/${encodeURIComponent(trackId)}/share`,
     { expiresIn },
+  )
+}
+
+// ── Playlist API ──────────────────────────────────────────────────────────────
+
+export async function fetchMusicPlaylists(): Promise<{ playlists: MusicPlaylistMeta[] }> {
+  return apiGet<{ playlists: MusicPlaylistMeta[] }>('/music/playlists')
+}
+
+export async function fetchMusicPlaylist(id: string): Promise<{ playlist: MusicPlaylistWithTracks }> {
+  return apiGet<{ playlist: MusicPlaylistWithTracks }>(`/music/playlists/${encodeURIComponent(id)}`)
+}
+
+export async function createMusicPlaylist(
+  name: string,
+  description?: string | null,
+): Promise<{ playlist: MusicPlaylistMeta }> {
+  return apiPost<{ playlist: MusicPlaylistMeta }>('/music/playlists', { name, description: description ?? null })
+}
+
+export async function updateMusicPlaylist(
+  id: string,
+  data: { name?: string; description?: string | null },
+): Promise<{ playlist: MusicPlaylistMeta }> {
+  return apiPatch<{ playlist: MusicPlaylistMeta }>(`/music/playlists/${encodeURIComponent(id)}`, data)
+}
+
+export async function deleteMusicPlaylist(id: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(`/music/playlists/${encodeURIComponent(id)}`)
+}
+
+export async function addTrackToPlaylist(playlistId: string, trackId: string): Promise<{ ok: boolean }> {
+  return apiPost<{ ok: boolean }>(
+    `/music/playlists/${encodeURIComponent(playlistId)}/tracks`,
+    { trackId },
+  )
+}
+
+export async function removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<{ ok: boolean }> {
+  return apiDelete<{ ok: boolean }>(
+    `/music/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`,
   )
 }
 

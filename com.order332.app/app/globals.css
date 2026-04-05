@@ -155,7 +155,7 @@
   /* Mobile tab bar height (py-4 × 2 + 28px icon + 6px gap + 16px text ≈ 83px).
      Using 6rem (96px) for a comfortable buffer above the nav chrome.
      The bar also adds env(safe-area-inset-bottom) padding separately. */
-  --mobile-nav-height: 6rem;
+  --mobile-nav-height: 82px;
 
   /* Backgrounds — lower alpha = more liquid glass (backdrop shows through) */
   --glass-bg-card:      oklch(1 0 0 / 5%);
@@ -390,6 +390,12 @@
 /* Mobile bottom nav — flush to screen, rounded top only */
 .glass-nav-viewport.rounded-t-2xl {
   border-radius: 1rem 1rem 0 0;
+  border-bottom: none;
+}
+
+/* Mobile bottom nav — flat top when miniplayer is docked above */
+.glass-nav-viewport.rounded-t-none {
+  border-radius: 0;
   border-bottom: none;
 }
 

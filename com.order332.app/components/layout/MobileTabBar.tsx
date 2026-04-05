@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, startTransition, useMemo } fr
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { House, Grid2X2, LogOut, QrCode, X, Settings, Shield } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useAnyPermission } from '@/hooks/usePermission'
 import { userDisplayName } from '@/lib/user-display'
@@ -10,6 +11,7 @@ import { HOME_APP_ITEMS, filterNavItemsForUser } from '@/lib/dashboard-nav'
 import { isAdminish, MINI_APP_PERMISSIONS, PERMISSIONS } from '@/lib/permissions'
 import { useAuthStore } from '@/lib/auth-store'
 import { UserAvatar } from '@/components/user/UserAvatar'
+import { useMusicContext } from '@/components/music/MusicContext'
 
 type Sheet = 'apps' | 'profile' | null
 
@@ -114,6 +116,10 @@ export function MobileTabBar() {
 
   const displayName = user ? userDisplayName(user) : ''
   const role = storeUser && isAdminish(storeUser.permissions) ? 'Admin' : 'Member'
+  const { currentTrack } = useMusicContext()
+  const isOnMusicPage = pathname === '/music' || pathname.startsWith('/music/')
+  const miniPlayerVisible = isOnMusicPage && !!currentTrack
+
   const isHome = pathname === '/home'
   const hideMobileChrome = pathname === '/qr-scan'
 
@@ -305,7 +311,7 @@ export function MobileTabBar() {
       {!hideMobileChrome && (
       <nav className="sm:hidden fixed inset-x-0 bottom-0 z-50">
         <div
-          className="glass-nav-viewport rounded-t-2xl rounded-b-none border-b-0"
+          className={cn("glass-nav-viewport rounded-b-none border-b-0", miniPlayerVisible ? "rounded-t-none" : "rounded-t-2xl")}
           style={{
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             ...(iosBrowserNav && {

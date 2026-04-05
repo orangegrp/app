@@ -56,7 +56,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
 
   const barContent = (
     <div
-      className="border-t border-foreground/8 px-4 py-2"
+      className="border-t border-foreground/8 px-4 py-2.5"
       style={{
         backdropFilter: "var(--glass-blur-sheet)",
         background: "var(--glass-bg-overlay)",
@@ -134,7 +134,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
       {/* Mobile — above tab bar, only on /music/* (OS media session handles off-page controls) */}
       {isOnMusicPage && (
         <div
-          className="fixed inset-x-0 z-40 sm:hidden"
+          className="fixed inset-x-0 z-40 sm:hidden overflow-hidden rounded-t-2xl"
           style={{ bottom: "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))" }}
         >
           {barContent}

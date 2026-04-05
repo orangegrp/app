@@ -59,8 +59,8 @@ function SyncedLyrics({
               isActive
                 ? "scale-[1.05] text-xl font-semibold text-foreground"
                 : isPast
-                  ? "text-lg text-muted-foreground/35"
-                  : "text-lg text-muted-foreground/55",
+                  ? "text-xl text-muted-foreground/35"
+                  : "text-xl text-muted-foreground/55",
               onSeek
                 ? "cursor-pointer rounded-xl hover:bg-foreground/6 hover:text-foreground/80"
                 : "cursor-default",

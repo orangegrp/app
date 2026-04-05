@@ -196,6 +196,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
             className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-2xl outline-none"
             style={{ height: "100dvh", ...glassBg }}
           >
+            <DrawerPrimitive.Title className="sr-only">Now Playing</DrawerPrimitive.Title>
             {/* Drag handle — vaul attaches its touch listeners to the content root,
                 so grabbing anywhere near the top also works, but the visible handle
                 gives users an obvious affordance. */}

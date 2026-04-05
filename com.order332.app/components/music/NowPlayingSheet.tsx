@@ -319,7 +319,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
         >
           <button
             onClick={onClose}
-            className="absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-muted-foreground transition-colors hover:bg-foreground/15 hover:text-foreground"
+            className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-muted-foreground transition-colors hover:bg-foreground/15 hover:text-foreground"
             aria-label="Close"
           >
             <X className="h-4 w-4" />

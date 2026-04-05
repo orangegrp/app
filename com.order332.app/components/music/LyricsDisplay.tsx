@@ -62,7 +62,7 @@ function SyncedLyrics({
                   ? "text-xl text-muted-foreground/35"
                   : "text-xl text-muted-foreground/55",
               onSeek
-                ? "cursor-pointer rounded-xl hover:bg-foreground/6 hover:text-foreground/80"
+                ? "cursor-pointer hover:text-foreground/80"
                 : "cursor-default",
             )}
           >

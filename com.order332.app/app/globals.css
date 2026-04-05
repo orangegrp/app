@@ -1266,6 +1266,13 @@ input[type="number"]::-webkit-outer-spin-button:hover {
   src: url('/fonts/VT323-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+@font-face {
+  font-family: 'Pixellari';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Pixellari.woff2') format('woff2');
+}
 
 /* ── 332 Design Tokens (dark-first, always active) ──────────────────── */
 
@@ -1293,7 +1300,7 @@ input[type="number"]::-webkit-outer-spin-button:hover {
 /* ── VT323 as --font-sans ───────────────────────────────────────────── */
 
 @theme inline {
-  --font-sans: "VT323", monospace;
+  --font-sans: "VT323", "Pixellari", monospace;
 }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
@@ -1860,7 +1867,7 @@ input[type="number"]::-webkit-outer-spin-button:hover {
 .blog-preview ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 1rem; }
 .blog-preview li { margin-bottom: 0.25rem; }
 .blog-preview blockquote { border-left: 3px solid rgba(255,255,255,0.2); padding-left: 1rem; margin: 1rem 0; color: var(--muted-foreground); font-style: italic; }
-.blog-preview code { background: rgba(255,255,255,0.08); border-radius: 4px; padding: 0.125rem 0.375rem; font-size: 0.875em; font-family: monospace; }
+.blog-preview code { background: rgba(255,255,255,0.08); border-radius: 4px; padding: 0.125rem 0.375rem; font-size: 0.875em; font-family: 2monospace; }
 .blog-preview pre { background: #0d1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; overflow-x: auto; }
 .blog-preview pre code { background: transparent; padding: 0; font-size: 0.85em; }
 .blog-preview a { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; opacity: 0.8; }

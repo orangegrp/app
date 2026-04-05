@@ -45,7 +45,7 @@ function SyncedLyrics({
   if (lines.length === 0) return <PlainLyrics content={content} />
 
   return (
-    <div className="flex flex-col items-center gap-0.5 py-6 text-center">
+    <div className="flex flex-col items-center gap-0.5 py-6 text-center" style={{ fontFamily: 'Pixellari, VT323, monospace' }}>
       {lines.map((line, i) => {
         const isActive = i === activeIndex
         const isPast = i < activeIndex

@@ -573,7 +573,7 @@ export function VMRunner({
             convertEol: true,
             cursorBlink: true,
             fontSize: 18,
-            fontFamily: '"VT323", "Courier New", monospace',
+            fontFamily: '"VT323", "Pixellari", "Courier New", monospace',
             theme: TERM_THEME,
             allowTransparency: true,
           })

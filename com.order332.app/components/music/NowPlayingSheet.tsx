@@ -277,7 +277,13 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                     </div>
                   </div>
                   {/* Scrollable lyrics */}
-                  <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4">
+                  <div
+                    className="flex-1 overflow-y-auto scrollbar-hide px-5 py-2"
+                    style={{
+                      maskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
+                      WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
+                    }}
+                  >
                     {lyricsContent && (
                       <LyricsDisplay
                         lyricsContent={lyricsContent}
@@ -285,6 +291,10 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                         onSeek={handleSeek}
                       />
                     )}
+                  </div>
+                  {/* Transport controls visible in lyrics view */}
+                  <div className="shrink-0 px-5 pt-1 pb-2">
+                    <TransportControls />
                   </div>
                 </div>
               </div>
@@ -363,7 +373,13 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
             {/* Right: lyrics */}
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               {hasLyrics ? (
-                <div className="flex-1 overflow-y-auto scrollbar-hide px-12 py-8">
+                <div
+                  className="flex-1 overflow-y-auto scrollbar-hide px-12 py-8"
+                  style={{
+                    maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+                    WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+                  }}
+                >
                   <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
                     LYRICS
                   </p>

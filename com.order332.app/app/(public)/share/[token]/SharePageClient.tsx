@@ -284,33 +284,33 @@ function SharePlayer({
 
   // ── Mobile layout ────────────────────────────────────────────────────────────
   if (isMobile) {
-    const showArt = !(showLyrics && hasLyrics)
     return (
       <div className="fixed inset-0 flex flex-col overflow-hidden" style={glassBg}>
 
         {/* ── Art view ── */}
-        {showArt && (
-          <div className="flex-1 min-h-0 flex flex-col px-5 pt-6 gap-4">
-            {/* Cover art — fixed max so it never crowds the content below */}
-            <div className="w-full max-w-[240px] mx-auto aspect-square shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
-              {track.coverUrl ? (
-                <img
-                  src={track.coverUrl}
-                  alt={`${track.title} cover`}
-                  className={cn(
-                    "h-full w-full object-cover transition-transform duration-1000",
-                    player.isPlaying && "scale-105",
-                  )}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Music2 className="h-14 w-14 text-muted-foreground/20" />
-                </div>
-              )}
+        {!(showLyrics && hasLyrics) && (
+          <div className="flex-1 min-h-0 flex flex-col items-center px-5 pt-6 pb-2">
+            {/* Cover art — flex-1 so it shrinks when screen is short */}
+            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+              <div className="aspect-square h-full max-h-[280px] max-w-full overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
+                {track.coverUrl ? (
+                  <img
+                    src={track.coverUrl}
+                    alt={`${track.title} cover`}
+                    className={cn(
+                      "h-full w-full object-cover transition-transform duration-1000",
+                      player.isPlaying && "scale-105",
+                    )}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Music2 className="h-14 w-14 text-muted-foreground/20" />
+                  </div>
+                )}
+              </div>
             </div>
-
             {/* Track info */}
-            <div className="shrink-0 text-center">
+            <div className="shrink-0 w-full text-center mt-4">
               <ScrollingTitle
                 text={track.title}
                 className="text-xl font-semibold tracking-wide text-foreground"
@@ -322,21 +322,16 @@ function SharePlayer({
                 </span>
               )}
             </div>
-
-            {/* Spacer — pushes transport controls down if there's room */}
-            <div className="flex-1" />
-
-            {/* Transport controls — always in flow, never overlapped */}
-            <div className="shrink-0 pb-3">
+            {/* Transport controls */}
+            <div className="shrink-0 w-full mt-4 pb-2">
               <TransportControls />
             </div>
           </div>
         )}
 
         {/* ── Lyrics view ── */}
-        {!showArt && (
+        {showLyrics && hasLyrics && (
           <div className="flex-1 min-h-0 flex flex-col">
-            {/* Mini header */}
             <div className="shrink-0 flex items-center gap-3 px-5 pt-4 pb-3">
               <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-foreground/5">
                 {track.coverUrl ? (
@@ -352,8 +347,6 @@ function SharePlayer({
                 <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
               </div>
             </div>
-
-            {/* Scrollable lyrics */}
             <div
               className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain scrollbar-hide px-5 py-2"
               style={{
@@ -369,15 +362,13 @@ function SharePlayer({
                 />
               )}
             </div>
-
-            {/* Transport controls */}
             <div className="shrink-0 px-5 pt-1 pb-3">
               <TransportControls />
             </div>
           </div>
         )}
 
-        {/* Settings row — always at the bottom, always fully visible */}
+        {/* Settings row — always last, always below everything, cannot overlap */}
         <div className="shrink-0 px-5 pt-1 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <SettingsRow
             hasLyrics={hasLyrics}

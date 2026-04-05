@@ -144,6 +144,14 @@ function ScrollingTitle({ text, className }: { text: string; className?: string 
   const containerRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const [shouldScroll, setShouldScroll] = useState(false)
+  const prevTextRef = useRef(text)
+
+  // Reset during render when text changes so the ref span is mounted
+  // before the measurement effect runs — prevents stale scroll state.
+  if (prevTextRef.current !== text) {
+    prevTextRef.current = text
+    setShouldScroll(false)
+  }
 
   useEffect(() => {
     const container = containerRef.current

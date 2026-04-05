@@ -211,7 +211,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 <div
                   className={cn(
                     "absolute inset-0 overflow-y-auto scrollbar-hide transition-all duration-300 ease-in-out",
-                    showLyrics
+                    showLyrics && hasLyrics
                       ? "pointer-events-none -translate-y-4 opacity-0"
                       : "translate-y-0 opacity-100",
                   )}
@@ -250,13 +250,14 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 {/* Lyrics panel */}
                 <div
                   className={cn(
-                    "absolute inset-0 overflow-y-auto scrollbar-hide px-5 pt-2 pb-4 transition-all duration-300 ease-in-out",
-                    !showLyrics
+                    "absolute inset-0 flex flex-col transition-all duration-300 ease-in-out",
+                    !(showLyrics && hasLyrics)
                       ? "pointer-events-none translate-y-4 opacity-0"
                       : "translate-y-0 opacity-100",
                   )}
                 >
-                  <div className="mb-4 flex items-center gap-3">
+                  {/* Sticky track info — never scrolls away */}
+                  <div className="shrink-0 flex items-center gap-3 px-5 pt-2 pb-3">
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-foreground/5">
                       {currentTrack.coverUrl ? (
                         <img src={currentTrack.coverUrl} alt="" className="h-full w-full object-cover" />
@@ -271,13 +272,16 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                       <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
                     </div>
                   </div>
-                  {lyricsContent && (
-                    <LyricsDisplay
-                      lyricsContent={lyricsContent}
-                      lyricsType={lyricsType}
-                      onSeek={handleSeek}
-                    />
-                  )}
+                  {/* Scrollable lyrics */}
+                  <div className="flex-1 overflow-y-auto scrollbar-hide px-5 pb-4">
+                    {lyricsContent && (
+                      <LyricsDisplay
+                        lyricsContent={lyricsContent}
+                        lyricsType={lyricsType}
+                        onSeek={handleSeek}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 

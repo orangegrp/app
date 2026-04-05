@@ -120,7 +120,7 @@ function TransportControls() {
       <div className="my-3 flex items-center justify-center gap-4">
         <button
           onClick={() => player.isPlaying ? player.pause() : player.play()}
-          className="flex h-14 w-14 items-center justify-center rounded-full glass-button glass-button-default"
+          className="flex h-14 w-14 items-center justify-center rounded-full glass-button glass-button-glass"
         >
           {player.isPlaying
             ? <Pause className="h-6 w-6 fill-current" />

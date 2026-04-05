@@ -53,7 +53,7 @@ export function RemotePlaybackButton({ className }: RemotePlaybackButtonProps) {
       }}
       className={cn(
         "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
-        "text-muted-foreground hover:text-foreground transition-colors",
+        "glass-button glass-button-ghost text-muted-foreground hover:text-foreground",
         className,
       )}
       aria-label={isApple ? "AirPlay" : "Cast to device"}

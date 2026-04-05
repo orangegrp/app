@@ -681,10 +681,10 @@ export function AudioPlayerVolume({
         className="relative flex h-5 w-full touch-none items-center select-none"
         aria-label="Volume"
       >
-        <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-foreground/15">
-          <SliderPrimitive.Range className="absolute h-full rounded-full bg-foreground/70" />
+        <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-foreground/[0.08] border border-foreground/[0.09]">
+          <SliderPrimitive.Range className="absolute h-full rounded-full bg-foreground/55" />
         </SliderPrimitive.Track>
-        <SliderPrimitive.Thumb className="block h-3 w-3 rounded-full bg-foreground shadow focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50" />
+        <SliderPrimitive.Thumb className="block h-3 w-3 rounded-full bg-foreground/80 shadow focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50" />
       </SliderPrimitive.Root>
     </div>
   )

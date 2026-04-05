@@ -72,13 +72,13 @@ function TransportControls() {
       <div className="my-3 flex items-center justify-center gap-4">
         <button
           onClick={playPrev}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-full glass-button glass-button-ghost text-muted-foreground hover:text-foreground"
         >
           <SkipBack className="h-5 w-5" />
         </button>
         <button
           onClick={() => player.isPlaying ? player.pause() : player.play()}
-          className="flex h-14 w-14 items-center justify-center rounded-full glass-button glass-button-default"
+          className="flex h-14 w-14 items-center justify-center rounded-full glass-button glass-button-glass"
         >
           {player.isPlaying
             ? <Pause className="h-6 w-6 fill-current" />
@@ -86,7 +86,7 @@ function TransportControls() {
         </button>
         <button
           onClick={playNext}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-full glass-button glass-button-ghost text-muted-foreground hover:text-foreground"
         >
           <SkipForward className="h-5 w-5" />
         </button>
@@ -107,11 +107,11 @@ function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics, onShare }: Setting
   return (
     <div className="flex items-center justify-center gap-4">
       <AudioPlayerVolume className="w-28 shrink-0" />
-      <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+      <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0 glass-button glass-button-ghost text-muted-foreground hover:text-foreground" />
       <RemotePlaybackButton />
       <button
         onClick={onShare}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full glass-button glass-button-ghost text-muted-foreground hover:text-foreground"
         aria-label="Share track"
       >
         <Share2 className="h-5 w-5" />
@@ -120,10 +120,10 @@ function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics, onShare }: Setting
         <button
           onClick={onToggleLyrics}
           className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
             showLyrics
               ? "bg-foreground text-background"
-              : "text-muted-foreground hover:text-foreground",
+              : "glass-button glass-button-ghost text-muted-foreground hover:text-foreground",
           )}
           aria-label={showLyrics ? "Show artwork" : "Show lyrics"}
         >
@@ -141,11 +141,11 @@ function PlayerControls({ onShare }: { onShare: () => void }) {
       <TransportControls />
       <div className="flex items-center justify-center gap-3">
         <AudioPlayerVolume className="w-28 shrink-0" />
-        <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+        <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0 glass-button glass-button-ghost text-muted-foreground hover:text-foreground" />
         <RemotePlaybackButton />
         <button
           onClick={onShare}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full glass-button glass-button-ghost text-muted-foreground hover:text-foreground"
           aria-label="Share track"
         >
           <Share2 className="h-5 w-5" />

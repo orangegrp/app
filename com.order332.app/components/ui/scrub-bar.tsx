@@ -137,7 +137,7 @@ function ScrubBarTrack({ className, children, ...props }: ScrubBarTrackProps) {
       ref={trackRef}
       data-slot="scrub-bar-track"
       className={cn(
-        "relative h-2 w-full grow cursor-pointer touch-none rounded-full transition-none select-none bg-foreground/15",
+        "relative h-2 w-full grow cursor-pointer touch-none rounded-full transition-none select-none bg-foreground/[0.08] border border-foreground/[0.09]",
         className
       )}
       onPointerDown={handlePointerDown}
@@ -161,7 +161,7 @@ function ScrubBarProgress({ className, ...props }: ScrubBarProgressProps) {
   return (
     <div
       data-slot="scrub-bar-progress"
-      className={cn("bg-foreground/80 absolute inset-y-0 left-0 rounded-full", className)}
+      className={cn("bg-foreground/60 absolute inset-y-0 left-0 rounded-full", className)}
       style={{ width: `${progress}%` }}
       {...props}
     />

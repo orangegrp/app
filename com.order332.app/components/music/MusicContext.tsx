@@ -83,6 +83,30 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
 
+  // Sync Media Session API so AirPlay / lock-screen controls show correct info.
+  // Without this iOS shows "Not Playing" in the AirPlay picker.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+    if (!currentTrack) {
+      navigator.mediaSession.metadata = null
+      navigator.mediaSession.playbackState = "none"
+      return
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artist ?? "",
+      album: "",
+      artwork: currentTrack.coverUrl
+        ? [{ src: currentTrack.coverUrl, sizes: "512x512" }]
+        : [],
+    })
+  }, [currentTrack])
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+    navigator.mediaSession.playbackState = player.isPlaying ? "playing" : "paused"
+  }, [player.isPlaying])
+
   const playTrack = useCallback((id: string) => {
     const track = tracksRef.current.find((t) => t.id === id)
     if (!track) return
@@ -106,6 +130,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const prev = list[(idx - 1 + list.length) % list.length]
     if (prev) playTrack(prev.id)
   }, [currentTrackId, playTrack])
+
+  // Register action handlers so lock-screen / AirPlay controls work.
+  // Placed after playNext/playPrev are defined.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+    navigator.mediaSession.setActionHandler("play", () => player.play())
+    navigator.mediaSession.setActionHandler("pause", () => player.pause())
+    navigator.mediaSession.setActionHandler("previoustrack", () => playPrev())
+    navigator.mediaSession.setActionHandler("nexttrack", () => playNext())
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null)
+      navigator.mediaSession.setActionHandler("pause", null)
+      navigator.mediaSession.setActionHandler("previoustrack", null)
+      navigator.mediaSession.setActionHandler("nexttrack", null)
+    }
+  }, [player.play, player.pause, playPrev, playNext])
 
   const addTrack = useCallback((track: MusicTrackMeta) => {
     setTracks((prev) => [track, ...prev])

@@ -1,5 +1,6 @@
 import 'server-only'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import { parseBuffer } from 'music-metadata'
 import { requireAuth } from '@/server/middleware/auth'
 import { requirePermission } from '@/server/middleware/rbac'
@@ -305,6 +306,55 @@ musicTrackRoutes.delete(
     return c.json({ ok: true })
   }
 )
+
+// GET /music/tracks/lyrics/search — proxy LRCLIB fetch, stream result via SSE
+musicTrackRoutes.get('/lyrics/search', async (c) => {
+  const trackName = (c.req.query('track_name') ?? '').trim()
+  const artistName = (c.req.query('artist_name') ?? '').trim()
+  const albumName = (c.req.query('album_name') ?? '').trim()
+  const duration = Math.round(Number(c.req.query('duration') ?? '0'))
+
+  if (!trackName || duration === 0) {
+    return c.json({ error: 'track_name and duration are required' }, 400)
+  }
+
+  return streamSSE(c, async (stream) => {
+    const url = new URL('https://lrclib.net/api/get')
+    url.searchParams.set('track_name', trackName)
+    if (artistName) url.searchParams.set('artist_name', artistName)
+    if (albumName) url.searchParams.set('album_name', albumName)
+    url.searchParams.set('duration', String(duration))
+
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { 'Lrclib-Client': 'order332/1.0 (https://order332.com)' },
+      })
+      if (res.status === 404) {
+        await stream.writeSSE({ event: 'not_found', data: '' })
+        return
+      }
+      if (!res.ok) {
+        await stream.writeSSE({ event: 'error', data: String(res.status) })
+        return
+      }
+      const data = await res.json() as {
+        syncedLyrics?: string | null
+        plainLyrics?: string | null
+        instrumental?: boolean
+      }
+      await stream.writeSSE({
+        event: 'result',
+        data: JSON.stringify({
+          syncedLyrics: data.syncedLyrics ?? null,
+          plainLyrics: data.plainLyrics ?? null,
+          instrumental: data.instrumental ?? false,
+        }),
+      })
+    } catch {
+      await stream.writeSSE({ event: 'error', data: 'fetch_failed' })
+    }
+  })
+})
 
 // GET /music/tracks/:id/lyrics — fetch lyrics content
 musicTrackRoutes.get('/:id/lyrics', async (c) => {

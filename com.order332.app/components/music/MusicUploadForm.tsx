@@ -5,8 +5,8 @@ import { parseBlob } from "music-metadata"
 import { CloudUpload, FileMusic, Loader2, Music, Music2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { uploadMusicTrack, type MusicTrackMeta } from "@/lib/music-api"
+import { useAuthStore } from "@/lib/auth-store"
 import { Button } from "@/components/ui/button"
-import { fetchLyricsFromLrclib } from "@/lib/lrclib"
 
 const AUDIO_MIME_TYPES = new Set(["audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/x-m4a"])
 const AUDIO_TYPES = [...AUDIO_MIME_TYPES].join(",")
@@ -53,29 +53,63 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
   const [error, setError] = useState<string | null>(null)
 
   const doFetchLyrics = useCallback(async (trackTitle: string, trackArtist: string, trackDuration: number, trackAlbum: string) => {
-    if (!trackTitle.trim() || !trackArtist.trim() || trackDuration === 0) return
+    if (!trackTitle.trim() || trackDuration === 0) return
     setLyricsStatus('searching')
+
+    const params = new URLSearchParams({ track_name: trackTitle.trim(), duration: String(trackDuration) })
+    if (trackArtist.trim()) params.set('artist_name', trackArtist.trim())
+    if (trackAlbum.trim()) params.set('album_name', trackAlbum.trim())
+
     try {
-      const result = await fetchLyricsFromLrclib({
-        trackName: trackTitle.trim(),
-        artistName: trackArtist.trim(),
-        albumName: trackAlbum.trim() || undefined,
-        duration: trackDuration,
+      const accessToken = useAuthStore.getState().accessToken
+      const res = await fetch(`/api/music/tracks/lyrics/search?${params}`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       })
-      if (!result) {
-        setLyricsStatus('not-found')
-      } else if (result.instrumental) {
-        setLyricsStatus('instrumental')
-      } else if (result.syncedLyrics) {
-        setFetchedLyrics(result.syncedLyrics)
-        setFetchedLyricsType('lrc')
-        setLyricsStatus('found')
-      } else if (result.plainLyrics) {
-        setFetchedLyrics(result.plainLyrics)
-        setFetchedLyricsType('txt')
-        setLyricsStatus('found')
-      } else {
-        setLyricsStatus('not-found')
+
+      if (!res.ok || !res.body) { setLyricsStatus('error'); return }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let eventType = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7).trim()
+          } else if (line.startsWith('data: ')) {
+            const payload = line.slice(6)
+            if (eventType === 'not_found') {
+              setLyricsStatus('not-found')
+            } else if (eventType === 'error') {
+              setLyricsStatus('error')
+            } else if (eventType === 'result') {
+              try {
+                const data = JSON.parse(payload) as { syncedLyrics: string | null; plainLyrics: string | null; instrumental: boolean }
+                if (data.instrumental) {
+                  setLyricsStatus('instrumental')
+                } else if (data.syncedLyrics) {
+                  setFetchedLyrics(data.syncedLyrics)
+                  setFetchedLyricsType('lrc')
+                  setLyricsStatus('found')
+                } else if (data.plainLyrics) {
+                  setFetchedLyrics(data.plainLyrics)
+                  setFetchedLyricsType('txt')
+                  setLyricsStatus('found')
+                } else {
+                  setLyricsStatus('not-found')
+                }
+              } catch { setLyricsStatus('error') }
+            }
+            eventType = ''
+          }
+        }
       }
     } catch {
       setLyricsStatus('error')
@@ -150,12 +184,15 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
       )
     } catch {
       // Fallback: just use filename for title and Web Audio for duration
-      setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
+      const fallbackTitle = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ")
+      setTitle(fallbackTitle)
       const objectUrl = URL.createObjectURL(file)
       const audio = new Audio(objectUrl)
       audio.addEventListener("loadedmetadata", () => {
-        setDurationSec(Math.round(audio.duration) || 0)
+        const dur = Math.round(audio.duration) || 0
+        setDurationSec(dur)
         URL.revokeObjectURL(objectUrl)
+        void doFetchLyrics(fallbackTitle, "", dur, "")
       })
     }
   }, [doFetchLyrics])

@@ -2,10 +2,11 @@
 
 import { useCallback, useRef, useState } from "react"
 import { parseBlob } from "music-metadata"
-import { CloudUpload, FileMusic, Music2, X } from "lucide-react"
+import { CloudUpload, FileMusic, Loader2, Music, Music2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { uploadMusicTrack, type MusicTrackMeta } from "@/lib/music-api"
 import { Button } from "@/components/ui/button"
+import { fetchLyricsFromLrclib } from "@/lib/lrclib"
 
 const AUDIO_MIME_TYPES = new Set(["audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/x-m4a"])
 const AUDIO_TYPES = [...AUDIO_MIME_TYPES].join(",")
@@ -35,8 +36,14 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
 
   const [title, setTitle] = useState("")
   const [artist, setArtist] = useState("")
+  const [album, setAlbum] = useState("")
   const [genre, setGenre] = useState("")
   const [durationSec, setDurationSec] = useState(0)
+
+  type LyricsSearchStatus = 'idle' | 'searching' | 'found' | 'not-found' | 'instrumental' | 'error'
+  const [lyricsStatus, setLyricsStatus] = useState<LyricsSearchStatus>('idle')
+  const [fetchedLyrics, setFetchedLyrics] = useState<string | null>(null)
+  const [fetchedLyricsType, setFetchedLyricsType] = useState<'lrc' | 'txt'>('lrc')
 
   const [audioDragging, setAudioDragging] = useState(false)
   const [lyricsDragging, setLyricsDragging] = useState(false)
@@ -44,6 +51,46 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+
+  const doFetchLyrics = useCallback(async (trackTitle: string, trackArtist: string, trackDuration: number, trackAlbum: string) => {
+    if (!trackTitle.trim() || !trackArtist.trim() || trackDuration === 0) return
+    setLyricsStatus('searching')
+    try {
+      const result = await fetchLyricsFromLrclib({
+        trackName: trackTitle.trim(),
+        artistName: trackArtist.trim(),
+        albumName: trackAlbum.trim() || undefined,
+        duration: trackDuration,
+      })
+      if (!result) {
+        setLyricsStatus('not-found')
+      } else if (result.instrumental) {
+        setLyricsStatus('instrumental')
+      } else if (result.syncedLyrics) {
+        setFetchedLyrics(result.syncedLyrics)
+        setFetchedLyricsType('lrc')
+        setLyricsStatus('found')
+      } else if (result.plainLyrics) {
+        setFetchedLyrics(result.plainLyrics)
+        setFetchedLyricsType('txt')
+        setLyricsStatus('found')
+      } else {
+        setLyricsStatus('not-found')
+      }
+    } catch {
+      setLyricsStatus('error')
+    }
+  }, [])
+
+  const useFetchedLyrics = useCallback(() => {
+    if (!fetchedLyrics) return
+    const ext = fetchedLyricsType === 'lrc' ? '.lrc' : '.txt'
+    const blob = new Blob([fetchedLyrics], { type: 'text/plain' })
+    const file = new File([blob], `lyrics${ext}`, { type: 'text/plain' })
+    setLyricsFile(file)
+    setLyricsStatus('idle')
+    setFetchedLyrics(null)
+  }, [fetchedLyrics, fetchedLyricsType])
 
   const handleAudioFile = useCallback(async (file: File) => {
     if (!AUDIO_MIME_TYPES.has(file.type) && !file.name.match(/\.(mp3|ogg|wav|flac|aac|m4a)$/i)) {
@@ -65,6 +112,7 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
       else if (common.albumartist?.trim()) setArtist(common.albumartist.trim())
 
       if (common.genre?.[0]?.trim()) setGenre(common.genre[0].trim())
+      if (common.album?.trim()) setAlbum(common.album.trim())
 
       if (format.duration) setDurationSec(Math.round(format.duration))
 
@@ -92,6 +140,14 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
         img.onerror = () => URL.revokeObjectURL(srcUrl)
         img.src = srcUrl
       }
+
+      // Auto-fetch lyrics if no manual lyrics file present
+      void doFetchLyrics(
+        common.title?.trim() || file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "),
+        common.artist?.trim() || common.albumartist?.trim() || "",
+        format.duration ? Math.round(format.duration) : 0,
+        common.album?.trim() || "",
+      )
     } catch {
       // Fallback: just use filename for title and Web Audio for duration
       setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
@@ -102,7 +158,7 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
         URL.revokeObjectURL(objectUrl)
       })
     }
-  }, [])
+  }, [doFetchLyrics])
 
   const handleCoverFile = useCallback((file: File) => {
     setCoverFile(file)
@@ -117,6 +173,8 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
       return
     }
     setLyricsFile(file)
+    setLyricsStatus('idle')
+    setFetchedLyrics(null)
     setError(null)
   }, [])
 
@@ -222,6 +280,16 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Album">
+              <input
+                type="text"
+                value={album}
+                onChange={(e) => setAlbum(e.target.value)}
+                maxLength={200}
+                placeholder="Album name"
+                className="input-glass"
+              />
+            </Field>
             <Field label="Genre">
               <input
                 type="text"
@@ -236,9 +304,39 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
                 {GENRES.map((g) => <option key={g} value={g} />)}
               </datalist>
             </Field>
+          </div>
 
-            {/* Lyrics file — supports drag-and-drop */}
-            <Field label="Lyrics file">
+          {/* Lyrics — LRCLIB auto-fetch + manual override */}
+          <Field label="Lyrics file">
+            {lyricsStatus === 'searching' ? (
+              <div className="input-glass flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                Searching LRCLIB for lyrics…
+              </div>
+            ) : lyricsStatus === 'found' && fetchedLyrics ? (
+              <div className="rounded-xl border border-foreground/10 bg-foreground/2 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-foreground/8">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Music className="h-3.5 w-3.5 shrink-0" />
+                    <span>Lyrics found on LRCLIB</span>
+                    <span className="rounded bg-foreground/8 px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
+                      {fetchedLyricsType === 'lrc' ? 'synced' : 'plain'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-muted-foreground" onClick={() => { setLyricsStatus('not-found'); setFetchedLyrics(null) }}>
+                      Dismiss
+                    </Button>
+                    <Button size="sm" className="h-6 px-2 text-xs" onClick={useFetchedLyrics}>
+                      Use lyrics
+                    </Button>
+                  </div>
+                </div>
+                <pre className="max-h-40 overflow-y-auto px-3 py-2 font-mono text-xs text-muted-foreground whitespace-pre-wrap leading-5">
+                  {fetchedLyrics}
+                </pre>
+              </div>
+            ) : lyricsStatus === 'instrumental' ? (
               <div
                 onClick={() => lyricsInputRef.current?.click()}
                 onDragOver={onLyricsDragOver}
@@ -249,27 +347,47 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
                   lyricsDragging && "border-foreground/40 bg-foreground/8",
                 )}
               >
-                {lyricsFile ? (
-                  <>
-                    <FileMusic className="h-3.5 w-3.5 shrink-0 text-foreground/60" />
-                    <span className="truncate text-foreground">{lyricsFile.name}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setLyricsFile(null) }}
-                      className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">
-                    {lyricsDragging ? "Drop .lrc or .txt here" : "Drop or choose .lrc / .txt"}
-                  </span>
-                )}
+                <span className="text-muted-foreground/60 text-xs">Instrumental track · drop custom .lrc if needed</span>
+                <input ref={lyricsInputRef} type="file" accept=".lrc,.txt,text/plain" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLyricsFile(f) }} className="hidden" />
               </div>
-              <input ref={lyricsInputRef} type="file" accept=".lrc,.txt,text/plain" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLyricsFile(f) }} className="hidden" />
-            </Field>
-          </div>
+            ) : (
+              /* idle / not-found / error — show drop zone */
+              <div>
+                {lyricsStatus === 'not-found' && (
+                  <p className="mb-1.5 text-xs text-muted-foreground/60">No lyrics found on LRCLIB · add manually or <button type="button" className="underline underline-offset-2 hover:text-muted-foreground" onClick={() => doFetchLyrics(title, artist, durationSec, album)}>try again</button></p>
+                )}
+                <div
+                  onClick={() => lyricsInputRef.current?.click()}
+                  onDragOver={onLyricsDragOver}
+                  onDragLeave={onLyricsDragLeave}
+                  onDrop={onLyricsDrop}
+                  className={cn(
+                    "input-glass flex cursor-pointer items-center gap-2 text-left text-sm transition-colors",
+                    lyricsDragging && "border-foreground/40 bg-foreground/8",
+                  )}
+                >
+                  {lyricsFile ? (
+                    <>
+                      <FileMusic className="h-3.5 w-3.5 shrink-0 text-foreground/60" />
+                      <span className="truncate text-foreground">{lyricsFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setLyricsFile(null) }}
+                        className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {lyricsDragging ? "Drop .lrc or .txt here" : "Drop or choose .lrc / .txt"}
+                    </span>
+                  )}
+                </div>
+                <input ref={lyricsInputRef} type="file" accept=".lrc,.txt,text/plain" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLyricsFile(f) }} className="hidden" />
+              </div>
+            )}
+          </Field>
         </div>
       </div>
 
@@ -298,7 +416,7 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
                 {durationSec > 0 && ` · ${Math.floor(durationSec / 60)}:${String(durationSec % 60).padStart(2, "0")}`}
               </p>
             </div>
-            <button onClick={(e) => { e.stopPropagation(); setAudioFile(null); setDurationSec(0) }} className="ml-4 text-muted-foreground hover:text-foreground">
+            <button onClick={(e) => { e.stopPropagation(); setAudioFile(null); setDurationSec(0); setAlbum(""); setLyricsStatus('idle'); setFetchedLyrics(null) }} className="ml-4 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>

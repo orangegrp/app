@@ -210,7 +210,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 {/* Art panel */}
                 <div
                   className={cn(
-                    "absolute inset-0 overflow-y-auto scrollbar-hide transition-all duration-300 ease-in-out",
+                    "absolute inset-0 overflow-y-auto overscroll-y-contain scrollbar-hide transition-all duration-300 ease-in-out",
                     showLyrics && hasLyrics
                       ? "pointer-events-none -translate-y-4 opacity-0"
                       : "translate-y-0 opacity-100",
@@ -278,7 +278,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                   </div>
                   {/* Scrollable lyrics */}
                   <div
-                    className="flex-1 overflow-y-auto scrollbar-hide px-5 py-2"
+                    className="flex-1 overflow-y-auto overscroll-y-contain scrollbar-hide px-5 py-2"
                     style={{
                       maskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
                       WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",

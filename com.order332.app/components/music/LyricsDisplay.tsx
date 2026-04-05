@@ -55,12 +55,12 @@ function SyncedLyrics({
             type="button"
             onClick={onSeek ? () => onSeek(line.timeMs / 1000) : undefined}
             className={cn(
-              "w-full max-w-2xl px-6 py-2 text-center transition-all duration-300",
+              "w-full max-w-2xl px-6 py-2 text-center text-xl font-semibold transition-all duration-300",
               isActive
-                ? "scale-[1.05] text-xl font-semibold text-foreground"
+                ? "scale-[1.05] text-foreground"
                 : isPast
-                  ? "text-xl text-muted-foreground/35"
-                  : "text-xl text-muted-foreground/55",
+                  ? "text-muted-foreground/35"
+                  : "text-muted-foreground/55",
               onSeek
                 ? "cursor-pointer hover:text-foreground/80"
                 : "cursor-default",

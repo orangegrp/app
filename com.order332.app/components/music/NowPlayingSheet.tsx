@@ -217,8 +217,8 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                   )}
                 >
                   <div className="flex min-h-full flex-col justify-center px-5 py-4">
-                    {/* Full-width album art */}
-                    <div className="w-full aspect-square shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
+                    {/* Full-width album art — capped so it never crowds out controls */}
+                    <div className="w-full max-h-[50vh] max-w-[50vh] mx-auto aspect-square shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                       {currentTrack.coverUrl ? (
                         <img
                           src={currentTrack.coverUrl}
@@ -235,7 +235,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                       )}
                     </div>
                     {/* Track info */}
-                    <div className="mt-5 mb-5">
+                    <div className="mt-5 mb-5 text-center">
                       <h3 className="text-xl font-semibold tracking-wide text-foreground truncate">
                         {currentTrack.title}
                       </h3>

@@ -216,8 +216,9 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                       : "translate-y-0 opacity-100",
                   )}
                 >
-                  <div className="flex min-h-full flex-col items-center justify-center px-5 py-4">
-                    <div className="mb-5 h-64 w-64 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
+                  <div className="flex min-h-full flex-col justify-center px-5 py-4">
+                    {/* Full-width album art */}
+                    <div className="w-full aspect-square shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                       {currentTrack.coverUrl ? (
                         <img
                           src={currentTrack.coverUrl}
@@ -233,17 +234,20 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                         </div>
                       )}
                     </div>
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold tracking-wide text-foreground">
+                    {/* Track info */}
+                    <div className="mt-5 mb-5">
+                      <h3 className="text-xl font-semibold tracking-wide text-foreground truncate">
                         {currentTrack.title}
                       </h3>
-                      <p className="mt-0.5 text-sm text-muted-foreground">{currentTrack.artist}</p>
+                      <p className="mt-0.5 text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
                       {currentTrack.genre && (
                         <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
                           {currentTrack.genre}
                         </span>
                       )}
                     </div>
+                    {/* Transport controls inline — keeps everything in one natural flow */}
+                    <TransportControls />
                   </div>
                 </div>
 
@@ -283,11 +287,6 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                     )}
                   </div>
                 </div>
-              </div>
-
-              {/* Transport controls — sit directly below the sliding panels */}
-              <div className="shrink-0 px-5 pt-4 pb-6">
-                <TransportControls />
               </div>
 
               {/* Settings row — pinned at the very bottom with safe-area inset */}

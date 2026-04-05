@@ -78,7 +78,7 @@ function TransportControls() {
         </button>
         <button
           onClick={() => player.isPlaying ? player.pause() : player.play()}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:opacity-80 transition-opacity"
+          className="flex h-14 w-14 items-center justify-center rounded-full glass-button glass-button-default"
         >
           {player.isPlaying
             ? <Pause className="h-6 w-6 fill-current" />
@@ -253,7 +253,6 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
         onOpenChange={(o) => { if (!o) onClose() }}
         direction="bottom"
         shouldScaleBackground={false}
-        dismissible={!shareOpen}
       >
         <DrawerPrimitive.Portal>
           <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" />

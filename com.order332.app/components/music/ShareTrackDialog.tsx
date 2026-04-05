@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Check, Copy, Share2 } from "lucide-react"
+import { Drawer as DrawerPrimitive } from "vaul"
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { createMusicShareLink } from "@/lib/music-api"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 type ExpiryOption = "24h" | "7d" | "never"
 
@@ -34,7 +36,108 @@ interface ShareTrackDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+// ── Shared content (used by both mobile and desktop) ─────────────────────────
+function ShareContent({
+  trackTitle,
+  expiresIn,
+  setExpiresIn,
+  shareUrl,
+  expiresAt,
+  copied,
+  loading,
+  error,
+  onCopy,
+  onCreate,
+  onClose,
+}: {
+  trackTitle: string
+  expiresIn: ExpiryOption
+  setExpiresIn: (v: ExpiryOption) => void
+  shareUrl: string | null
+  expiresAt: string | null
+  copied: boolean
+  loading: boolean
+  error: string | null
+  onCopy: () => void
+  onCreate: () => void
+  onClose: () => void
+}) {
+  const formatExpiry = (iso: string | null) => {
+    if (!iso) return null
+    return new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" })
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground truncate">"{trackTitle}"</p>
+
+        {!shareUrl ? (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs tracking-wider text-muted-foreground">LINK EXPIRES</p>
+              <div className="grid grid-cols-3 gap-2">
+                {EXPIRY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setExpiresIn(opt.value)}
+                    className={cn(
+                      "flex flex-col items-center rounded-xl px-3 py-2.5 text-center transition-colors border",
+                      expiresIn === opt.value
+                        ? "border-foreground/30 bg-foreground/10 text-foreground"
+                        : "border-foreground/8 bg-foreground/4 text-muted-foreground hover:bg-foreground/8",
+                    )}
+                  >
+                    <span className="text-sm font-medium">{opt.label}</span>
+                    <span className="mt-0.5 text-[10px] opacity-60">{opt.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs tracking-wider text-muted-foreground">SHARE LINK</p>
+            <div className="flex items-center gap-2 rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
+              <span className="flex-1 min-w-0 break-all text-xs text-foreground/80 font-mono">
+                {shareUrl}
+              </span>
+              <button
+                onClick={onCopy}
+                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
+                aria-label="Copy link"
+              >
+                {copied
+                  ? <Check className="h-3.5 w-3.5 text-green-400" />
+                  : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+              </button>
+            </div>
+            {expiresAt ? (
+              <p className="text-xs text-muted-foreground">Expires {formatExpiry(expiresAt)}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">This link never expires</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 mt-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {shareUrl ? "Done" : "Cancel"}
+        </Button>
+        {!shareUrl && (
+          <Button size="sm" onClick={onCreate} disabled={loading}>
+            {loading ? "Creating…" : "Create link"}
+          </Button>
+        )}
+      </div>
+    </>
+  )
+}
+
 export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: ShareTrackDialogProps) {
+  const isMobile = useIsMobile()
   const [expiresIn, setExpiresIn] = useState<ExpiryOption>("7d")
   const [loading, setLoading] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -44,7 +147,6 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
 
   const handleClose = (next: boolean) => {
     if (!next) {
-      // Reset state when dialog closes
       setShareUrl(null)
       setExpiresAt(null)
       setCopied(false)
@@ -74,7 +176,6 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Fallback for environments without clipboard API
       const el = document.createElement("textarea")
       el.value = shareUrl
       document.body.appendChild(el)
@@ -86,92 +187,49 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
     }
   }
 
-  const formatExpiry = (iso: string | null) => {
-    if (!iso) return null
-    return new Date(iso).toLocaleDateString(undefined, {
-      dateStyle: "medium",
-    })
+  const sharedProps = {
+    trackTitle,
+    expiresIn,
+    setExpiresIn,
+    shareUrl,
+    expiresAt,
+    copied,
+    loading,
+    error,
+    onCopy: handleCopy,
+    onCreate: handleCreate,
+    onClose: () => handleClose(false),
   }
 
+  // ── Mobile: vaul bottom sheet (avoids vaul touch event conflicts) ─────────
+  if (isMobile) {
+    return (
+      <DrawerPrimitive.Root open={open} onOpenChange={handleClose} direction="bottom">
+        <DrawerPrimitive.Portal>
+          <DrawerPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/40" />
+          <DrawerPrimitive.Content className="fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-popover outline-none pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+            <DrawerPrimitive.Title className="sr-only">Share track</DrawerPrimitive.Title>
+            <div className="flex shrink-0 items-center px-4 pt-3 pb-1">
+              <div className="mx-auto h-1 w-10 rounded-full bg-foreground/20" />
+            </div>
+            <div className="px-5 pb-2 pt-3 flex flex-col gap-1">
+              <p className="text-base font-semibold text-foreground">Share track</p>
+              <ShareContent {...sharedProps} />
+            </div>
+          </DrawerPrimitive.Content>
+        </DrawerPrimitive.Portal>
+      </DrawerPrimitive.Root>
+    )
+  }
+
+  // ── Desktop: centered base-ui dialog ─────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()} className="z-[60]" overlayClassName="z-[60]">
+      <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>Share track</DialogTitle>
         </DialogHeader>
-
-        <div className="flex flex-col gap-4">
-          <p className="text-sm text-muted-foreground truncate">
-            "{trackTitle}"
-          </p>
-
-          {!shareUrl ? (
-            <>
-              {/* Expiry options */}
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs tracking-wider text-muted-foreground">LINK EXPIRES</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {EXPIRY_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setExpiresIn(opt.value)}
-                      className={cn(
-                        "flex flex-col items-center rounded-xl px-3 py-2.5 text-center transition-colors border",
-                        expiresIn === opt.value
-                          ? "border-foreground/30 bg-foreground/10 text-foreground"
-                          : "border-foreground/8 bg-foreground/4 text-muted-foreground hover:bg-foreground/8",
-                      )}
-                    >
-                      <span className="text-sm font-medium">{opt.label}</span>
-                      <span className="mt-0.5 text-[10px] opacity-60">{opt.description}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {error && (
-                <p className="text-xs text-destructive">{error}</p>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {/* Share URL display */}
-              <p className="text-xs tracking-wider text-muted-foreground">SHARE LINK</p>
-              <div className="flex items-center gap-2 rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
-                <span className="flex-1 min-w-0 break-all text-xs text-foreground/80 font-mono">
-                  {shareUrl}
-                </span>
-                <button
-                  onClick={handleCopy}
-                  className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
-                  aria-label="Copy link"
-                >
-                  {copied
-                    ? <Check className="h-3.5 w-3.5 text-green-400" />
-                    : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
-                </button>
-              </div>
-              {expiresAt ? (
-                <p className="text-xs text-muted-foreground">
-                  Expires {formatExpiry(expiresAt)}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">This link never expires</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => handleClose(false)}>
-            {shareUrl ? "Done" : "Cancel"}
-          </Button>
-          {!shareUrl && (
-            <Button size="sm" onClick={handleCreate} disabled={loading}>
-              {loading ? "Creating…" : "Create link"}
-            </Button>
-          )}
-        </DialogFooter>
+        <ShareContent {...sharedProps} />
       </DialogContent>
     </Dialog>
   )

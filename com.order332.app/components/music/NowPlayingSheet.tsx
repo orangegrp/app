@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { AlignLeft, Music2, Pause, Play, SkipBack, SkipForward, X } from "lucide-react"
@@ -130,11 +130,40 @@ function PlayerControls() {
   return (
     <div className="shrink-0">
       <TransportControls />
-      <div className="flex items-center gap-3">
-        <AudioPlayerVolume className="flex-1" />
+      <div className="flex items-center justify-center gap-3">
+        <AudioPlayerVolume className="w-28 shrink-0" />
         <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
         <RemotePlaybackButton />
       </div>
+    </div>
+  )
+}
+
+// ── Scrolling title — marquees only when text overflows its container ────────
+function ScrollingTitle({ text, className }: { text: string; className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const textRef = useRef<HTMLSpanElement>(null)
+  const [shouldScroll, setShouldScroll] = useState(false)
+
+  useEffect(() => {
+    const container = containerRef.current
+    const textEl = textRef.current
+    if (!container || !textEl) return
+    setShouldScroll(textEl.offsetWidth > container.clientWidth)
+  }, [text])
+
+  return (
+    <div ref={containerRef} className={cn("overflow-hidden whitespace-nowrap", className)}>
+      {shouldScroll ? (
+        // Both copies carry the same pr-14 so total width = 2×(text+gap),
+        // making translateX(-50%) land exactly at the start of copy 2 — seamless loop.
+        <span className="inline-block animate-title-marquee">
+          <span className="pr-14">{text}</span>
+          <span aria-hidden className="pr-14">{text}</span>
+        </span>
+      ) : (
+        <span ref={textRef}>{text}</span>
+      )}
     </div>
   )
 }
@@ -236,9 +265,10 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                     </div>
                     {/* Track info */}
                     <div className="mt-5 mb-5 text-center">
-                      <h3 className="text-xl font-semibold tracking-wide text-foreground truncate">
-                        {currentTrack.title}
-                      </h3>
+                      <ScrollingTitle
+                        text={currentTrack.title}
+                        className="text-xl font-semibold tracking-wide text-foreground"
+                      />
                       <p className="mt-0.5 text-sm text-muted-foreground truncate">{currentTrack.artist}</p>
                       {currentTrack.genre && (
                         <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">

@@ -399,6 +399,15 @@
   border-bottom: none;
 }
 
+/* Scrolling title marquee — for long track titles on mobile */
+@keyframes title-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-title-marquee {
+  animation: title-marquee 12s linear infinite;
+}
+
 .glass-nav-content,
 [data-viewport="false"] [data-slot="navigation-menu-content"],
 .glass-popover {

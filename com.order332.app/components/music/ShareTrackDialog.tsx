@@ -138,7 +138,7 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
               {/* Share URL display */}
               <p className="text-xs tracking-wider text-muted-foreground">SHARE LINK</p>
               <div className="flex items-center gap-2 rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
-                <span className="flex-1 truncate text-xs text-foreground/80 font-mono">
+                <span className="flex-1 min-w-0 break-all text-xs text-foreground/80 font-mono">
                   {shareUrl}
                 </span>
                 <button

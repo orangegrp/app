@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Music2, Pause, Pencil, Play, Trash2 } from "lucide-react"
+import { Music2, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDuration, type MusicTrackMeta } from "@/lib/music-api"
 import {
@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { ShareTrackDialog } from "@/components/music/ShareTrackDialog"
 
 const GENRES = ["Pop", "Rock", "Hip-Hop", "Electronic", "Jazz", "Classical", "R&B", "Country", "Folk", "Ambient", "Metal", "Punk", "Indie", "Soul", "Reggae"]
 
@@ -47,6 +48,7 @@ export function MusicTrackCard({
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editTitle, setEditTitle] = useState("")
   const [editArtist, setEditArtist] = useState("")
@@ -161,26 +163,35 @@ export function MusicTrackCard({
         </div>
       </div>
 
-      {/* Creator action buttons */}
-      {isCreator && (
-        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            onClick={openEdit}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
-            aria-label="Edit track"
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
-            disabled={deleting}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive/80"
-            aria-label="Delete track"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
+      {/* Action buttons — share visible to all, edit/delete only for creators */}
+      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShareOpen(true) }}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+          aria-label="Share track"
+        >
+          <Share2 className="h-3 w-3" />
+        </button>
+        {isCreator && (
+          <>
+            <button
+              onClick={openEdit}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+              aria-label="Edit track"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
+              disabled={deleting}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive/80"
+              aria-label="Delete track"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Edit dialog */}
       <Dialog open={editOpen} onOpenChange={(o) => { if (!o) setEditOpen(false) }}>
@@ -262,6 +273,13 @@ export function MusicTrackCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ShareTrackDialog
+        trackId={track.id}
+        trackTitle={track.title}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </div>
   )
 }

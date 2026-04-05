@@ -272,6 +272,21 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       CREATE INDEX IF NOT EXISTS music_tracks_genre_idx       ON music_tracks (genre);
     `,
   },
+  music_share_links: {
+    columns: ['id', 'token', 'track_id', 'created_by', 'created_at', 'expires_at'],
+    sql: `
+      CREATE TABLE IF NOT EXISTS music_share_links (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        token      TEXT        NOT NULL UNIQUE,
+        track_id   UUID        NOT NULL REFERENCES music_tracks(id) ON DELETE CASCADE,
+        created_by UUID        REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at TIMESTAMPTZ
+      );
+      CREATE INDEX IF NOT EXISTS music_share_links_token_idx    ON music_share_links (token);
+      CREATE INDEX IF NOT EXISTS music_share_links_track_id_idx ON music_share_links (track_id);
+    `,
+  },
 }
 
 export async function validateAndMigrateSchema(): Promise<void> {

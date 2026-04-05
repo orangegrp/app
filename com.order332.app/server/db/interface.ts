@@ -8,6 +8,7 @@ import type {
   QRSessionStatus,
   WebAuthnChallenge,
   PendingRegistration,
+  MusicShareLink,
 } from '@/server/lib/types'
 
 export interface CreateUserData {
@@ -89,6 +90,13 @@ export interface CreatePendingRegistrationData {
   inviteCodeId: string
   registrationToken: string
   expiresAt: Date
+}
+
+export interface CreateMusicShareLinkData {
+  token: string
+  trackId: string
+  createdBy: string
+  expiresAt: Date | null
 }
 
 export interface DBAdapter {
@@ -176,4 +184,8 @@ export interface DBAdapter {
   consumePendingRegistration(id: string): Promise<PendingRegistration | null>
   /** After Discord OAuth deny during signup: remove pending row and un-burn invite if registration never completed. */
   abortPendingRegistrationAndReleaseInvite(registrationToken: string): Promise<void>
+
+  // Music share links
+  createMusicShareLink(data: CreateMusicShareLinkData): Promise<MusicShareLink>
+  getMusicShareLinkByToken(token: string): Promise<MusicShareLink | null>
 }

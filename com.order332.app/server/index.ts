@@ -25,6 +25,7 @@ import { contentItemRoutes } from '@/server/routes/content/items'
 import { contentFolderRoutes } from '@/server/routes/content/folders'
 import { contentScanRoutes } from '@/server/routes/content/scans'
 import { musicTrackRoutes } from '@/server/routes/music/tracks'
+import { musicShareAuthRoutes, musicSharePublicRoutes } from '@/server/routes/music/share'
 import { normalizeDisplayName } from '@/lib/display-name'
 import { isWelcomeWizardCompletedForUser } from '@/lib/welcome-wizard'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -46,6 +47,8 @@ function isBotIdAllowlisted(method: string, pathname: string): boolean {
   if (m === 'GET' && pathname === '/api/auth/discord/callback') return true
   if (m === 'POST' && pathname === '/api/auth/magic/generate') return true
   if (m === 'GET' && pathname === '/api/cron/cleanup') return true
+  // Public music share endpoint — OG scrapers (Discord, Twitter, etc.) don't send BotID headers
+  if (m === 'GET' && /^\/api\/music\/share\/[A-Za-z0-9_-]{43}$/.test(pathname)) return true
   return false
 }
 
@@ -340,7 +343,12 @@ app.route('/content/scans', contentScanRoutes)
 // POST   /music/tracks           — upload track (requires app.music + app.music.upload)
 // DELETE /music/tracks/:id       — delete track (requires app.music + app.music.upload)
 // GET    /music/tracks/:id/lyrics — get lyrics content (requires app.music)
+// POST   /music/tracks/:id/share  — create share link (requires app.music)
 app.route('/music/tracks', musicTrackRoutes)
+app.route('/music/tracks', musicShareAuthRoutes)
+
+// GET    /music/share/:token     — public: resolve share link, return track + signed URLs
+app.route('/music/share', musicSharePublicRoutes)
 
 // ── Blog routes ───────────────────────────────────────────────────────────────
 

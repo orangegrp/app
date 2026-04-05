@@ -1,4 +1,4 @@
-import { apiGet, apiDelete, apiPatch } from './api-client'
+import { apiGet, apiDelete, apiPatch, apiPost } from './api-client'
 import { useAuthStore } from './auth-store'
 
 export type LyricsType = 'lrc' | 'txt'
@@ -96,6 +96,22 @@ export async function uploadMusicTrack(
     xhr.onerror = () => reject(new Error('Network error'))
     xhr.send(formData)
   })
+}
+
+export interface MusicShareLinkResult {
+  token: string
+  shareUrl: string
+  expiresAt: string | null
+}
+
+export async function createMusicShareLink(
+  trackId: string,
+  expiresIn: '24h' | '7d' | 'never',
+): Promise<MusicShareLinkResult> {
+  return apiPost<MusicShareLinkResult>(
+    `/music/tracks/${encodeURIComponent(trackId)}/share`,
+    { expiresIn },
+  )
 }
 
 /** Formats seconds as m:ss or h:mm:ss. */

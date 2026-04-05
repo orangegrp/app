@@ -1,5 +1,14 @@
 import 'server-only'
 
+export interface MusicShareLink {
+  id: string
+  token: string
+  trackId: string
+  createdBy: string | null
+  createdAt: string
+  expiresAt: string | null
+}
+
 export interface User {
   id: string
   createdAt: Date

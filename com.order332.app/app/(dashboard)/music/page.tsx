@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ToggleLeft, ToggleRight } from 'lucide-react'
 import { PageBackground } from '@/components/layout/PageBackground'
 import { MusicTrackGrid } from '@/components/music/MusicTrackGrid'
@@ -8,7 +9,18 @@ import { MusicUploadForm } from '@/components/music/MusicUploadForm'
 import { useMusicContext } from '@/components/music/MusicContext'
 
 export default function MusicPage() {
-  const { isCreator, isCreatorMode, setCreatorMode, addTrack, loading, error } = useMusicContext()
+  const { isCreator, isCreatorMode, setCreatorMode, addTrack, loading, error, playTrack, openNowPlaying, tracks } = useMusicContext()
+  const searchParams = useSearchParams()
+
+  // Auto-play a track linked from a share URL (?track=<id>)
+  useEffect(() => {
+    const trackId = searchParams.get('track')
+    if (!trackId || loading || tracks.length === 0) return
+    const exists = tracks.some((t) => t.id === trackId)
+    if (!exists) return
+    playTrack(trackId)
+    openNowPlaying()
+  }, [loading, tracks.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const [showUploadForm, setShowUploadForm] = useState(false)
 
   return (

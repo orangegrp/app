@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
-import { AlignLeft, Music2, Pause, Play, SkipBack, SkipForward, X } from "lucide-react"
+import { AlignLeft, Music2, Pause, Play, Share2, SkipBack, SkipForward, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   useAudioPlayer,
@@ -22,6 +22,7 @@ import {
 import { useMusicContext } from "./MusicContext"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { RemotePlaybackButton } from "./RemotePlaybackButton"
+import { ShareTrackDialog } from "./ShareTrackDialog"
 import { fetchTrackLyrics, type LyricsType } from "@/lib/music-api"
 import { useIsMobile } from "@/hooks/use-mobile"
 
@@ -94,19 +95,27 @@ function TransportControls() {
   )
 }
 
-// ── Settings row: volume + speed + cast + optional lyrics toggle ─────────────
+// ── Settings row: volume + speed + cast + optional lyrics toggle + share ──────
 // Centered layout — volume has a fixed width so the row doesn't stretch.
 interface SettingsRowProps {
   hasLyrics: boolean
   showLyrics: boolean
   onToggleLyrics: () => void
+  onShare: () => void
 }
-function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics }: SettingsRowProps) {
+function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics, onShare }: SettingsRowProps) {
   return (
     <div className="flex items-center justify-center gap-4">
       <AudioPlayerVolume className="w-28 shrink-0" />
       <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
       <RemotePlaybackButton />
+      <button
+        onClick={onShare}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+        aria-label="Share track"
+      >
+        <Share2 className="h-5 w-5" />
+      </button>
       {hasLyrics && (
         <button
           onClick={onToggleLyrics}
@@ -126,7 +135,7 @@ function SettingsRow({ hasLyrics, showLyrics, onToggleLyrics }: SettingsRowProps
 }
 
 // ── Desktop player controls: transport + settings (no lyrics toggle) ─────────
-function PlayerControls() {
+function PlayerControls({ onShare }: { onShare: () => void }) {
   return (
     <div className="shrink-0">
       <TransportControls />
@@ -134,6 +143,13 @@ function PlayerControls() {
         <AudioPlayerVolume className="w-28 shrink-0" />
         <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
         <RemotePlaybackButton />
+        <button
+          onClick={onShare}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Share track"
+        >
+          <Share2 className="h-5 w-5" />
+        </button>
       </div>
     </div>
   )
@@ -184,6 +200,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
   const player = useAudioPlayer()
   const isMobile = useIsMobile()
 
+  const [shareOpen, setShareOpen] = useState(false)
   const [lyricsContent, setLyricsContent] = useState<string | null>(null)
   const [lyricsType, setLyricsType] = useState<LyricsType>("txt")
 
@@ -218,9 +235,19 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
   const hasLyrics = !!lyricsContent
   const handleSeek = (t: number) => player.seek(t)
 
+  const shareDialog = (
+    <ShareTrackDialog
+      trackId={currentTrack.id}
+      trackTitle={currentTrack.title}
+      open={shareOpen}
+      onOpenChange={setShareOpen}
+    />
+  )
+
   // ── MOBILE: full-screen vaul drawer with swipe-to-dismiss ──────────────────
   if (isMobile) {
     return (
+      <>
       <DrawerPrimitive.Root
         open={open}
         onOpenChange={(o) => { if (!o) onClose() }}
@@ -343,17 +370,21 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                   hasLyrics={hasLyrics}
                   showLyrics={showLyrics}
                   onToggleLyrics={toggleLyrics}
+                  onShare={() => setShareOpen(true)}
                 />
               </div>
             </div>
           </DrawerPrimitive.Content>
         </DrawerPrimitive.Portal>
       </DrawerPrimitive.Root>
+      {shareDialog}
+      </>
     )
   }
 
   // ── DESKTOP: centered base-ui dialog ───────────────────────────────────────
   return (
+    <>
     <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogPrimitive.Portal>
         {/* Backdrop */}
@@ -404,7 +435,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 )}
               </div>
               <div className="w-full">
-                <PlayerControls />
+                <PlayerControls onShare={() => setShareOpen(true)} />
               </div>
             </div>
 
@@ -437,5 +468,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+    {shareDialog}
+    </>
   )
 }

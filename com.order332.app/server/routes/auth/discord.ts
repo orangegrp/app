@@ -323,7 +323,7 @@ discordRoutes.get('/callback', async (c) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'Strict',
       path: '/',
-      maxAge: isPwa ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60,
+      maxAge: 30 * 24 * 60 * 60,
     })
 
     setCookie(c, 'oauth_nonce', '', { maxAge: 0, path: '/' })

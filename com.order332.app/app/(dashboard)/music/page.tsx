@@ -12,7 +12,7 @@ export default function MusicPage() {
   const [showUploadForm, setShowUploadForm] = useState(false)
 
   return (
-    <div className="page-root relative min-h-screen px-6 pt-8 pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+5rem)] sm:pb-28 sm:pt-10">
+    <div className="page-root relative min-h-screen px-6 pt-8 pb-[calc(var(--mobile-nav-height)+5rem)] sm:pb-28 sm:pt-10">
       <PageBackground />
       <div className="relative z-10 mx-auto max-w-6xl">
         <p className="section-label">Music</p>

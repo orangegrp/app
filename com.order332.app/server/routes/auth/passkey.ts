@@ -191,7 +191,7 @@ passkeyRoutes.post("/register/finish", async (c) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: "Strict",
     path: "/",
-    maxAge: isPwa ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   })
 
   const posthog = getPostHogClient()
@@ -324,7 +324,7 @@ passkeyRoutes.post("/verify", rateLimit(10, 60_000), async (c) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: "Strict",
     path: "/",
-    maxAge: isPwa ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   })
 
   const posthog = getPostHogClient()

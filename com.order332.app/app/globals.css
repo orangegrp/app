@@ -376,10 +376,10 @@
 /* ── Liquid Glass: Navigation ─────────────────────────────────────── */
 
 .glass-nav-viewport {
-  background: var(--glass-bg-subtle);
+  background: oklch(0.1 0 0 / 72%);
   border: 1px solid var(--glass-border-subtle);
   border-radius: var(--glass-radius-lg);
-  backdrop-filter: var(--glass-blur-lg);
+  backdrop-filter: var(--glass-blur-md);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 5%),
     inset 0 -1px 0 oklch(1 0 0 / 2%),

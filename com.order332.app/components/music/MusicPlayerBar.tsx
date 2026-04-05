@@ -135,7 +135,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
       {isOnMusicPage && (
         <div
           className="fixed inset-x-0 z-40 sm:hidden overflow-hidden rounded-t-2xl"
-          style={{ bottom: "calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: "var(--mobile-nav-height)" }}
         >
           {barContent}
         </div>

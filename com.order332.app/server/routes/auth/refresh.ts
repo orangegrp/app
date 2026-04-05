@@ -54,7 +54,7 @@ refreshRoutes.post('/refresh', rateLimit(30, 60_000), async (c) => {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'Strict',
     path: '/',
-    maxAge: isPwa ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   })
 
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)

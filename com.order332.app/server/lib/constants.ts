@@ -3,8 +3,8 @@ import 'server-only'
 // Token lifetimes (seconds)
 export const TOKEN_LIFETIMES = {
   browser: {
-    access: 15 * 60,           // 15 minutes
-    refresh: 7 * 24 * 60 * 60, // 7 days
+    access: 60 * 60,            // 1 hour
+    refresh: 30 * 24 * 60 * 60, // 30 days
   },
   pwa: {
     access: 24 * 60 * 60,       // 24 hours

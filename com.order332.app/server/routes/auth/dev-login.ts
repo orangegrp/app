@@ -53,7 +53,7 @@ devLoginRoutes.post('/dev-login', async (c) => {
     httpOnly: true,
     secure: false,
     sameSite: 'Strict',
-    maxAge: 7 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60,
     path: '/',
   })
 

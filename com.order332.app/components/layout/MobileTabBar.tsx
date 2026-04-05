@@ -162,6 +162,20 @@ export function MobileTabBar() {
     swipe.close(then)
   }, [sheet, appsSwipe, profileSwipe])
 
+  // Keep --mobile-nav-height in sync with the real rendered nav height so the
+  // miniplayer always sits flush regardless of zoom, font scale, or browser quirks.
+  const navRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const update = () =>
+      document.documentElement.style.setProperty('--mobile-nav-height', `${nav.offsetHeight}px`)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(nav)
+    return () => ro.disconnect()
+  }, [])
+
   return (
     <>
       {/* Apps sheet */}
@@ -309,7 +323,7 @@ export function MobileTabBar() {
 
       {/* Bottom tab bar — flush to screen edge, rounded top corners only */}
       {!hideMobileChrome && (
-      <nav className="sm:hidden fixed inset-x-0 bottom-0 z-50">
+      <nav ref={navRef} className="sm:hidden fixed inset-x-0 bottom-0 z-50">
         <div
           className={cn("glass-nav-viewport rounded-b-none border-b-0", miniPlayerVisible ? "rounded-t-none" : "rounded-t-2xl")}
           style={{
@@ -333,8 +347,8 @@ export function MobileTabBar() {
                 isHome && !sheet ? 'text-foreground' : 'text-muted-foreground',
               ].join(' ')}
             >
-              <House size={28} strokeWidth={1.5} />
-              <span className="text-xs tracking-widest">Home</span>
+              <House size={24} strokeWidth={1.5} />
+              <span className="hidden text-xs tracking-widest">Home</span>
             </button>
 
             {/* Apps — hidden when user has no mini-app permissions */}
@@ -348,10 +362,10 @@ export function MobileTabBar() {
                 ].join(' ')}
               >
                 {sheet === 'apps'
-                  ? <X size={28} strokeWidth={1.5} />
-                  : <Grid2X2 size={28} strokeWidth={1.5} />
+                  ? <X size={24} strokeWidth={1.5} />
+                  : <Grid2X2 size={24} strokeWidth={1.5} />
                 }
-                <span className="text-xs tracking-widest">Apps</span>
+                <span className="hidden text-xs tracking-widest">Apps</span>
               </button>
             ) : null}
 
@@ -364,10 +378,10 @@ export function MobileTabBar() {
               ].join(' ')}
             >
               {sheet === 'profile' ? (
-                <X size={28} strokeWidth={1.5} />
+                <X size={24} strokeWidth={1.5} />
               ) : (
                 user ? (
-                  <UserAvatar user={user} size={28} className="ring-1 ring-white/10" />
+                  <UserAvatar user={user} size={24} className="ring-1 ring-white/10" />
                 ) : (
                   <div
                     className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium"
@@ -377,7 +391,7 @@ export function MobileTabBar() {
                   </div>
                 )
               )}
-              <span className="text-xs tracking-widest">Profile</span>
+              <span className="hidden text-xs tracking-widest">Profile</span>
             </button>
           </div>
         </div>

@@ -424,9 +424,10 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 )}
               </div>
               <div className="mb-5 w-full text-center">
-                <h3 className="text-xl font-semibold tracking-wide text-foreground">
-                  {currentTrack.title}
-                </h3>
+                <ScrollingTitle
+                  text={currentTrack.title}
+                  className="text-xl font-semibold tracking-wide text-foreground"
+                />
                 <p className="mt-1 text-sm text-muted-foreground">{currentTrack.artist}</p>
                 {currentTrack.genre && (
                   <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">

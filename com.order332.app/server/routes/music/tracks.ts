@@ -260,6 +260,46 @@ musicTrackRoutes.post(
   }
 )
 
+// PATCH /music/tracks/:id — update track metadata (own items only, or superuser)
+musicTrackRoutes.patch(
+  '/:id',
+  requirePermission(PERMISSIONS.APP_MUSIC_UPLOAD),
+  async (c) => {
+    const id = c.req.param('id')
+    const user = c.get('user')
+
+    let body: { title?: unknown; artist?: unknown; genre?: unknown }
+    try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+
+    const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : ''
+    const artist = typeof body.artist === 'string' ? body.artist.trim().slice(0, 200) : ''
+    const genre = typeof body.genre === 'string' ? (body.genre.trim().slice(0, 100) || null) : null
+
+    if (!title || !artist) return c.json({ error: 'title and artist are required' }, 400)
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from('music_tracks').select('uploaded_by').eq('id', id).single()
+    if (fetchErr || !existing) return c.json({ error: 'Track not found' }, 404)
+
+    const isSuperuser = user.permissions === '*'
+    if (!isSuperuser && existing.uploaded_by !== user.id) return c.json({ error: 'Forbidden' }, 403)
+
+    const { data, error } = await supabase
+      .from('music_tracks')
+      .update({ title, artist, genre, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('[music/tracks] update error:', error)
+      return c.json({ error: 'Update failed' }, 500)
+    }
+
+    return c.json({ track: rowToMusicTrack(data) })
+  }
+)
+
 // DELETE /music/tracks/:id — delete a track (own items only, or superuser)
 musicTrackRoutes.delete(
   '/:id',

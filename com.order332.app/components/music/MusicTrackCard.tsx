@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Music2, Pause, Play, Trash2 } from "lucide-react"
+import { Music2, Pause, Pencil, Play, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatDuration, type MusicTrackMeta } from "@/lib/music-api"
 import {
@@ -14,6 +14,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+
+const GENRES = ["Pop", "Rock", "Hip-Hop", "Electronic", "Jazz", "Classical", "R&B", "Country", "Folk", "Ambient", "Metal", "Punk", "Indie", "Soul", "Reggae"]
 
 interface MusicTrackCardProps {
   track: MusicTrackMeta
@@ -22,6 +32,7 @@ interface MusicTrackCardProps {
   onPlay: () => void
   isCreator: boolean
   onDelete: (id: string) => void
+  onEdit: (id: string, meta: { title: string; artist: string; genre?: string }) => Promise<void>
 }
 
 export function MusicTrackCard({
@@ -31,10 +42,39 @@ export function MusicTrackCard({
   onPlay,
   isCreator,
   onDelete,
+  onEdit,
 }: MusicTrackCardProps) {
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editTitle, setEditTitle] = useState("")
+  const [editArtist, setEditArtist] = useState("")
+  const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
+
+  const openEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditTitle(track.title)
+    setEditArtist(track.artist)
+    setEditGenre(track.genre ?? "")
+    setEditOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (!editTitle.trim() || !editArtist.trim()) return
+    setSaving(true)
+    try {
+      await onEdit(track.id, {
+        title: editTitle.trim(),
+        artist: editArtist.trim(),
+        genre: editGenre.trim() || undefined,
+      })
+      setEditOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleDeleteConfirm = () => {
     setDeleting(true)
@@ -121,17 +161,87 @@ export function MusicTrackCard({
         </div>
       </div>
 
-      {/* Creator delete button */}
+      {/* Creator action buttons */}
       {isCreator && (
-        <button
-          onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
-          disabled={deleting}
-          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/80"
-          aria-label="Delete track"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            onClick={openEdit}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+            aria-label="Edit track"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
+            disabled={deleting}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive/80"
+            aria-label="Delete track"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
+
+      {/* Edit dialog */}
+      <Dialog open={editOpen} onOpenChange={(o) => { if (!o) setEditOpen(false) }}>
+        <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Edit track</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
+                Title <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                maxLength={200}
+                className="input-glass w-full"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
+                Artist <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="text"
+                value={editArtist}
+                onChange={(e) => setEditArtist(e.target.value)}
+                maxLength={200}
+                className="input-glass w-full"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
+                Genre
+              </label>
+              <input
+                type="text"
+                list="edit-genre-list"
+                value={editGenre}
+                onChange={(e) => setEditGenre(e.target.value)}
+                maxLength={100}
+                placeholder="e.g. Electronic"
+                className="input-glass w-full"
+              />
+              <datalist id="edit-genre-list">
+                {GENRES.map((g) => <option key={g} value={g} />)}
+              </datalist>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setEditOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={!editTitle.trim() || !editArtist.trim() || saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent size="sm">

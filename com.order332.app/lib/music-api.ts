@@ -1,4 +1,4 @@
-import { apiGet, apiDelete } from './api-client'
+import { apiGet, apiDelete, apiPatch } from './api-client'
 import { useAuthStore } from './auth-store'
 
 export type LyricsType = 'lrc' | 'txt'
@@ -25,6 +25,13 @@ export async function fetchMusicTracks(genre?: string): Promise<{ tracks: MusicT
 
 export async function deleteMusicTrack(id: string): Promise<{ ok: boolean }> {
   return apiDelete<{ ok: boolean }>(`/music/tracks/${encodeURIComponent(id)}`)
+}
+
+export async function updateMusicTrack(
+  id: string,
+  meta: { title: string; artist: string; genre?: string },
+): Promise<{ track: MusicTrackMeta }> {
+  return apiPatch<{ track: MusicTrackMeta }>(`/music/tracks/${encodeURIComponent(id)}`, meta)
 }
 
 export async function fetchTrackLyrics(trackId: string): Promise<{ content: string; type: LyricsType }> {

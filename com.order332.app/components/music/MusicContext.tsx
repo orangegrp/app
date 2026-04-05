@@ -25,6 +25,7 @@ interface MusicContextValue {
   playPrev: () => void
   addTrack: (track: MusicTrackMeta) => void
   removeTrack: (id: string) => void
+  updateTrack: (track: MusicTrackMeta) => void
   isCreatorMode: boolean
   setCreatorMode: (v: boolean) => void
   isCreator: boolean
@@ -110,6 +111,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setTracks((prev) => [track, ...prev])
   }, [])
 
+  const updateTrack = useCallback((track: MusicTrackMeta) => {
+    setTracks((prev) => prev.map((t) => t.id === track.id ? track : t))
+  }, [])
+
   const removeTrack = useCallback((id: string) => {
     setTracks((prev) => prev.filter((t) => t.id !== id))
     if (currentTrackId === id) {
@@ -122,7 +127,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     <MusicContext.Provider value={{
       tracks, currentTrackId, currentTrack,
       playTrack, playNext, playPrev,
-      addTrack, removeTrack,
+      addTrack, removeTrack, updateTrack,
       isCreatorMode, setCreatorMode, isCreator,
       loading, error,
       nowPlayingOpen,

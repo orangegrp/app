@@ -17,6 +17,7 @@ import {
   uploadMusicTrack,
   type MusicTrackMeta,
 } from "@/lib/music-api"
+import { useAuthStore } from "@/lib/auth-store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -73,6 +74,13 @@ const GENRES = [
 ]
 
 type UploadStatus = "ready" | "uploading" | "success" | "error"
+type LyricsSearchStatus =
+  | "idle"
+  | "searching"
+  | "found"
+  | "not-found"
+  | "instrumental"
+  | "error"
 
 interface UploadItem {
   id: string
@@ -85,6 +93,9 @@ interface UploadItem {
   album: string
   genre: string
   durationSec: number
+  lyricsStatus: LyricsSearchStatus
+  fetchedLyrics: string | null
+  fetchedLyricsType: "lrc" | "txt"
   progress: number
   status: UploadStatus
   error: string | null
@@ -300,40 +311,169 @@ export function MusicUploadForm({
     )
   }, [])
 
-  const addAudioFiles = useCallback(async (filesLike: FileList | File[]) => {
-    const files = Array.from(filesLike)
-    if (files.length === 0) return
+  const fetchLyricsForItem = useCallback(
+    async (
+      itemId: string,
+      trackTitle: string,
+      trackArtist: string,
+      trackDuration: number,
+      trackAlbum: string
+    ) => {
+      if (!trackTitle.trim() || trackDuration === 0) return
 
-    setGlobalError(null)
-    const accepted = files.filter(isAudioFile)
-    if (accepted.length === 0) {
-      setGlobalError("No valid audio files were selected.")
-      return
-    }
-
-    const created = await Promise.all(
-      accepted.map(async (file) => {
-        const parsed = await parseAudioMetadata(file)
-        return {
-          id: crypto.randomUUID(),
-          audioFile: file,
-          coverFile: parsed.coverFile,
-          coverPreview: parsed.coverPreview,
-          lyricsFile: null,
-          title: parsed.title,
-          artist: parsed.artist,
-          album: parsed.album,
-          genre: parsed.genre,
-          durationSec: parsed.durationSec,
-          progress: 0,
-          status: "ready",
-          error: null,
-        } satisfies UploadItem
+      updateItem(itemId, {
+        lyricsStatus: "searching",
+        fetchedLyrics: null,
       })
-    )
 
-    setItems((prev) => [...prev, ...created])
-  }, [])
+      const params = new URLSearchParams({
+        track_name: trackTitle.trim(),
+        duration: String(trackDuration),
+      })
+      if (trackArtist.trim()) params.set("artist_name", trackArtist.trim())
+      if (trackAlbum.trim()) params.set("album_name", trackAlbum.trim())
+
+      try {
+        const accessToken = useAuthStore.getState().accessToken
+        const res = await fetch(`/api/music/tracks/lyrics/search?${params}`, {
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : {},
+        })
+
+        if (!res.ok || !res.body) {
+          updateItem(itemId, { lyricsStatus: "error" })
+          return
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let eventType = ""
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7).trim()
+            } else if (line.startsWith("data: ")) {
+              const payload = line.slice(6)
+              if (eventType === "not_found") {
+                updateItem(itemId, { lyricsStatus: "not-found" })
+              } else if (eventType === "error") {
+                updateItem(itemId, { lyricsStatus: "error" })
+              } else if (eventType === "result") {
+                try {
+                  const data = JSON.parse(payload) as {
+                    syncedLyrics: string | null
+                    plainLyrics: string | null
+                    instrumental: boolean
+                  }
+                  if (data.instrumental) {
+                    updateItem(itemId, { lyricsStatus: "instrumental" })
+                  } else if (data.syncedLyrics) {
+                    updateItem(itemId, {
+                      lyricsStatus: "found",
+                      fetchedLyrics: data.syncedLyrics,
+                      fetchedLyricsType: "lrc",
+                    })
+                  } else if (data.plainLyrics) {
+                    updateItem(itemId, {
+                      lyricsStatus: "found",
+                      fetchedLyrics: data.plainLyrics,
+                      fetchedLyricsType: "txt",
+                    })
+                  } else {
+                    updateItem(itemId, { lyricsStatus: "not-found" })
+                  }
+                } catch {
+                  updateItem(itemId, { lyricsStatus: "error" })
+                }
+              }
+              eventType = ""
+            }
+          }
+        }
+      } catch {
+        updateItem(itemId, { lyricsStatus: "error" })
+      }
+    },
+    [updateItem]
+  )
+
+  const applyFetchedLyrics = useCallback(
+    (itemId: string) => {
+      const item = items.find((it) => it.id === itemId)
+      if (!item?.fetchedLyrics) return
+
+      const ext = item.fetchedLyricsType === "lrc" ? ".lrc" : ".txt"
+      const blob = new Blob([item.fetchedLyrics], { type: "text/plain" })
+      const file = new File([blob], `lyrics${ext}`, { type: "text/plain" })
+
+      updateItem(itemId, {
+        lyricsFile: file,
+        lyricsStatus: "idle",
+        fetchedLyrics: null,
+      })
+    },
+    [items, updateItem]
+  )
+
+  const addAudioFiles = useCallback(
+    async (filesLike: FileList | File[]) => {
+      const files = Array.from(filesLike)
+      if (files.length === 0) return
+
+      setGlobalError(null)
+      const accepted = files.filter(isAudioFile)
+      if (accepted.length === 0) {
+        setGlobalError("No valid audio files were selected.")
+        return
+      }
+
+      const created = await Promise.all(
+        accepted.map(async (file) => {
+          const parsed = await parseAudioMetadata(file)
+          return {
+            id: crypto.randomUUID(),
+            audioFile: file,
+            coverFile: parsed.coverFile,
+            coverPreview: parsed.coverPreview,
+            lyricsFile: null,
+            title: parsed.title,
+            artist: parsed.artist,
+            album: parsed.album,
+            genre: parsed.genre,
+            durationSec: parsed.durationSec,
+            lyricsStatus: "idle",
+            fetchedLyrics: null,
+            fetchedLyricsType: "lrc",
+            progress: 0,
+            status: "ready",
+            error: null,
+          } satisfies UploadItem
+        })
+      )
+
+      setItems((prev) => [...prev, ...created])
+
+      for (const item of created) {
+        void fetchLyricsForItem(
+          item.id,
+          item.title,
+          item.artist,
+          item.durationSec,
+          item.album
+        )
+      }
+    },
+    [fetchLyricsForItem]
+  )
 
   const setCoverFor = useCallback(
     async (itemId: string, file: File) => {
@@ -349,7 +489,12 @@ export function MusicUploadForm({
         updateItem(itemId, { error: "Lyrics must be a .lrc or .txt file." })
         return
       }
-      updateItem(itemId, { lyricsFile: file, error: null })
+      updateItem(itemId, {
+        lyricsFile: file,
+        lyricsStatus: "idle",
+        fetchedLyrics: null,
+        error: null,
+      })
     },
     [updateItem]
   )
@@ -698,6 +843,22 @@ export function MusicUploadForm({
             }
             onSetCover={(file) => void setCoverFor(item.id, file)}
             onSetLyrics={(file) => setLyricsFor(item.id, file)}
+            onFetchLyrics={() =>
+              void fetchLyricsForItem(
+                item.id,
+                item.title,
+                item.artist,
+                item.durationSec,
+                item.album
+              )
+            }
+            onUseFetchedLyrics={() => applyFetchedLyrics(item.id)}
+            onDismissFetchedLyrics={() =>
+              updateItem(item.id, {
+                lyricsStatus: "not-found",
+                fetchedLyrics: null,
+              })
+            }
           />
         ))}
       </div>
@@ -764,6 +925,9 @@ function TrackCard({
   onRemove,
   onSetCover,
   onSetLyrics,
+  onFetchLyrics,
+  onUseFetchedLyrics,
+  onDismissFetchedLyrics,
 }: {
   item: UploadItem
   index: number
@@ -772,6 +936,9 @@ function TrackCard({
   onRemove: () => void
   onSetCover: (file: File) => void
   onSetLyrics: (file: File) => void
+  onFetchLyrics: () => void
+  onUseFetchedLyrics: () => void
+  onDismissFetchedLyrics: () => void
 }) {
   const coverInputRef = useRef<HTMLInputElement>(null)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
@@ -909,48 +1076,115 @@ function TrackCard({
           </div>
 
           <Field label="Lyrics file">
-            <div
-              onClick={() => !disabled && lyricsInputRef.current?.click()}
-              className={cn(
-                "input-glass flex cursor-pointer items-center gap-2 text-left text-sm transition-colors",
-                disabled && "cursor-not-allowed opacity-50"
-              )}
-            >
-              {item.lyricsFile ? (
-                <>
-                  <FileMusic className="h-3.5 w-3.5 shrink-0 text-foreground/60" />
-                  <span className="truncate text-foreground">
-                    {item.lyricsFile.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!disabled) onPatch({ lyricsFile: null, error: null })
-                    }}
-                    className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
-                    disabled={disabled}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </>
-              ) : (
-                <span className="text-muted-foreground">
-                  Drop or choose .lrc / .txt
-                </span>
-              )}
-            </div>
-            <input
-              ref={lyricsInputRef}
-              type="file"
-              accept=".lrc,.txt,text/plain"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) onSetLyrics(f)
-                e.currentTarget.value = ""
-              }}
-              className="hidden"
-            />
+            {item.lyricsStatus === "searching" ? (
+              <div className="input-glass flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                Searching LRCLIB for lyrics...
+              </div>
+            ) : item.lyricsStatus === "found" && item.fetchedLyrics ? (
+              <div className="overflow-hidden rounded-xl border border-foreground/10 bg-foreground/2">
+                <div className="flex items-center justify-between gap-2 border-b border-foreground/8 px-3 py-2">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>Lyrics found on LRCLIB</span>
+                    <span className="rounded bg-foreground/8 px-1.5 py-0.5 text-[10px] tracking-wider uppercase">
+                      {item.fetchedLyricsType === "lrc" ? "synced" : "plain"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-muted-foreground"
+                      onClick={onDismissFetchedLyrics}
+                      disabled={disabled}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={onUseFetchedLyrics}
+                      disabled={disabled}
+                    >
+                      Use lyrics
+                    </Button>
+                  </div>
+                </div>
+                <pre className="max-h-40 overflow-y-auto px-3 py-2 font-mono text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
+                  {item.fetchedLyrics}
+                </pre>
+              </div>
+            ) : (
+              <div>
+                {(item.lyricsStatus === "not-found" ||
+                  item.lyricsStatus === "error" ||
+                  item.lyricsStatus === "instrumental") && (
+                  <p className="mb-1.5 text-xs text-muted-foreground/60">
+                    {item.lyricsStatus === "instrumental"
+                      ? "Instrumental track detected."
+                      : item.lyricsStatus === "error"
+                        ? "Lyrics lookup failed."
+                        : "No lyrics found on LRCLIB."}{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-muted-foreground"
+                      onClick={onFetchLyrics}
+                      disabled={disabled}
+                    >
+                      Try again
+                    </button>
+                  </p>
+                )}
+                <div
+                  onClick={() => !disabled && lyricsInputRef.current?.click()}
+                  className={cn(
+                    "input-glass flex cursor-pointer items-center gap-2 text-left text-sm transition-colors",
+                    disabled && "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  {item.lyricsFile ? (
+                    <>
+                      <FileMusic className="h-3.5 w-3.5 shrink-0 text-foreground/60" />
+                      <span className="truncate text-foreground">
+                        {item.lyricsFile.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!disabled)
+                            onPatch({
+                              lyricsFile: null,
+                              lyricsStatus: "idle",
+                              fetchedLyrics: null,
+                              error: null,
+                            })
+                        }}
+                        className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                        disabled={disabled}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Drop or choose .lrc / .txt
+                    </span>
+                  )}
+                </div>
+                <input
+                  ref={lyricsInputRef}
+                  type="file"
+                  accept=".lrc,.txt,text/plain"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) onSetLyrics(f)
+                    e.currentTarget.value = ""
+                  }}
+                  className="hidden"
+                />
+              </div>
+            )}
           </Field>
         </div>
       </div>

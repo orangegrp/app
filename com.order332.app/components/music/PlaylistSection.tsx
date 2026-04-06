@@ -11,7 +11,11 @@ import {
   Shuffle,
   Trash2,
 } from "lucide-react"
-import { fetchMusicPlaylist, type MusicPlaylistMeta } from "@/lib/music-api"
+import {
+  fetchMusicPlaylist,
+  reorderPlaylistTracks,
+  type MusicPlaylistMeta,
+} from "@/lib/music-api"
 import { useMusicContext } from "./MusicContext"
 import { useAuthStore } from "@/lib/auth-store"
 import { moveItem } from "@/lib/music-queue"
@@ -450,9 +454,23 @@ function PlaylistDetailModal({
   >(null)
   const [loading, setLoading] = useState(true)
   const dragIndexRef = useRef<number | null>(null)
-  const moveTrack = useCallback((from: number, to: number) => {
-    setTracks((prev) => (prev ? moveItem(prev, from, to) : prev))
-  }, [])
+  const handleReorder = useCallback(
+    async (from: number, to: number) => {
+      if (!tracks) return
+      const ordered = moveItem(tracks, from, to)
+      setTracks(ordered)
+      try {
+        await reorderPlaylistTracks(
+          playlist.id,
+          ordered.map((t) => t.id)
+        )
+      } catch (err) {
+        console.error("[PlaylistSection] reorder error", err)
+        setTracks(tracks)
+      }
+    },
+    [playlist.id, tracks]
+  )
   const handleDragStart = useCallback(
     (index: number, event: DragEvent<HTMLDivElement>) => {
       dragIndexRef.current = index
@@ -466,11 +484,12 @@ function PlaylistDetailModal({
   const handleDrop = useCallback(
     (index: number, event: DragEvent<HTMLDivElement>) => {
       event.preventDefault()
-      if (dragIndexRef.current === null) return
-      moveTrack(dragIndexRef.current, index)
+      const from = dragIndexRef.current
+      if (from === null) return
       dragIndexRef.current = null
+      void handleReorder(from, index)
     },
-    [moveTrack]
+    [handleReorder]
   )
   const handleDragEnd = useCallback(() => {
     dragIndexRef.current = null

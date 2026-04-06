@@ -1,6 +1,14 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+} from "react"
 import {
   ListEnd,
   ListStart,
@@ -16,8 +24,11 @@ import {
 import { cn } from "@/lib/utils"
 import {
   formatDuration,
+  type LyricsType,
   type MusicTrackMeta,
   type MusicPlaylistMeta,
+  type MusicTrackUpdateMeta,
+  uploadMusicTrackAsset,
 } from "@/lib/music-api"
 import {
   AlertDialog,
@@ -47,6 +58,14 @@ import {
 } from "@/components/ui/context-menu"
 import { useLongPress } from "@/hooks/use-long-press"
 
+type PointerPoint = {
+  clientX: number
+  clientY: number
+}
+
+const COVER_ACCEPT = ["image/jpeg", "image/png", "image/webp"].join(",")
+const LYRICS_ACCEPT = ".lrc,.txt,text/plain"
+
 const GENRES = [
   "Pop",
   "Rock",
@@ -72,15 +91,7 @@ interface MusicTrackCardProps {
   onPlay: () => void
   isCreator: boolean
   onDelete: (id: string) => void
-  onEdit: (
-    id: string,
-    meta: {
-      title: string
-      artist: string
-      album?: string | null
-      genre?: string | null
-    }
-  ) => Promise<void>
+  onEdit: (id: string, meta: MusicTrackUpdateMeta) => Promise<void>
   onAddToQueue?: (id: string) => void
   onPlayNext?: (id: string) => void
   playlists?: MusicPlaylistMeta[]
@@ -105,25 +116,92 @@ export function MusicTrackCard({
   const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const longPressHandlers = useLongPress(() => setMenuOpen(true))
+  const menuTriggerRef = useRef<HTMLDivElement | null>(null)
+  const lastPointerRef = useRef<PointerPoint | null>(null)
+
+  const rememberPointer = useCallback((point?: PointerPoint | null) => {
+    if (!point) {
+      lastPointerRef.current = null
+      return
+    }
+    lastPointerRef.current = { clientX: point.clientX, clientY: point.clientY }
+  }, [])
+
+  const triggerContextMenu = useCallback((point?: PointerPoint | null) => {
+    if (typeof window === "undefined" || !menuTriggerRef.current) return
+    const rect = menuTriggerRef.current.getBoundingClientRect()
+    const clientX = point?.clientX ?? rect.left + rect.width / 2
+    const clientY = point?.clientY ?? rect.top + rect.height / 2
+    const evt = new window.MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX,
+      clientY,
+    })
+    menuTriggerRef.current.dispatchEvent(evt)
+  }, [])
+
+  const baseLongPressHandlers = useLongPress(() =>
+    triggerContextMenu(lastPointerRef.current)
+  )
+  const longPressHandlers = {
+    ...baseLongPressHandlers,
+    onMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => {
+      rememberPointer(event.nativeEvent)
+      baseLongPressHandlers.onMouseDown?.()
+    },
+    onTouchStart: (event: ReactTouchEvent<HTMLDivElement>) => {
+      const touch = event.touches[0]
+      if (touch) rememberPointer(touch)
+      baseLongPressHandlers.onTouchStart?.()
+    },
+    onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => {
+      rememberPointer(event.nativeEvent)
+      event.stopPropagation()
+      baseLongPressHandlers.onContextMenu?.(event)
+      triggerContextMenu(event.nativeEvent)
+    },
+  }
   const [playlistOpen, setPlaylistOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const handleMenuAction = useCallback((action?: () => void) => {
     action?.()
     setMenuOpen(false)
   }, [])
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  const lyricsInputRef = useRef<HTMLInputElement>(null)
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(
+    track.coverUrl ?? null
+  )
+  const [lyricsFile, setLyricsFile] = useState<File | null>(null)
+  useEffect(() => {
+    if (!editOpen) {
+      setCoverPreview(track.coverUrl ?? null)
+      setCoverFile(null)
+      setLyricsFile(null)
+    }
+  }, [editOpen, track.coverUrl])
   const [editTitle, setEditTitle] = useState("")
   const [editArtist, setEditArtist] = useState("")
   const [editAlbum, setEditAlbum] = useState("")
   const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
+  const iconOverlayButton =
+    "pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20 backdrop-blur-md transition duration-200 hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+  const playOverlayButton =
+    "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full text-white ring-1 ring-white/20 backdrop-blur-xl shadow-[0_25px_45px_rgba(0,0,0,0.35)] transition duration-200 transform-gpu focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
 
-  const openEdit = (e?: React.MouseEvent) => {
+  const openEdit = (e?: ReactMouseEvent) => {
     e?.stopPropagation()
     setEditTitle(track.title)
     setEditArtist(track.artist)
     setEditAlbum(track.album ?? "")
     setEditGenre(track.genre ?? "")
+    setCoverPreview(track.coverUrl ?? null)
+    setCoverFile(null)
+    setLyricsFile(null)
     setEditOpen(true)
   }
 
@@ -131,16 +209,62 @@ export function MusicTrackCard({
     if (!editTitle.trim() || !editArtist.trim()) return
     setSaving(true)
     try {
-      await onEdit(track.id, {
+      let coverKey: string | null = null
+      if (coverFile) {
+        const upload = await uploadMusicTrackAsset("covers", coverFile)
+        coverKey = upload.storageKey
+      }
+
+      let lyricsKey: string | null = null
+      let lyricsType: LyricsType | null = null
+      if (lyricsFile) {
+        lyricsType = lyricsFile.name.toLowerCase().endsWith(".lrc")
+          ? "lrc"
+          : "txt"
+        const upload = await uploadMusicTrackAsset("lyrics", lyricsFile)
+        lyricsKey = upload.storageKey
+      }
+
+      const meta: MusicTrackUpdateMeta = {
         title: editTitle.trim(),
         artist: editArtist.trim(),
         album: editAlbum.trim() || null,
         genre: editGenre.trim() || null,
-      })
+        ...(coverKey ? { coverKey } : {}),
+        ...(lyricsKey ? { lyricsKey, lyricsType } : {}),
+      }
+
+      await onEdit(track.id, meta)
       setEditOpen(false)
+    } catch (err) {
+      console.error("[MusicTrackCard] save error", err)
     } finally {
       setSaving(false)
     }
+  }
+  const handleCoverFileSelect = useCallback((file: File) => {
+    setCoverFile(file)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setCoverPreview(event.target.result as string)
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [])
+
+  const handleCoverInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    handleCoverFileSelect(file)
+    event.target.value = ""
+  }
+
+  const handleLyricsInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setLyricsFile(file)
+    event.target.value = ""
   }
 
   const handleDeleteConfirm = () => {
@@ -151,16 +275,14 @@ export function MusicTrackCard({
 
   return (
     <div
+      {...longPressHandlers}
       className={cn(
         "glass-card group relative flex flex-col overflow-hidden rounded-xl transition-all",
         isActive && "ring-1 ring-foreground/30"
       )}
     >
       {/* Cover art */}
-      <div
-        className="relative aspect-square overflow-hidden bg-foreground/5"
-        {...longPressHandlers}
-      >
+      <div className="relative aspect-square overflow-hidden bg-foreground/5">
         {track.coverUrl ? (
           <img
             src={track.coverUrl}
@@ -179,27 +301,36 @@ export function MusicTrackCard({
 
         <div className="pointer-events-none absolute inset-0">
           <div className="flex h-full flex-col justify-between p-3">
-            <div className="flex justify-end gap-2 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <div className="flex justify-end gap-2 opacity-90 transition-opacity">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   setShareOpen(true)
                 }}
                 type="button"
-                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                className={iconOverlayButton}
                 aria-label="Share track"
               >
                 <Share2 className="h-4 w-4" />
               </button>
               <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
-                <ContextMenuTrigger>
-                  <button
-                    type="button"
-                    className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                    aria-label="Show actions"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
+                <ContextMenuTrigger
+                  className={iconOverlayButton}
+                  aria-label="Show actions"
+                  ref={menuTriggerRef}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    const point =
+                      event.nativeEvent.detail === 0 &&
+                      event.nativeEvent.clientX === 0 &&
+                      event.nativeEvent.clientY === 0
+                        ? null
+                        : event.nativeEvent
+                    rememberPointer(point)
+                    triggerContextMenu(point)
+                  }}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem
@@ -271,15 +402,17 @@ export function MusicTrackCard({
                 }}
                 type="button"
                 className={cn(
-                  "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/60 shadow-lg transition",
-                  showingPlay ? "bg-foreground" : "bg-white/10"
+                  playOverlayButton,
+                  showingPlay
+                    ? "bg-white/85 text-foreground ring-white/60"
+                    : "bg-white/15 text-white hover:-translate-y-0.5 hover:bg-white/25"
                 )}
                 aria-label={showingPlay ? "Pause track" : "Play track"}
               >
                 {showingPlay ? (
-                  <Pause className="h-6 w-6 fill-white text-white" />
+                  <Pause className="h-6 w-6 text-current" />
                 ) : (
-                  <Play className="ml-0.5 h-6 w-6 fill-white text-white" />
+                  <Play className="ml-0.5 h-6 w-6 text-current" />
                 )}
               </button>
             </div>
@@ -330,81 +463,6 @@ export function MusicTrackCard({
             {formatDuration(track.durationSec)}
           </span>
         </div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        {onPlayNext && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onPlayNext(track.id)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
-            aria-label="Play next"
-            title="Play next"
-          >
-            <ListStart className="h-3 w-3" />
-          </button>
-        )}
-        {onAddToQueue && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onAddToQueue(track.id)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
-            aria-label="Add to queue"
-            title="Add to queue"
-          >
-            <ListEnd className="h-3 w-3" />
-          </button>
-        )}
-        {playlists && onAddToPlaylist && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setPlaylistOpen(true)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
-            aria-label="Add to playlist"
-            title="Add to playlist"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setShareOpen(true)
-          }}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
-          aria-label="Share track"
-        >
-          <Share2 className="h-3 w-3" />
-        </button>
-        {isCreator && (
-          <>
-            <button
-              onClick={openEdit}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
-              aria-label="Edit track"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setConfirmOpen(true)
-              }}
-              disabled={deleting}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive/80"
-              aria-label="Delete track"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </>
-        )}
       </div>
 
       {/* Edit dialog */}
@@ -480,6 +538,68 @@ export function MusicTrackCard({
               </datalist>
             </div>
           </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs tracking-wider text-muted-foreground">
+                Cover art
+              </label>
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className="flex h-32 items-center justify-center rounded-xl border border-dashed border-foreground/10 bg-foreground/5 transition hover:border-foreground/30"
+              >
+                {coverPreview ? (
+                  <img
+                    src={coverPreview}
+                    alt="Cover preview"
+                    className="h-full w-full rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
+                    <Music2 className="h-5 w-5" />
+                    <span>Upload JPG, PNG, WebP</span>
+                  </div>
+                )}
+              </button>
+              <p className="text-[11px] text-muted-foreground/60">
+                Optional · JPG, PNG, WebP
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs tracking-wider text-muted-foreground">
+                Lyrics file
+              </label>
+              <button
+                type="button"
+                onClick={() => lyricsInputRef.current?.click()}
+                className="flex h-32 flex-col items-center justify-center rounded-xl border border-dashed border-foreground/10 bg-foreground/5 text-xs text-muted-foreground transition hover:border-foreground/30"
+              >
+                <span className="text-center">
+                  {lyricsFile?.name ??
+                    (track.lyricsUrl
+                      ? "Current lyrics attached"
+                      : "Upload .lrc or .txt")}
+                </span>
+              </button>
+              <p className="text-[11px] text-muted-foreground/60">
+                Optional · LRCLIB-ready (.lrc or .txt)
+              </p>
+            </div>
+          </div>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept={COVER_ACCEPT}
+            className="hidden"
+            onChange={handleCoverInputChange}
+          />
+          <input
+            ref={lyricsInputRef}
+            type="file"
+            accept={LYRICS_ACCEPT}
+            className="hidden"
+            onChange={handleLyricsInputChange}
+          />
           <DialogFooter>
             <Button
               variant="ghost"

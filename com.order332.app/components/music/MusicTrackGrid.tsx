@@ -3,19 +3,33 @@
 import { useAudioPlayer } from "@/components/ui/audio-player"
 import { MusicTrackCard } from "./MusicTrackCard"
 import { useMusicContext } from "./MusicContext"
-import { deleteMusicTrack, updateMusicTrack } from "@/lib/music-api"
+import {
+  deleteMusicTrack,
+  type MusicTrackUpdateMeta,
+  updateMusicTrack,
+} from "@/lib/music-api"
 
 export function MusicTrackGrid() {
   const {
-    tracks, currentTrackId, playTrack, removeTrack, updateTrack, isCreatorMode,
-    addToQueue, playNextTrack, playlists, addTrackToPlaylist,
+    tracks,
+    currentTrackId,
+    playTrack,
+    removeTrack,
+    updateTrack,
+    isCreatorMode,
+    addToQueue,
+    playNextTrack,
+    playlists,
+    addTrackToPlaylist,
   } = useMusicContext()
   const player = useAudioPlayer()
 
   if (tracks.length === 0) {
     return (
       <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-foreground/10">
-        <p className="text-sm text-muted-foreground tracking-wider">No tracks yet.</p>
+        <p className="text-sm tracking-wider text-muted-foreground">
+          No tracks yet.
+        </p>
       </div>
     )
   }
@@ -25,16 +39,16 @@ export function MusicTrackGrid() {
       await deleteMusicTrack(id)
       removeTrack(id)
     } catch (err) {
-      console.error('[MusicTrackGrid] delete error:', err)
+      console.error("[MusicTrackGrid] delete error:", err)
     }
   }
 
-  const handleUpdate = async (id: string, meta: { title: string; artist: string; album?: string | null; genre?: string | null }) => {
+  const handleUpdate = async (id: string, meta: MusicTrackUpdateMeta) => {
     try {
       const { track } = await updateMusicTrack(id, meta)
       updateTrack(track)
     } catch (err) {
-      console.error('[MusicTrackGrid] update error:', err)
+      console.error("[MusicTrackGrid] update error:", err)
       throw err
     }
   }

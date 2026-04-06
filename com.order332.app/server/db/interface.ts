@@ -11,7 +11,7 @@ import type {
   MusicShareLink,
   MusicPlaylist,
   MusicPlaylistWithTracks,
-} from '@/server/lib/types'
+} from "@/server/lib/types"
 
 export interface CreateUserData {
   discordId?: string
@@ -84,7 +84,7 @@ export interface CreateChallengeData {
   userId?: string
   /** Invite sign-up: associate challenge with this pending registration (omit userId). */
   pendingRegistrationId?: string
-  type: 'registration' | 'authentication'
+  type: "registration" | "authentication"
   expiresAt: Date
 }
 
@@ -148,7 +148,9 @@ export interface DBAdapter {
   atomicClaimInviteCode(code: string): Promise<InviteCode | null>
 
   // Passkey credentials
-  getPasskeyByCredentialId(credentialId: string): Promise<PasskeyCredential | null>
+  getPasskeyByCredentialId(
+    credentialId: string
+  ): Promise<PasskeyCredential | null>
   getPasskeysByUserId(userId: string): Promise<PasskeyCredential[]>
   createPasskeyCredential(data: CreatePasskeyData): Promise<PasskeyCredential>
   updatePasskeyCounter(id: string, counter: number): Promise<void>
@@ -158,7 +160,12 @@ export interface DBAdapter {
   createSession(data: CreateSessionData): Promise<Session>
   getSessionById(id: string): Promise<Session | null>
   getSessionByTokenHash(hash: string): Promise<Session | null>
-  rotateSession(id: string, oldHash: string, newHash: string, newExpiresAt: Date): Promise<Session | null>
+  rotateSession(
+    id: string,
+    oldHash: string,
+    newHash: string,
+    newExpiresAt: Date
+  ): Promise<Session | null>
   deleteSession(id: string): Promise<void>
   deleteUserSessions(userId: string): Promise<void>
 
@@ -190,13 +197,17 @@ export interface DBAdapter {
   deleteChallenge(id: string): Promise<void>
 
   // Pending registrations (post-invite-code-claim, pre-auth-setup)
-  createPendingRegistration(data: CreatePendingRegistrationData): Promise<PendingRegistration>
+  createPendingRegistration(
+    data: CreatePendingRegistrationData
+  ): Promise<PendingRegistration>
   getPendingRegistration(token: string): Promise<PendingRegistration | null>
   deletePendingRegistration(id: string): Promise<void>
   /** Atomically deletes a pending registration if it exists and hasn't expired. Returns the record if deleted, null if already consumed or expired. */
   consumePendingRegistration(id: string): Promise<PendingRegistration | null>
   /** After Discord OAuth deny during signup: remove pending row and un-burn invite if registration never completed. */
-  abortPendingRegistrationAndReleaseInvite(registrationToken: string): Promise<void>
+  abortPendingRegistrationAndReleaseInvite(
+    registrationToken: string
+  ): Promise<void>
 
   // Music share links
   createMusicShareLink(data: CreateMusicShareLinkData): Promise<MusicShareLink>
@@ -206,8 +217,12 @@ export interface DBAdapter {
   listMusicPlaylists(): Promise<MusicPlaylist[]>
   getMusicPlaylist(id: string): Promise<MusicPlaylistWithTracks | null>
   createMusicPlaylist(data: CreateMusicPlaylistData): Promise<MusicPlaylist>
-  updateMusicPlaylist(id: string, data: UpdateMusicPlaylistData): Promise<MusicPlaylist>
+  updateMusicPlaylist(
+    id: string,
+    data: UpdateMusicPlaylistData
+  ): Promise<MusicPlaylist>
   deleteMusicPlaylist(id: string): Promise<void>
   addTrackToPlaylist(playlistId: string, trackId: string): Promise<void>
   removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void>
+  reorderMusicPlaylistTracks(playlistId: string, order: string[]): Promise<void>
 }

@@ -169,6 +169,17 @@ function QueuePanelContent() {
     .map((id) => tracks.find((t) => t.id === id))
     .filter((t): t is MusicTrackMeta => !!t)
 
+  const effectiveQueue = shuffle ? shuffledQueue : queue
+  const currentIndex = currentTrackId
+    ? effectiveQueue.findIndex((id) => id === currentTrackId)
+    : -1
+  const previousIds =
+    currentIndex > 0 ? effectiveQueue.slice(0, currentIndex) : []
+  const previousTracks = previousIds
+    .map((id) => tracks.find((t) => t.id === id))
+    .filter((t): t is MusicTrackMeta => !!t)
+  const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
+
   const dragIndexRef = useRef<number | null>(null)
 
   const onDragStart = (index: number, event: DragEvent<HTMLDivElement>) => {
@@ -186,15 +197,124 @@ function QueuePanelContent() {
   const onDragOver = (event: DragEvent<HTMLDivElement>) =>
     event.preventDefault()
 
-  const queueIsEmpty = manualTracks.length === 0 && autoTracks.length === 0
+  const hasQueueEntries =
+    previousTracks.length > 0 ||
+    currentTrack !== null ||
+    manualTracks.length > 0 ||
+    autoTracks.length > 0
+
+  const rowClasses = (isCurrent = false, faded = false) =>
+    cn(
+      "flex items-center gap-3 rounded-xl px-3 py-2 transition-colors duration-150",
+      isCurrent
+        ? "bg-white/10 text-foreground shadow-[0_12px_30px_rgba(0,0,0,0.25)] ring-1 ring-white/30"
+        : "hover:bg-white/5",
+      faded &&
+        "text-muted-foreground/70 opacity-45 saturate-50 hover:bg-transparent"
+    )
+
+  const renderTrackRow = (
+    track: MusicTrackMeta,
+    label: string | number,
+    options: {
+      isCurrent?: boolean
+      faded?: boolean
+      showHandle?: boolean
+      removable?: boolean
+      onRemove?: () => void
+      dragIndex?: number
+    } = {}
+  ) => (
+    <div
+      key={`${track.id}-${label}`}
+      draggable={options.showHandle}
+      onDragStart={
+        options.showHandle
+          ? (event) => onDragStart(options.dragIndex ?? 0, event)
+          : undefined
+      }
+      onDragOver={options.showHandle ? onDragOver : undefined}
+      onDrop={
+        options.showHandle
+          ? (event) => onDrop(options.dragIndex ?? 0, event)
+          : undefined
+      }
+      className={cn(
+        options.showHandle ? "group/qi" : "",
+        rowClasses(options.isCurrent ?? false, options.faded ?? false)
+      )}
+    >
+      {options.showHandle && (
+        <span className="flex h-8 w-8 items-center justify-center text-muted-foreground/40">
+          <GripVertical className="h-4 w-4" />
+        </span>
+      )}
+      <span
+        className={cn(
+          "w-4 shrink-0 text-center text-xs tabular-nums",
+          options.faded ? "text-muted-foreground/40" : "text-foreground"
+        )}
+      >
+        {label}
+      </span>
+      <div
+        className={cn(
+          "h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/5",
+          options.faded && "opacity-70"
+        )}
+      >
+        {track.coverUrl ? (
+          <img
+            src={track.coverUrl}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Music2 className="h-3 w-3 text-muted-foreground/30" />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "truncate text-sm",
+            options.faded ? "text-muted-foreground/80" : "text-foreground"
+          )}
+        >
+          {track.title}
+        </p>
+        <p
+          className={cn(
+            "truncate text-xs",
+            options.faded ? "text-muted-foreground/60" : "text-muted-foreground"
+          )}
+        >
+          {track.artist}
+        </p>
+      </div>
+      {options.removable && options.onRemove && (
+        <button
+          onClick={(event) => {
+            event.stopPropagation()
+            options.onRemove?.()
+          }}
+          className="shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover/qi:opacity-100 hover:text-muted-foreground"
+          aria-label="Remove from queue"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[10px] tracking-[0.2em] text-muted-foreground/40">
-          UP NEXT
+          QUEUE
         </p>
-        {manualTracks.length > 0 && (
+        {(manualTracks.length > 0 || autoTracks.length > 0) && (
           <button
             onClick={clearQueue}
             className="text-xs text-muted-foreground transition-colors hover:text-foreground"
@@ -203,98 +323,65 @@ function QueuePanelContent() {
           </button>
         )}
       </div>
-      {queueIsEmpty ? (
+      {!hasQueueEntries ? (
         <p className="py-6 text-center text-sm text-muted-foreground/60">
           Queue is empty
         </p>
       ) : (
         <div className="flex flex-col gap-0.5">
-          {manualTracks.map((track, i) => (
-            <div
-              key={track.id}
-              draggable
-              onDragStart={(event) => onDragStart(i, event)}
-              onDragOver={onDragOver}
-              onDrop={(event) => onDrop(i, event)}
-              className="group/qi flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-foreground/5"
-            >
-              <span className="flex h-8 w-8 items-center justify-center text-muted-foreground/40">
-                <GripVertical className="h-4 w-4" />
-              </span>
-              <span className="w-4 shrink-0 text-center text-xs text-muted-foreground/40 tabular-nums">
-                {i + 1}
-              </span>
-              <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/5">
-                {track.coverUrl ? (
-                  <img
-                    src={track.coverUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Music2 className="h-3 w-3 text-muted-foreground/30" />
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-foreground">
-                  {track.title}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {track.artist}
-                </p>
-              </div>
-              <button
-                onClick={() => removeFromQueue(i)}
-                className="shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover/qi:opacity-100 hover:text-muted-foreground"
-                aria-label="Remove from queue"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-          {autoTracks.length > 0 && (
-            <div className="pt-3">
-              {manualTracks.length > 0 && (
-                <p className="mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
-                  IN QUEUE
-                </p>
+          {previousTracks.length > 0 && (
+            <>
+              <p className="mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                PREVIOUS
+              </p>
+              {previousTracks.map((track, idx) =>
+                renderTrackRow(track, idx + 1, { faded: true })
               )}
-              <div className="flex flex-col gap-0.5">
-                {autoTracks.map((track, i) => (
-                  <div
-                    key={`auto-${track.id}`}
-                    className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-foreground/5"
-                  >
-                    <span className="w-4 shrink-0 text-center text-xs text-muted-foreground/40 tabular-nums">
-                      {manualTracks.length + i + 1}
-                    </span>
-                    <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/5">
-                      {track.coverUrl ? (
-                        <img
-                          src={track.coverUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <Music2 className="h-3 w-3 text-muted-foreground/30" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-foreground">
-                        {track.title}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {track.artist}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            </>
+          )}
+          {currentTrack && (
+            <div>
+              <p className="mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                NOW PLAYING
+              </p>
+              {renderTrackRow(
+                currentTrack,
+                currentIndex >= 0
+                  ? currentIndex + 1
+                  : previousTracks.length + 1,
+                {
+                  isCurrent: true,
+                }
+              )}
             </div>
+          )}
+          {manualTracks.length > 0 && (
+            <>
+              <p className="mt-2 mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                QUEUE
+              </p>
+              {manualTracks.map((track, i) =>
+                renderTrackRow(track, i + 1, {
+                  showHandle: true,
+                  removable: true,
+                  dragIndex: i,
+                  onRemove: () => removeFromQueue(i),
+                  isCurrent: track.id === currentTrackId,
+                })
+              )}
+            </>
+          )}
+          {autoTracks.length > 0 && (
+            <>
+              <p className="mt-2 mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                UP NEXT
+              </p>
+              {autoTracks.map((track, i) =>
+                renderTrackRow(track, manualTracks.length + i + 1, {
+                  isCurrent: track.id === currentTrackId,
+                })
+              )}
+            </>
           )}
         </div>
       )}

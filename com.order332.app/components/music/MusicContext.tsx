@@ -9,7 +9,10 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { useAudioPlayer } from "@/components/ui/audio-player"
+import {
+  useAudioPlayer,
+  useAudioPlayerTime,
+} from "@/components/ui/audio-player"
 import {
   fetchMusicTracks,
   fetchMusicPlaylists,
@@ -126,6 +129,7 @@ export function useOptionalMusicContext(): MusicContextValue | null {
 
 export function MusicProvider({ children }: { children: ReactNode }) {
   const player = useAudioPlayer<MusicTrackMeta>()
+  const currentTime = useAudioPlayerTime()
   const user = useAuthStore((s) => s.user)
   const isMobile = useIsMobile()
   const isCreator = user
@@ -227,6 +231,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         : [],
     })
   }, [currentTrack])
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
+      return
+    const duration = player.duration
+    if (!duration || !Number.isFinite(duration) || duration <= 0) return
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: player.playbackRate,
+        position: Math.min(Math.max(currentTime, 0), duration),
+      })
+    } catch (err) {
+      console.error("[music/context] media session position error", err)
+    }
+  }, [currentTime, player.duration, player.playbackRate])
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !("mediaSession" in navigator))
@@ -368,6 +388,31 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       navigator.mediaSession.setActionHandler("nexttrack", null)
     }
   }, [player.play, player.pause])
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
+      return
+    const handler = (details: MediaSessionActionDetails) => {
+      if (details.seekTime == null) return
+      const duration = player.duration ?? 0
+      const target = Math.min(
+        Math.max(details.seekTime, 0),
+        duration > 0 ? duration : details.seekTime
+      )
+      if (details.fastSeek && player.ref.current?.fastSeek) {
+        player.ref.current.fastSeek(target)
+      } else {
+        player.seek(target)
+      }
+      if (player.isPlaying) {
+        void player.play()
+      }
+    }
+    navigator.mediaSession.setActionHandler("seekto", handler)
+    return () => {
+      navigator.mediaSession.setActionHandler("seekto", null)
+    }
+  }, [player, player.seek, player.play])
 
   // ── Queue management ─────────────────────────────────────────────────────────
 

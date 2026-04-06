@@ -197,9 +197,11 @@ function QueuePanelContent() {
     : null
 
   const dragIndexRef = useRef<number | null>(null)
+  const [dropIndex, setDropIndex] = useState<number | null>(null)
 
   const onDragStart = (index: number, event: DragEvent<HTMLDivElement>) => {
     dragIndexRef.current = index
+    setDropIndex(index)
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer?.setData("text/plain", String(index))
     const preview = event.currentTarget.cloneNode(true) as HTMLDivElement
@@ -230,17 +232,22 @@ function QueuePanelContent() {
       (Number.isFinite(dragIndexFromData) ? dragIndexFromData : null)
     if (from === null || from === index) {
       dragIndexRef.current = null
+      setDropIndex(null)
       return
     }
     reorderQueue(from, index)
     dragIndexRef.current = null
+    setDropIndex(null)
   }
 
-  const onDragOver = (event: DragEvent<HTMLDivElement>) =>
+  const onDragOver = (index: number, event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
+    setDropIndex(index)
+  }
 
   const onDragEnd = () => {
     dragIndexRef.current = null
+    setDropIndex(null)
   }
 
   const hasQueueEntries =
@@ -279,7 +286,11 @@ function QueuePanelContent() {
           ? (event) => onDragStart(options.dragIndex ?? 0, event)
           : undefined
       }
-      onDragOver={options.showHandle ? onDragOver : undefined}
+      onDragOver={
+        options.showHandle
+          ? (event) => onDragOver(options.dragIndex ?? 0, event)
+          : undefined
+      }
       onDragEnd={options.showHandle ? onDragEnd : undefined}
       onDrop={
         options.showHandle
@@ -288,6 +299,10 @@ function QueuePanelContent() {
       }
       className={cn(
         options.showHandle ? "group/qi cursor-grab active:cursor-grabbing" : "",
+        options.showHandle &&
+          dropIndex === (options.dragIndex ?? -1) &&
+          dragIndexRef.current !== (options.dragIndex ?? -1) &&
+          "border-t-2 border-cyan-300/70",
         rowClasses(options.isCurrent ?? false, options.faded ?? false)
       )}
     >

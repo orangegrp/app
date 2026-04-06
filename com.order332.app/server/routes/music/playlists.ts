@@ -43,14 +43,12 @@ musicPlaylistRoutes.get("/", async (c) => {
     .select("playlist_id, track_id")
     .in("playlist_id", playlistIds)
 
-  // Group up to 4 track IDs per playlist (in arrival order)
+  // Group all track IDs per playlist (in arrival order)
   const trackIdsByPlaylist = new Map<string, string[]>()
   for (const row of ptRows ?? []) {
     const arr = trackIdsByPlaylist.get(row.playlist_id) ?? []
-    if (arr.length < 4) {
-      arr.push(row.track_id)
-      trackIdsByPlaylist.set(row.playlist_id, arr)
-    }
+    arr.push(row.track_id)
+    trackIdsByPlaylist.set(row.playlist_id, arr)
   }
 
   const allTrackIds = [...new Set([...trackIdsByPlaylist.values()].flat())]
@@ -66,13 +64,14 @@ musicPlaylistRoutes.get("/", async (c) => {
     }
   }
 
-  // Build cover keys per playlist and sign them in one batch
+  // Build cover keys per playlist (prefer tracks that have art)
   const coverKeysByPlaylist = new Map<string, string[]>()
   for (const [playlistId, trackIds] of trackIdsByPlaylist) {
     const keys = trackIds
       .map((id) => coverKeysByTrack.get(id))
       .filter(Boolean) as string[]
-    if (keys.length > 0) coverKeysByPlaylist.set(playlistId, keys)
+    const topKeys = keys.slice(0, 4)
+    if (topKeys.length > 0) coverKeysByPlaylist.set(playlistId, topKeys)
   }
 
   const allCoverKeys = [...new Set([...coverKeysByPlaylist.values()].flat())]

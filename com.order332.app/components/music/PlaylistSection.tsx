@@ -6,6 +6,7 @@ import {
   GripVertical,
   Loader2,
   Music2,
+  Pencil,
   Play,
   Plus,
   Shuffle,
@@ -21,6 +22,7 @@ import {
 import { useMusicContext } from "./MusicContext"
 import { useAuthStore } from "@/lib/auth-store"
 import { moveItem } from "@/lib/music-queue"
+import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -203,17 +205,13 @@ function PlaylistCoverArt({
   coverUrls?: string[]
   trackCount: number
 }) {
-  const covers = coverUrls ?? []
-  const visible = Math.min(trackCount, 4)
-  if (visible === 0) {
+  const covers = (coverUrls ?? []).slice(0, 4)
+  if (trackCount === 0) {
     return <Music2 className="h-12 w-12 text-muted-foreground/20" />
   }
-  const cells = Array.from({ length: 4 }, (_, index) => {
-    if (index >= visible) return null
-    return covers[index] ?? null
-  })
+  const cells = Array.from({ length: 4 }, (_, index) => covers[index] ?? null)
   return (
-    <div className="grid h-full w-full grid-cols-2">
+    <div className="grid h-full w-full grid-cols-2 grid-rows-2">
       {cells.map((url, i) =>
         url ? (
           <img
@@ -226,7 +224,7 @@ function PlaylistCoverArt({
         ) : (
           <div
             key={i}
-            className="flex h-full w-full items-center justify-center rounded-md bg-foreground/8 text-muted-foreground/30"
+            className="flex h-full w-full items-center justify-center bg-foreground/8 text-muted-foreground/30"
             aria-hidden
           >
             <Music2 className="h-4 w-4" />
@@ -349,7 +347,7 @@ function PlaylistCard({
               aria-label="Rename playlist"
               title="Rename"
             >
-              <ChevronRight className="h-3 w-3 rotate-[-90deg]" />
+              <Pencil className="h-3 w-3" />
             </button>
             <button
               onClick={(e) => {
@@ -460,6 +458,7 @@ function PlaylistDetailModal({
   const [loading, setLoading] = useState(true)
   const [updatingCover, setUpdatingCover] = useState(false)
   const dragIndexRef = useRef<number | null>(null)
+  const [dropIndex, setDropIndex] = useState<number | null>(null)
   const coverInputRef = useRef<HTMLInputElement | null>(null)
   const handleReorder = useCallback(
     async (from: number, to: number) => {
@@ -481,6 +480,7 @@ function PlaylistDetailModal({
   const handleDragStart = useCallback(
     (index: number, event: DragEvent<HTMLDivElement>) => {
       dragIndexRef.current = index
+      setDropIndex(index)
       event.dataTransfer.effectAllowed = "move"
       event.dataTransfer?.setData("text/plain", String(index))
       const preview = event.currentTarget.cloneNode(true) as HTMLDivElement
@@ -510,12 +510,14 @@ function PlaylistDetailModal({
       const from = dragIndexRef.current
       if (from === null) return
       dragIndexRef.current = null
+      setDropIndex(null)
       void handleReorder(from, index)
     },
     [handleReorder]
   )
   const handleDragEnd = useCallback(() => {
     dragIndexRef.current = null
+    setDropIndex(null)
   }, [])
 
   useEffect(() => {
@@ -577,8 +579,15 @@ function PlaylistDetailModal({
         className="flex max-h-[80vh] flex-col select-none"
       >
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>{playlist.name}</DialogTitle>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="truncate">{playlist.name}</DialogTitle>
+              {playlist.description && (
+                <p className="mt-1 text-sm text-muted-foreground/80">
+                  {playlist.description}
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {canManage && (
                 <button
@@ -636,10 +645,18 @@ function PlaylistDetailModal({
                   key={track.id}
                   draggable
                   onDragStart={(event) => handleDragStart(i, event)}
-                  onDragOver={handleDragOver}
+                  onDragOver={(event) => {
+                    handleDragOver(event)
+                    setDropIndex(i)
+                  }}
                   onDrop={(event) => handleDrop(i, event)}
                   onDragEnd={handleDragEnd}
-                  className="group/ti flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-foreground/5"
+                  className={cn(
+                    "group/ti flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-foreground/5",
+                    dropIndex === i && dragIndexRef.current !== i
+                      ? "border-t-2 border-cyan-300/70"
+                      : ""
+                  )}
                   onClick={() => handlePlay(track.id, false)}
                 >
                   <span className="flex h-5 w-5 items-center justify-center text-muted-foreground/40">

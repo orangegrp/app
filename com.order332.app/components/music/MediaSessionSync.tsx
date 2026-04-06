@@ -91,21 +91,6 @@ export function MediaSessionSync() {
         "seekto",
         (d) => { if (d.seekTime != null) playerRef.current.seek(d.seekTime) },
       ],
-      [
-        "seekbackward",
-        (d) => playerRef.current.seek(
-          Math.max(0, currentTimeRef.current - (d.seekOffset ?? 10))
-        ),
-      ],
-      [
-        "seekforward",
-        (d) => playerRef.current.seek(
-          Math.min(
-            playerRef.current.duration ?? Infinity,
-            currentTimeRef.current + (d.seekOffset ?? 10)
-          )
-        ),
-      ],
     ]
 
     for (const [action, handler] of handlers) {

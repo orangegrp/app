@@ -353,13 +353,13 @@ export function MusicTrackCard({
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem
-                    onSelect={() => handleMenuAction(() => onPlay())}
+                    onClick={() => handleMenuAction(() => onPlay())}
                   >
                     <Play className="h-3.5 w-3.5" />
                     {showingPlay ? "Pause" : "Play"}
                   </ContextMenuItem>
                   <ContextMenuItem
-                    onSelect={() =>
+                    onClick={() =>
                       handleMenuAction(() => onPlayNext?.(track.id))
                     }
                   >
@@ -367,7 +367,7 @@ export function MusicTrackCard({
                     Play next
                   </ContextMenuItem>
                   <ContextMenuItem
-                    onSelect={() =>
+                    onClick={() =>
                       handleMenuAction(() => onAddToQueue?.(track.id))
                     }
                   >
@@ -376,7 +376,7 @@ export function MusicTrackCard({
                   </ContextMenuItem>
                   {playlists && onAddToPlaylist && (
                     <ContextMenuItem
-                      onSelect={() =>
+                      onClick={() =>
                         handleMenuAction(() => setPlaylistOpen(true))
                       }
                     >
@@ -385,7 +385,7 @@ export function MusicTrackCard({
                     </ContextMenuItem>
                   )}
                   <ContextMenuItem
-                    onSelect={() => handleMenuAction(() => setShareOpen(true))}
+                    onClick={() => handleMenuAction(() => setShareOpen(true))}
                   >
                     <Share2 className="h-3.5 w-3.5" />
                     Share
@@ -394,14 +394,14 @@ export function MusicTrackCard({
                     <>
                       <ContextMenuSeparator />
                       <ContextMenuItem
-                        onSelect={() => handleMenuAction(() => openEdit())}
+                        onClick={() => handleMenuAction(() => openEdit())}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Edit track
                       </ContextMenuItem>
                       <ContextMenuItem
                         variant="destructive"
-                        onSelect={() =>
+                        onClick={() =>
                           handleMenuAction(() => setConfirmOpen(true))
                         }
                       >

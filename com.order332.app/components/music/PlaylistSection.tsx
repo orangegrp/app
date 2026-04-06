@@ -15,6 +15,8 @@ import {
   fetchMusicPlaylist,
   reorderPlaylistTracks,
   type MusicPlaylistMeta,
+  updateMusicTrack,
+  uploadMusicTrackAsset,
 } from "@/lib/music-api"
 import { useMusicContext } from "./MusicContext"
 import { useAuthStore } from "@/lib/auth-store"
@@ -285,7 +287,7 @@ function PlaylistCard({
   return (
     <>
       <div
-        className="glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all hover:ring-1 hover:ring-foreground/20"
+        className="glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all select-none hover:ring-1 hover:ring-foreground/20"
         onClick={onOpen}
       >
         {/* Cover art */}
@@ -453,7 +455,9 @@ function PlaylistDetailModal({
     Awaited<ReturnType<typeof fetchMusicPlaylist>>["playlist"]["tracks"] | null
   >(null)
   const [loading, setLoading] = useState(true)
+  const [updatingCover, setUpdatingCover] = useState(false)
   const dragIndexRef = useRef<number | null>(null)
+  const coverInputRef = useRef<HTMLInputElement | null>(null)
   const handleReorder = useCallback(
     async (from: number, to: number) => {
       if (!tracks) return
@@ -514,6 +518,34 @@ function PlaylistDetailModal({
     setTracks((prev) => prev?.filter((t) => t.id !== trackId) ?? null)
   }
 
+  const handlePlaylistCoverUpdate = async (file: File) => {
+    if (!tracks || tracks.length === 0) return
+    setUpdatingCover(true)
+    try {
+      const upload = await uploadMusicTrackAsset("covers", file)
+      const updated = await Promise.all(
+        tracks.map((track) =>
+          updateMusicTrack(track.id, {
+            title: track.title,
+            artist: track.artist,
+            album: track.album ?? null,
+            genre: track.genre ?? null,
+            coverKey: upload.storageKey,
+          })
+        )
+      )
+      setTracks((prev) => {
+        if (!prev) return prev
+        const updates = new Map(updated.map(({ track }) => [track.id, track]))
+        return prev.map((track) => updates.get(track.id) ?? track)
+      })
+    } catch (err) {
+      console.error("[PlaylistSection] cover update error", err)
+    } finally {
+      setUpdatingCover(false)
+    }
+  }
+
   return (
     <Dialog
       open
@@ -523,12 +555,21 @@ function PlaylistDetailModal({
     >
       <DialogContent
         showCloseButton={false}
-        className="flex max-h-[80vh] flex-col"
+        className="flex max-h-[80vh] flex-col select-none"
       >
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>{playlist.name}</DialogTitle>
             <div className="flex items-center gap-2">
+              {canManage && (
+                <button
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={!tracks || tracks.length === 0 || updatingCover}
+                  className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                >
+                  Cover art
+                </button>
+              )}
               <button
                 onClick={() => handlePlay(undefined, false)}
                 disabled={!tracks || tracks.length === 0}
@@ -546,6 +587,19 @@ function PlaylistDetailModal({
             </div>
           </div>
         </DialogHeader>
+        {canManage && (
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void handlePlaylistCoverUpdate(file)
+              event.target.value = ""
+            }}
+          />
+        )}
 
         <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
           {loading ? (
@@ -557,7 +611,7 @@ function PlaylistDetailModal({
               No tracks in this playlist.
             </p>
           ) : (
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 select-none">
               {tracks.map((track, i) => (
                 <div
                   key={track.id}

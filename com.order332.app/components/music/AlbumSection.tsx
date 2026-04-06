@@ -1,8 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { Music2, Play, Shuffle } from "lucide-react"
-import { type MusicTrackMeta } from "@/lib/music-api"
+import { useRef, useState } from "react"
+import { Music2, Pencil, Play, Shuffle } from "lucide-react"
+import {
+  type MusicTrackMeta,
+  updateMusicTrack,
+  uploadMusicTrackAsset,
+} from "@/lib/music-api"
 import { cn } from "@/lib/utils"
 import { useMusicContext } from "./MusicContext"
 import { useAudioPlayer } from "@/components/ui/audio-player"
@@ -17,7 +21,8 @@ interface AlbumInfo {
 const MAX_VISIBLE = 5
 
 export function AlbumSection() {
-  const { tracks, playAlbum, currentTrackId } = useMusicContext()
+  const { tracks, playAlbum, currentTrackId, isCreatorMode, updateTrack } =
+    useMusicContext()
   const player = useAudioPlayer()
   const [showAll, setShowAll] = useState(false)
 
@@ -72,6 +77,8 @@ export function AlbumSection() {
               onPlay={() => playAlbum(album.name, undefined, false)}
               onShuffle={() => playAlbum(album.name, undefined, true)}
               tracks={albumTracks}
+              canEditCover={isCreatorMode}
+              onUpdateTrack={updateTrack}
             />
           )
         })}
@@ -87,6 +94,8 @@ interface AlbumCardProps {
   onPlay: () => void
   onShuffle: () => void
   tracks: MusicTrackMeta[]
+  canEditCover: boolean
+  onUpdateTrack: (track: MusicTrackMeta) => void
 }
 
 function AlbumCard({
@@ -96,11 +105,40 @@ function AlbumCard({
   onPlay,
   onShuffle,
   tracks,
+  canEditCover,
+  onUpdateTrack,
 }: AlbumCardProps) {
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  const [updatingCover, setUpdatingCover] = useState(false)
+
+  const handleCoverUpdate = async (file: File) => {
+    if (tracks.length === 0) return
+    setUpdatingCover(true)
+    try {
+      const upload = await uploadMusicTrackAsset("covers", file)
+      const updatedTracks = await Promise.all(
+        tracks.map((track) =>
+          updateMusicTrack(track.id, {
+            title: track.title,
+            artist: track.artist,
+            album: track.album ?? null,
+            genre: track.genre ?? null,
+            coverKey: upload.storageKey,
+          })
+        )
+      )
+      updatedTracks.forEach(({ track }) => onUpdateTrack(track))
+    } catch (err) {
+      console.error("[AlbumSection] cover update error", err)
+    } finally {
+      setUpdatingCover(false)
+    }
+  }
+
   return (
     <div
       className={cn(
-        "glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all",
+        "glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all select-none",
         isActive && "ring-1 ring-foreground/30"
       )}
       onClick={onPlay}
@@ -194,6 +232,33 @@ function AlbumCard({
           <Shuffle className="h-3 w-3" />
         </button>
       </div>
+      {canEditCover && (
+        <>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (!updatingCover) coverInputRef.current?.click()
+            }}
+            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100 hover:bg-foreground/80"
+            aria-label="Edit album art"
+            title="Edit album art"
+            disabled={updatingCover}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void handleCoverUpdate(file)
+              event.target.value = ""
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }

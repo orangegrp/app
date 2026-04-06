@@ -184,18 +184,33 @@ function QueuePanelContent() {
 
   const onDragStart = (index: number, event: DragEvent<HTMLDivElement>) => {
     dragIndexRef.current = index
+    event.dataTransfer.effectAllowed = "move"
     event.dataTransfer?.setData("text/plain", String(index))
   }
 
   const onDrop = (index: number, event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-    if (dragIndexRef.current === null) return
-    reorderQueue(dragIndexRef.current, index)
+    const dragIndexFromData = Number.parseInt(
+      event.dataTransfer?.getData("text/plain") ?? "",
+      10
+    )
+    const from =
+      dragIndexRef.current ??
+      (Number.isFinite(dragIndexFromData) ? dragIndexFromData : null)
+    if (from === null || from === index) {
+      dragIndexRef.current = null
+      return
+    }
+    reorderQueue(from, index)
     dragIndexRef.current = null
   }
 
   const onDragOver = (event: DragEvent<HTMLDivElement>) =>
     event.preventDefault()
+
+  const onDragEnd = () => {
+    dragIndexRef.current = null
+  }
 
   const hasQueueEntries =
     previousTracks.length > 0 ||
@@ -234,13 +249,14 @@ function QueuePanelContent() {
           : undefined
       }
       onDragOver={options.showHandle ? onDragOver : undefined}
+      onDragEnd={options.showHandle ? onDragEnd : undefined}
       onDrop={
         options.showHandle
           ? (event) => onDrop(options.dragIndex ?? 0, event)
           : undefined
       }
       className={cn(
-        options.showHandle ? "group/qi" : "",
+        options.showHandle ? "group/qi cursor-grab active:cursor-grabbing" : "",
         rowClasses(options.isCurrent ?? false, options.faded ?? false)
       )}
     >
@@ -328,7 +344,7 @@ function QueuePanelContent() {
           Queue is empty
         </p>
       ) : (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-0.5 select-none">
           {previousTracks.length > 0 && (
             <>
               <p className="mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">

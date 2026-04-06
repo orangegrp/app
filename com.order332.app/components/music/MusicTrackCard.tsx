@@ -189,9 +189,9 @@ export function MusicTrackCard({
   const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
   const iconOverlayButton =
-    "pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/20 backdrop-blur-md transition duration-200 hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+    "pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
   const playOverlayButton =
-    "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full text-white ring-1 ring-white/20 backdrop-blur-xl shadow-[0_25px_45px_rgba(0,0,0,0.35)] transition duration-200 transform-gpu focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+    "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md"
 
   const openEdit = (e?: ReactMouseEvent) => {
     e?.stopPropagation()
@@ -277,7 +277,7 @@ export function MusicTrackCard({
     <div
       {...longPressHandlers}
       className={cn(
-        "glass-card group relative flex flex-col overflow-hidden rounded-xl transition-all",
+        "glass-card group relative flex flex-col overflow-hidden rounded-xl transition-all select-none",
         isActive && "ring-1 ring-foreground/30"
       )}
     >
@@ -334,13 +334,13 @@ export function MusicTrackCard({
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem
-                    onSelect={() => handleMenuAction(() => onPlay())}
+                    onClick={() => handleMenuAction(() => onPlay())}
                   >
                     <Play className="h-3.5 w-3.5" />
                     {showingPlay ? "Pause" : "Play"}
                   </ContextMenuItem>
                   <ContextMenuItem
-                    onSelect={() =>
+                    onClick={() =>
                       handleMenuAction(() => onPlayNext?.(track.id))
                     }
                   >
@@ -348,7 +348,7 @@ export function MusicTrackCard({
                     Play next
                   </ContextMenuItem>
                   <ContextMenuItem
-                    onSelect={() =>
+                    onClick={() =>
                       handleMenuAction(() => onAddToQueue?.(track.id))
                     }
                   >
@@ -357,7 +357,7 @@ export function MusicTrackCard({
                   </ContextMenuItem>
                   {playlists && onAddToPlaylist && (
                     <ContextMenuItem
-                      onSelect={() =>
+                      onClick={() =>
                         handleMenuAction(() => setPlaylistOpen(true))
                       }
                     >
@@ -366,7 +366,7 @@ export function MusicTrackCard({
                     </ContextMenuItem>
                   )}
                   <ContextMenuItem
-                    onSelect={() => handleMenuAction(() => setShareOpen(true))}
+                    onClick={() => handleMenuAction(() => setShareOpen(true))}
                   >
                     <Share2 className="h-3.5 w-3.5" />
                     Share
@@ -375,14 +375,14 @@ export function MusicTrackCard({
                     <>
                       <ContextMenuSeparator />
                       <ContextMenuItem
-                        onSelect={() => handleMenuAction(() => openEdit())}
+                        onClick={() => handleMenuAction(() => openEdit())}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Edit track
                       </ContextMenuItem>
                       <ContextMenuItem
                         variant="destructive"
-                        onSelect={() =>
+                        onClick={() =>
                           handleMenuAction(() => setConfirmOpen(true))
                         }
                       >
@@ -403,16 +403,14 @@ export function MusicTrackCard({
                 type="button"
                 className={cn(
                   playOverlayButton,
-                  showingPlay
-                    ? "bg-white/85 text-foreground ring-white/60"
-                    : "bg-white/15 text-white hover:-translate-y-0.5 hover:bg-white/25"
+                  showingPlay ? "bg-white/20" : "hover:bg-white/20"
                 )}
                 aria-label={showingPlay ? "Pause track" : "Play track"}
               >
                 {showingPlay ? (
-                  <Pause className="h-6 w-6 text-current" />
+                  <Pause className="h-5 w-5 fill-white text-white" />
                 ) : (
-                  <Play className="ml-0.5 h-6 w-6 text-current" />
+                  <Play className="ml-0.5 h-5 w-5 fill-white text-white" />
                 )}
               </button>
             </div>

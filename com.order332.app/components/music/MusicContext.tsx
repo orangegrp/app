@@ -428,7 +428,17 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setUpNext((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
-  const clearQueue = useCallback(() => setUpNext([]), [])
+  const clearQueue = useCallback(() => {
+    setUpNext([])
+    const currentId = currentTrackIdRef.current
+    if (currentId) {
+      setQueue([currentId])
+      setShuffledQueue([currentId])
+      return
+    }
+    setQueue([])
+    setShuffledQueue([])
+  }, [])
   const reorderQueue = useCallback((from: number, to: number) => {
     setUpNext((prev) => moveItem(prev, from, to))
   }, [])

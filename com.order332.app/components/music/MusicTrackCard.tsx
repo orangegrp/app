@@ -194,7 +194,7 @@ export function MusicTrackCard({
   const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
   const iconOverlayButton =
-    "glass-button glass-button-glass pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
+    "glass-button glass-button-glass pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border-white/30 bg-white/22 text-white backdrop-blur-2xl shadow-[0_10px_26px_rgba(0,0,0,0.4)] hover:bg-white/28"
   const playOverlayButton =
     "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/18 ring-1 ring-white/30 backdrop-blur-xl shadow-[0_18px_36px_rgba(0,0,0,0.35)]"
 
@@ -310,9 +310,11 @@ export function MusicTrackCard({
           </div>
         )}
 
+        <div className="pointer-events-none absolute inset-0 bg-black/40" />
+
         <div className="pointer-events-none absolute inset-0">
           <div className="flex h-full flex-col justify-between p-3">
-            <div className="absolute top-2 right-2 flex gap-1 opacity-90 transition-opacity">
+            <div className="absolute top-2 right-2 flex gap-1 transition-opacity">
               <button
                 onClick={(e) => {
                   if (suppressTapRef.current) {

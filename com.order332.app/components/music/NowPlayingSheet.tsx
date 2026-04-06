@@ -425,7 +425,7 @@ function QueuePanelContent() {
           {manualTracks.length > 0 && (
             <>
               <p className="mt-2 mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
-                QUEUE
+                UP NEXT
               </p>
               {manualTracks.map((track, i) =>
                 renderTrackRow(track, i + 1, {
@@ -442,7 +442,7 @@ function QueuePanelContent() {
           {autoTracks.length > 0 && (
             <>
               <p className="mt-2 mb-2 text-[10px] tracking-[0.2em] text-muted-foreground/40">
-                UP NEXT
+                AUTOPLAY
               </p>
               {autoTracks.map((track, i) =>
                 renderTrackRow(track, manualTracks.length + i + 1, {

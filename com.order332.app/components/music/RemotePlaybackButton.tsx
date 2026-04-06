@@ -5,6 +5,10 @@ import { Airplay, Cast } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAudioPlayer } from "@/components/ui/audio-player"
 
+interface WebKitAirPlayMediaElement extends HTMLAudioElement {
+  webkitShowPlaybackTargetPicker?: () => void
+}
+
 interface RemotePlaybackButtonProps {
   className?: string
 }
@@ -30,15 +34,19 @@ export function RemotePlaybackButton({ className }: RemotePlaybackButtonProps) {
 
     remote
       .watchAvailability((avail) => setAvailable(avail))
-      .then((id) => { watchId = id })
-      .catch(() => { /* NotSupportedError — feature unavailable in this env */ })
+      .then((id) => {
+        watchId = id
+      })
+      .catch(() => {
+        /* NotSupportedError — feature unavailable in this env */
+      })
 
     return () => {
       if (watchId != null) {
         remote.cancelWatchAvailability(watchId).catch(() => {})
       }
     }
-  }, []) // player.ref is stable — runs once on mount
+  }, [player.ref])
 
   if (!available) return null
 
@@ -48,13 +56,22 @@ export function RemotePlaybackButton({ className }: RemotePlaybackButtonProps) {
     <button
       onClick={() => {
         const audio = player.ref.current
-        if (!audio || !("remote" in audio)) return
+        if (!audio) return
+
+        if (isApple) {
+          ;(
+            audio as WebKitAirPlayMediaElement
+          ).webkitShowPlaybackTargetPicker?.()
+          return
+        }
+
+        if (!("remote" in audio)) return
         audio.remote.prompt().catch(() => {})
       }}
       className={cn(
         "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
         "glass-button glass-button-ghost text-muted-foreground hover:text-foreground",
-        className,
+        className
       )}
       aria-label={isApple ? "AirPlay" : "Cast to device"}
     >

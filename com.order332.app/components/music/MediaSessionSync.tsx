@@ -14,10 +14,14 @@ export function MediaSessionSync() {
   const { currentTrack, playNext, playPrev } = useMusicContext()
   const player = useAudioPlayer()
 
+  const currentTrackRef = useRef(currentTrack)
   const playerRef = useRef(player)
   const playNextRef = useRef(playNext)
   const playPrevRef = useRef(playPrev)
 
+  useEffect(() => {
+    currentTrackRef.current = currentTrack
+  })
   useEffect(() => {
     playerRef.current = player
   })
@@ -61,6 +65,39 @@ export function MediaSessionSync() {
     }
   }, [])
 
+  const reassertMediaSessionState = useCallback(() => {
+    if (!("mediaSession" in navigator)) return
+
+    const track = currentTrackRef.current
+    if (!track) {
+      navigator.mediaSession.metadata = null
+    } else {
+      const coverUrl = track.coverUrl ?? undefined
+      const artwork: NonNullable<MediaMetadataInit["artwork"]> = coverUrl
+        ? ["512x512", "384x384", "256x256", "192x192", "128x128", "96x96"].map(
+            (sizes) => ({
+              src: coverUrl,
+              sizes,
+            })
+          )
+        : []
+
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.artist,
+        album: track.album ?? track.genre ?? undefined,
+        artwork,
+      })
+    }
+
+    const audio = playerRef.current.ref.current
+    if (audio) {
+      navigator.mediaSession.playbackState = audio.paused ? "paused" : "playing"
+    }
+
+    updatePositionState()
+  }, [updatePositionState])
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) return
     if (!currentTrack) {
@@ -69,16 +106,15 @@ export function MediaSessionSync() {
       return
     }
 
-    const artwork: NonNullable<MediaMetadataInit["artwork"]> =
-      currentTrack.coverUrl
-        ? ["96x96", "128x128", "192x192", "256x256", "384x384", "512x512"].map(
-            (sizes) => ({
-              src: currentTrack.coverUrl as string,
-              sizes,
-              type: "image/jpeg",
-            })
-          )
-        : []
+    const coverUrl = currentTrack.coverUrl ?? undefined
+    const artwork: NonNullable<MediaMetadataInit["artwork"]> = coverUrl
+      ? ["512x512", "384x384", "256x256", "192x192", "128x128", "96x96"].map(
+          (sizes) => ({
+            src: coverUrl,
+            sizes,
+          })
+        )
+      : []
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title,
@@ -197,6 +233,36 @@ export function MediaSessionSync() {
       clearHandlers()
     }
   }, [updatePositionState])
+
+  useEffect(() => {
+    const audio = playerRef.current.ref.current
+    if (!audio || !("mediaSession" in navigator)) return
+
+    const sync = () => reassertMediaSessionState()
+
+    audio.addEventListener("webkitcurrentplaybacktargetiswirelesschanged", sync)
+    audio.addEventListener("webkitplaybacktargetavailabilitychanged", sync)
+
+    const remote = "remote" in audio ? audio.remote : null
+    if (remote) {
+      remote.addEventListener("connecting", sync)
+      remote.addEventListener("connect", sync)
+      remote.addEventListener("disconnect", sync)
+    }
+
+    return () => {
+      audio.removeEventListener(
+        "webkitcurrentplaybacktargetiswirelesschanged",
+        sync
+      )
+      audio.removeEventListener("webkitplaybacktargetavailabilitychanged", sync)
+      if (remote) {
+        remote.removeEventListener("connecting", sync)
+        remote.removeEventListener("connect", sync)
+        remote.removeEventListener("disconnect", sync)
+      }
+    }
+  }, [player.ref, reassertMediaSessionState])
 
   return null
 }

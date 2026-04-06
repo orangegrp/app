@@ -39,7 +39,9 @@ export function ContentGrid({
   onFoldersChange,
 }: ContentGridProps) {
   const [createOpen, setCreateOpen] = useState(false)
-  const [renamingFolder, setRenamingFolder] = useState<ContentFolder | null>(null)
+  const [renamingFolder, setRenamingFolder] = useState<ContentFolder | null>(
+    null
+  )
   const [renameValue, setRenameValue] = useState("")
   const [renameLoading, setRenameLoading] = useState(false)
 
@@ -55,11 +57,14 @@ export function ContentGrid({
     if (!renamingFolder || !renameValue.trim()) return
     setRenameLoading(true)
     try {
-      const { folder: updated } = await renameContentFolder(renamingFolder.id, renameValue.trim())
+      const { folder: updated } = await renameContentFolder(
+        renamingFolder.id,
+        renameValue.trim()
+      )
       onFoldersChange(folders.map((f) => (f.id === updated.id ? updated : f)))
       setRenamingFolder(null)
     } catch (err) {
-      console.error('[ContentGrid] rename error:', err)
+      console.error("[ContentGrid] rename error:", err)
     } finally {
       setRenameLoading(false)
     }
@@ -73,14 +78,15 @@ export function ContentGrid({
       toRemove.add(folder.id)
       onFoldersChange(folders.filter((f) => !toRemove.has(f.id)))
     } catch (err) {
-      console.error('[ContentGrid] delete folder error:', err)
+      console.error("[ContentGrid] delete folder error:", err)
     }
   }
 
   const parentFolderId = currentFolderId
     ? (folders.find((f) => f.id === currentFolderId)?.parentId ?? null)
     : null
-  const isEmpty = currentFolders.length === 0 && items.length === 0 && !currentFolderId
+  const isEmpty =
+    currentFolders.length === 0 && items.length === 0 && !currentFolderId
 
   return (
     <>
@@ -89,7 +95,7 @@ export function ContentGrid({
         {(currentFolders.length > 0 || isCreator || currentFolderId) && (
           <div>
             <p className="card-label mb-3">Folders</p>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 items-start">
+            <div className="grid grid-cols-2 items-start gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {/* Virtual ".." card — drop target to move items to parent; also navigates up */}
               {currentFolderId && (
                 <ParentFolderCard
@@ -100,7 +106,7 @@ export function ContentGrid({
               {isCreator && (
                 <button
                   onClick={() => setCreateOpen(true)}
-                  className="glass-card flex flex-col items-start gap-3 rounded-xl p-4 text-left transition-colors hover:bg-foreground/5 border-2 border-dashed border-foreground/10 hover:border-foreground/20"
+                  className="glass-card flex flex-col items-start gap-3 rounded-xl border-2 border-dashed border-foreground/10 p-4 text-left transition-colors hover:border-foreground/20 hover:bg-foreground/5"
                 >
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/5">
                     <FolderPlus className="h-5 w-5 text-muted-foreground" />
@@ -114,7 +120,10 @@ export function ContentGrid({
                   folder={folder}
                   isCreatorMode={isCreator}
                   onOpen={() => onNavigateFolder(folder.id)}
-                  onRename={() => { setRenamingFolder(folder); setRenameValue(folder.name) }}
+                  onRename={() => {
+                    setRenamingFolder(folder)
+                    setRenameValue(folder.name)
+                  }}
                   onDelete={() => void handleDeleteFolder(folder)}
                   onDrop={(itemId) => onMove(itemId, folder.id)}
                 />
@@ -123,14 +132,16 @@ export function ContentGrid({
           </div>
         )}
 
-        {/* Items section — CSS columns for natural card heights (masonry feel) */}
+        {/* Items section */}
         {items.length > 0 && (
           <div>
-            {(currentFolders.length > 0 || currentFolderId) && <p className="card-label mb-3">Files</p>}
+            {(currentFolders.length > 0 || currentFolderId) && (
+              <p className="card-label mb-3">Files</p>
+            )}
             <AudioPlayerProvider>
-              <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                 {items.map((item) => (
-                  <div key={item.id} className="mb-4 break-inside-avoid">
+                  <div key={item.id}>
                     <ContentItemCard
                       item={item}
                       isCreator={isCreator}
@@ -146,7 +157,9 @@ export function ContentGrid({
 
         {isEmpty && (
           <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-foreground/10">
-            <p className="text-sm text-muted-foreground tracking-wider">No content yet.</p>
+            <p className="text-sm tracking-wider text-muted-foreground">
+              No content yet.
+            </p>
           </div>
         )}
       </div>
@@ -167,12 +180,16 @@ export function ContentGrid({
             className="glass-card w-full max-w-sm rounded-2xl p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="mb-4 text-sm font-semibold text-foreground">Rename Folder</p>
+            <p className="mb-4 text-sm font-semibold text-foreground">
+              Rename Folder
+            </p>
             <input
               type="text"
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleRenameConfirm() }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleRenameConfirm()
+              }}
               maxLength={200}
               autoFocus
               className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-foreground/20 focus:outline-none"
@@ -180,14 +197,14 @@ export function ContentGrid({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setRenamingFolder(null)}
-                className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 Cancel
               </button>
               <button
                 onClick={() => void handleRenameConfirm()}
                 disabled={!renameValue.trim() || renameLoading}
-                className="rounded-lg bg-foreground px-3 py-1.5 text-sm text-background hover:opacity-80 transition-opacity disabled:opacity-40"
+                className="rounded-lg bg-foreground px-3 py-1.5 text-sm text-background transition-opacity hover:opacity-80 disabled:opacity-40"
               >
                 {renameLoading ? "Saving…" : "Save"}
               </button>
@@ -199,13 +216,19 @@ export function ContentGrid({
   )
 }
 
-function ParentFolderCard({ onNavigate, onDrop }: { onNavigate: () => void; onDrop: (itemId: string) => void }) {
+function ParentFolderCard({
+  onNavigate,
+  onDrop,
+}: {
+  onNavigate: () => void
+  onDrop: (itemId: string) => void
+}) {
   const [isDragOver, setIsDragOver] = useState(false)
 
   const handleDragOver = (e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('application/x-content-item-id')) return
+    if (!e.dataTransfer.types.includes("application/x-content-item-id")) return
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+    e.dataTransfer.dropEffect = "move"
     setIsDragOver(true)
   }
 
@@ -216,7 +239,7 @@ function ParentFolderCard({ onNavigate, onDrop }: { onNavigate: () => void; onDr
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-    const itemId = e.dataTransfer.getData('application/x-content-item-id')
+    const itemId = e.dataTransfer.getData("application/x-content-item-id")
     if (itemId) onDrop(itemId)
   }
 
@@ -224,13 +247,16 @@ function ParentFolderCard({ onNavigate, onDrop }: { onNavigate: () => void; onDr
     <div
       className={cn(
         "glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-shadow",
-        isDragOver && "ring-2 ring-foreground/40 bg-foreground/5",
+        isDragOver && "bg-foreground/5 ring-2 ring-foreground/40"
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <button onClick={onNavigate} className="flex flex-col items-start gap-3 p-4 text-left w-full">
+      <button
+        onClick={onNavigate}
+        className="flex w-full flex-col items-start gap-3 p-4 text-left"
+      >
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/5">
           <FolderOpen className="h-5 w-5 text-muted-foreground" />
         </div>
@@ -240,7 +266,10 @@ function ParentFolderCard({ onNavigate, onDrop }: { onNavigate: () => void; onDr
   )
 }
 
-function collectDescendants(folders: ContentFolder[], rootId: string): Set<string> {
+function collectDescendants(
+  folders: ContentFolder[],
+  rootId: string
+): Set<string> {
   const result = new Set<string>()
   const queue = [rootId]
   while (queue.length > 0) {

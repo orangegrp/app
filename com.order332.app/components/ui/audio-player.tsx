@@ -250,7 +250,8 @@ export function AudioPlayerProvider<TData = unknown>({
     if (!audioRef.current) return
     if (audioRef.current.muted || audioRef.current.volume === 0) {
       audioRef.current.muted = false
-      audioRef.current.volume = prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8
+      audioRef.current.volume =
+        prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8
       setIsMutedState(false)
     } else {
       prevVolumeRef.current = audioRef.current.volume
@@ -273,7 +274,9 @@ export function AudioPlayerProvider<TData = unknown>({
       try {
         // @ts-expect-error — Audio Session API (Chrome 120+)
         navigator.audioSession.type = "playback"
-      } catch { /* unsupported */ }
+      } catch {
+        /* unsupported */
+      }
     }
   }, [])
 
@@ -287,7 +290,9 @@ export function AudioPlayerProvider<TData = unknown>({
         shouldBePlayingRef.current &&
         audio.paused
       ) {
-        audio.play().catch(() => { /* ignore — user may have paused intentionally */ })
+        audio.play().catch(() => {
+          /* ignore — user may have paused intentionally */
+        })
       }
     }
     document.addEventListener("visibilitychange", handle)
@@ -422,7 +427,14 @@ export function AudioPlayerProvider<TData = unknown>({
     <AudioPlayerContext.Provider value={api as AudioPlayerApi<unknown>}>
       <AudioPlayerTimeContext.Provider value={time}>
         {/* x-webkit-airplay enables AirPlay on Safari; Remote Playback API handles routing */}
-        <audio ref={audioRef} className="hidden" crossOrigin="anonymous" x-webkit-airplay="allow" preload="metadata" />
+        <audio
+          ref={audioRef}
+          className="hidden"
+          crossOrigin="anonymous"
+          x-webkit-airplay="allow"
+          preload="metadata"
+          playsInline
+        />
         {children}
       </AudioPlayerTimeContext.Provider>
     </AudioPlayerContext.Provider>
@@ -482,14 +494,14 @@ export const AudioPlayerProgress = ({
         Number.isNaN(player.duration)
       }
     >
-      <SliderPrimitive.Track className="bg-muted relative h-[4px] w-full grow overflow-hidden rounded-full">
-        <SliderPrimitive.Range className="bg-primary absolute h-full" />
+      <SliderPrimitive.Track className="relative h-[4px] w-full grow overflow-hidden rounded-full bg-muted">
+        <SliderPrimitive.Range className="absolute h-full bg-primary" />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
         className="relative flex h-0 w-0 items-center justify-center opacity-0 group-hover/player:opacity-100 focus-visible:opacity-100 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
         data-slot="slider-thumb"
       >
-        <div className="bg-foreground absolute size-3 rounded-full" />
+        <div className="absolute size-3 rounded-full bg-foreground" />
       </SliderPrimitive.Thumb>
     </SliderPrimitive.Root>
   )
@@ -503,7 +515,7 @@ export const AudioPlayerTime = ({
   return (
     <span
       {...otherProps}
-      className={cn("text-muted-foreground text-sm tabular-nums", className)}
+      className={cn("text-sm text-muted-foreground tabular-nums", className)}
     >
       {formatTime(time)}
     </span>
@@ -518,7 +530,7 @@ export const AudioPlayerDuration = ({
   return (
     <span
       {...otherProps}
-      className={cn("text-muted-foreground text-sm tabular-nums", className)}
+      className={cn("text-sm text-muted-foreground tabular-nums", className)}
     >
       {player.duration !== null &&
       player.duration !== undefined &&
@@ -537,7 +549,7 @@ function Spinner({ className }: SpinnerProps) {
   return (
     <div
       className={cn(
-        "border-muted border-t-foreground size-3.5 animate-spin rounded-full border-2",
+        "size-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground",
         className
       )}
       role="status"
@@ -593,8 +605,9 @@ const PlayButton = ({
   )
 }
 
-export interface AudioPlayerButtonProps<TData = unknown>
-  extends React.ComponentProps<typeof Button> {
+export interface AudioPlayerButtonProps<
+  TData = unknown,
+> extends React.ComponentProps<typeof Button> {
   item?: AudioPlayerItem<TData>
 }
 
@@ -671,8 +684,9 @@ function useAnimationFrame(callback: Callback) {
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const
 
-export interface AudioPlayerSpeedProps
-  extends React.ComponentProps<typeof Button> {
+export interface AudioPlayerSpeedProps extends React.ComponentProps<
+  typeof Button
+> {
   speeds?: readonly number[]
 }
 
@@ -688,7 +702,19 @@ export function AudioPlayerSpeed({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant={variant} size={size} className={cn(className)} aria-label="Playback speed" {...props} />}><Settings className="size-5" /></DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant={variant}
+            size={size}
+            className={cn(className)}
+            aria-label="Playback speed"
+            {...props}
+          />
+        }
+      >
+        <Settings className="size-5" />
+      </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[120px]">
         {speeds.map((speed) => (
           <DropdownMenuItem
@@ -707,8 +733,10 @@ export function AudioPlayerSpeed({
   )
 }
 
-export interface AudioPlayerSpeedButtonGroupProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
+export interface AudioPlayerSpeedButtonGroupProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "children"
+> {
   speeds?: readonly number[]
 }
 
@@ -765,15 +793,21 @@ export function AudioPlayerVolume({
       {showIcon && (
         <button
           onClick={player.toggleMute}
-          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
           aria-label={player.isMuted ? "Unmute" : "Mute"}
         >
           {player.isMuted || player.volume === 0 ? (
-            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+            </svg>
           ) : player.volume < 0.5 ? (
-            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+              <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
+            </svg>
           ) : (
-            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+            </svg>
           )}
         </button>
       )}
@@ -786,7 +820,7 @@ export function AudioPlayerVolume({
         className="relative flex h-5 w-full touch-none items-center select-none"
         aria-label="Volume"
       >
-        <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-foreground/[0.08] border border-foreground/[0.09]">
+        <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full border border-foreground/[0.09] bg-foreground/[0.08]">
           <SliderPrimitive.Range className="absolute h-full rounded-full bg-foreground/55" />
         </SliderPrimitive.Track>
         <SliderPrimitive.Thumb className="block h-3 w-3 rounded-full bg-foreground/80 shadow focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50" />

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { useAudioPlayer, useAudioPlayerTime } from "@/components/ui/audio-player"
+import { useCallback, useEffect, useRef } from "react"
+import { useAudioPlayer } from "@/components/ui/audio-player"
 import { useMusicContext } from "./MusicContext"
 
 /**
@@ -13,96 +13,187 @@ import { useMusicContext } from "./MusicContext"
 export function MediaSessionSync() {
   const { currentTrack, playNext, playPrev } = useMusicContext()
   const player = useAudioPlayer()
-  const currentTime = useAudioPlayerTime()
 
-  // Stable refs so one-time handlers stay up-to-date without re-registering
   const playerRef = useRef(player)
   const playNextRef = useRef(playNext)
   const playPrevRef = useRef(playPrev)
-  const currentTimeRef = useRef(currentTime)
 
-  useEffect(() => { playerRef.current = player })
-  useEffect(() => { playNextRef.current = playNext })
-  useEffect(() => { playPrevRef.current = playPrev })
-  useEffect(() => { currentTimeRef.current = currentTime })
+  useEffect(() => {
+    playerRef.current = player
+  })
+  useEffect(() => {
+    playNextRef.current = playNext
+  })
+  useEffect(() => {
+    playPrevRef.current = playPrev
+  })
 
-  // ── Metadata ──────────────────────────────────────────────────────────────
+  const updatePositionState = useCallback(() => {
+    if (!("mediaSession" in navigator)) return
+    const audio = playerRef.current.ref.current
+    if (!audio) return
+
+    const duration = audio.duration
+    if (!Number.isFinite(duration) || duration <= 0) {
+      try {
+        navigator.mediaSession.setPositionState({})
+      } catch {
+        // Unsupported or invalid state in this environment
+      }
+      return
+    }
+
+    const rawPosition = Number.isFinite(audio.currentTime)
+      ? audio.currentTime
+      : 0
+    const position = Math.min(Math.max(rawPosition, 0), duration)
+    const rawRate = Number.isFinite(audio.playbackRate) ? audio.playbackRate : 1
+    const playbackRate = rawRate > 0 ? rawRate : 1
+
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate,
+        position,
+      })
+    } catch {
+      // Unsupported or invalid state in this environment
+    }
+  }, [])
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) return
     if (!currentTrack) {
       navigator.mediaSession.metadata = null
+      updatePositionState()
       return
     }
+
+    const artwork: NonNullable<MediaMetadataInit["artwork"]> =
+      currentTrack.coverUrl
+        ? ["96x96", "128x128", "192x192", "256x256", "384x384", "512x512"].map(
+            (sizes) => ({
+              src: currentTrack.coverUrl as string,
+              sizes,
+              type: "image/jpeg",
+            })
+          )
+        : []
+
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title,
       artist: currentTrack.artist,
-      album: currentTrack.genre ?? undefined,
-      artwork: currentTrack.coverUrl
-        ? [{ src: currentTrack.coverUrl, sizes: "512x512", type: "image/jpeg" }]
-        : [],
+      album: currentTrack.album ?? currentTrack.genre ?? undefined,
+      artwork,
     })
-  }, [currentTrack])
 
-  // ── Playback state ────────────────────────────────────────────────────────
+    updatePositionState()
+  }, [currentTrack, updatePositionState])
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) return
-    navigator.mediaSession.playbackState = player.isPlaying ? "playing" : "paused"
+    navigator.mediaSession.playbackState = player.isPlaying
+      ? "playing"
+      : "paused"
   }, [player.isPlaying])
 
-  // ── Position state (1 Hz is plenty for the OS seekbar) ───────────────────
   useEffect(() => {
     if (!("mediaSession" in navigator)) return
-    const id = setInterval(() => {
-      const p = playerRef.current
-      if (!p.duration || !Number.isFinite(p.duration)) return
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: p.duration,
-          playbackRate: p.playbackRate,
-          position: Math.min(currentTimeRef.current, p.duration),
-        })
-      } catch {
-        /* Some environments throw for invalid state — ignore */
-      }
-    }, 1000)
-    return () => clearInterval(id)
-  }, []) // stable — reads via refs
+    const audio = playerRef.current.ref.current
+    if (!audio) return
 
-  // ── Reset position state on track change to avoid stale scrubber ─────────
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return
-    try {
-      navigator.mediaSession.setPositionState({})
-    } catch {
-      /* ignore */
+    const sync = () => updatePositionState()
+
+    sync()
+    audio.addEventListener("timeupdate", sync)
+    audio.addEventListener("durationchange", sync)
+    audio.addEventListener("ratechange", sync)
+    audio.addEventListener("loadedmetadata", sync)
+    audio.addEventListener("seeked", sync)
+    audio.addEventListener("emptied", sync)
+
+    const intervalId = window.setInterval(sync, 500)
+
+    return () => {
+      window.clearInterval(intervalId)
+      audio.removeEventListener("timeupdate", sync)
+      audio.removeEventListener("durationchange", sync)
+      audio.removeEventListener("ratechange", sync)
+      audio.removeEventListener("loadedmetadata", sync)
+      audio.removeEventListener("seeked", sync)
+      audio.removeEventListener("emptied", sync)
     }
-  }, [currentTrack])
+  }, [player.ref, currentTrack?.id, updatePositionState])
 
-  // ── Action handlers (registered once) ────────────────────────────────────
   useEffect(() => {
     if (!("mediaSession" in navigator)) return
 
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ["play", () => playerRef.current.play()],
       ["pause", () => playerRef.current.pause()],
+      ["stop", () => playerRef.current.pause()],
       ["previoustrack", () => playPrevRef.current()],
       ["nexttrack", () => playNextRef.current()],
       [
         "seekto",
-        (d) => { if (d.seekTime != null) playerRef.current.seek(d.seekTime) },
+        (details) => {
+          const audio = playerRef.current.ref.current
+          if (!audio || details.seekTime == null) return
+          const seekTime = Math.max(
+            0,
+            Math.min(details.seekTime, audio.duration || details.seekTime)
+          )
+          if (details.fastSeek && typeof audio.fastSeek === "function") {
+            audio.fastSeek(seekTime)
+          } else {
+            playerRef.current.seek(seekTime)
+          }
+          updatePositionState()
+        },
+      ],
+      [
+        "seekbackward",
+        (details) => {
+          const audio = playerRef.current.ref.current
+          if (!audio) return
+          const offset = details.seekOffset ?? 10
+          playerRef.current.seek(Math.max(0, audio.currentTime - offset))
+          updatePositionState()
+        },
+      ],
+      [
+        "seekforward",
+        (details) => {
+          const audio = playerRef.current.ref.current
+          if (!audio) return
+          const duration = Number.isFinite(audio.duration)
+            ? audio.duration
+            : Infinity
+          const offset = details.seekOffset ?? 10
+          playerRef.current.seek(Math.min(duration, audio.currentTime + offset))
+          updatePositionState()
+        },
       ],
     ]
 
     for (const [action, handler] of handlers) {
-      try { navigator.mediaSession.setActionHandler(action, handler) } catch { /* unsupported */ }
+      try {
+        navigator.mediaSession.setActionHandler(action, handler)
+      } catch {
+        // Action not supported in this browser
+      }
     }
 
     return () => {
       for (const [action] of handlers) {
-        try { navigator.mediaSession.setActionHandler(action, null) } catch { /* ignore */ }
+        try {
+          navigator.mediaSession.setActionHandler(action, null)
+        } catch {
+          // Ignore unsupported cleanup failures
+        }
       }
     }
-  }, []) // stable — reads via refs
+  }, [updatePositionState])
 
   return null
 }

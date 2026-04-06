@@ -1,30 +1,33 @@
-'use client'
+"use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { ToggleLeft, ToggleRight } from 'lucide-react'
-import { PageBackground } from '@/components/layout/PageBackground'
-import { ContentFilterBar } from '@/components/content/ContentFilterBar'
-import { ContentGrid } from '@/components/content/ContentGrid'
-import { ContentUploadArea } from '@/components/content/ContentUploadArea'
-import { FolderBreadcrumb } from '@/components/content/FolderBreadcrumb'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { ToggleLeft, ToggleRight } from "lucide-react"
+import { PageBackground } from "@/components/layout/PageBackground"
+import { ContentFilterBar } from "@/components/content/ContentFilterBar"
+import { ContentGrid } from "@/components/content/ContentGrid"
+import { ContentUploadArea } from "@/components/content/ContentUploadArea"
+import { FolderBreadcrumb } from "@/components/content/FolderBreadcrumb"
 import {
   fetchContentItems,
   fetchContentFolders,
   deleteContentItem,
   moveContentItem,
   pollVtScans,
+  normalizeContentItemType,
   type ContentItemMeta,
   type ContentItemType,
   type ContentFolder,
-} from '@/lib/content-api'
-import { hasPermission } from '@/lib/permissions'
-import { useAuthStore } from '@/lib/auth-store'
-import { PERMISSIONS } from '@/lib/permissions'
+} from "@/lib/content-api"
+import { hasPermission } from "@/lib/permissions"
+import { useAuthStore } from "@/lib/auth-store"
+import { PERMISSIONS } from "@/lib/permissions"
 
 export default function ContentPage() {
   const user = useAuthStore((s) => s.user)
-  const isCreator = user ? hasPermission(user.permissions, PERMISSIONS.APP_CONTENT_UPLOAD) : false
+  const isCreator = user
+    ? hasPermission(user.permissions, PERMISSIONS.APP_CONTENT_UPLOAD)
+    : false
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -32,8 +35,8 @@ export default function ContentPage() {
   const [items, setItems] = useState<ContentItemMeta[]>([])
   const [folders, setFolders] = useState<ContentFolder[]>([])
   const [filter, setFilter] = useState<ContentItemType | undefined>(undefined)
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(
-    () => searchParams.get('folder')
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(() =>
+    searchParams.get("folder")
   )
   const [isCreatorMode, setIsCreatorMode] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -42,17 +45,20 @@ export default function ContentPage() {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Sync folder navigation to URL
-  const navigateFolder = useCallback((id: string | null) => {
-    setCurrentFolderId(id)
-    setFilter(undefined) // reset filter on folder change
-    const params = new URLSearchParams(searchParams.toString())
-    if (id) {
-      params.set('folder', id)
-    } else {
-      params.delete('folder')
-    }
-    router.replace(`/content?${params.toString()}`, { scroll: false })
-  }, [router, searchParams])
+  const navigateFolder = useCallback(
+    (id: string | null) => {
+      setCurrentFolderId(id)
+      setFilter(undefined) // reset filter on folder change
+      const params = new URLSearchParams(searchParams.toString())
+      if (id) {
+        params.set("folder", id)
+      } else {
+        params.delete("folder")
+      }
+      router.replace(`/content?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams]
+  )
 
   const loadItems = useCallback(async (folderId: string | null) => {
     try {
@@ -60,7 +66,7 @@ export default function ContentPage() {
       const { items: fetched } = await fetchContentItems(undefined, folderId)
       setItems(fetched)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load content')
+      setError(err instanceof Error ? err.message : "Failed to load content")
     } finally {
       setLoading(false)
     }
@@ -71,14 +77,19 @@ export default function ContentPage() {
     setLoading(true)
     void Promise.all([
       loadItems(currentFolderId),
-      fetchContentFolders().then(({ folders: f }) => setFolders(f)).catch(console.error),
+      fetchContentFolders()
+        .then(({ folders: f }) => setFolders(f))
+        .catch(console.error),
     ])
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-load items when folder changes (skip initial mount — handled above)
   const isFirstRender = useRef(true)
   useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return }
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
     setLoading(true)
     void loadItems(currentFolderId)
   }, [currentFolderId, loadItems])
@@ -86,7 +97,7 @@ export default function ContentPage() {
   // VT scan polling: start/stop based on whether any items are pending
   useEffect(() => {
     const hasPending = items.some(
-      (i) => i.vtScanStatus === 'scanning' || i.vtScanStatus === 'pending'
+      (i) => i.vtScanStatus === "scanning" || i.vtScanStatus === "pending"
     )
 
     if (hasPending && !pollIntervalRef.current) {
@@ -94,7 +105,10 @@ export default function ContentPage() {
         try {
           const { stillPending } = await pollVtScans()
           // Re-fetch to get updated statuses
-          const { items: refreshed } = await fetchContentItems(undefined, currentFolderId)
+          const { items: refreshed } = await fetchContentItems(
+            undefined,
+            currentFolderId
+          )
           setItems(refreshed)
           if (stillPending === 0) {
             clearInterval(pollIntervalRef.current!)
@@ -118,8 +132,13 @@ export default function ContentPage() {
   }, [items, currentFolderId])
 
   const filteredItems = useMemo(
-    () => (filter ? items.filter((i) => i.itemType === filter) : items),
-    [items, filter],
+    () =>
+      filter
+        ? items.filter(
+            (i) => normalizeContentItemType(i.itemType, i.mimeType) === filter
+          )
+        : items,
+    [items, filter]
   )
 
   const handleUploadComplete = useCallback((item: ContentItemMeta) => {
@@ -131,7 +150,7 @@ export default function ContentPage() {
       await deleteContentItem(id)
       setItems((prev) => prev.filter((i) => i.id !== id))
     } catch (err) {
-      console.error('[content] delete error:', err)
+      console.error("[content] delete error:", err)
     }
   }, [])
 
@@ -139,57 +158,80 @@ export default function ContentPage() {
     setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)))
   }, [])
 
-  const handleMove = useCallback(async (itemId: string, folderId: string | null) => {
-    // Optimistically remove from current view (item is moving to a different folder)
-    setItems((prev) => prev.filter((i) => i.id !== itemId))
-    try {
-      await moveContentItem(itemId, folderId)
-    } catch (err) {
-      console.error('[content] move error:', err)
-      // Re-fetch on failure to restore correct state
-      void loadItems(currentFolderId)
-    }
-  }, [currentFolderId, loadItems])
+  const handleMove = useCallback(
+    async (itemId: string, folderId: string | null) => {
+      // Optimistically remove from current view (item is moving to a different folder)
+      setItems((prev) => prev.filter((i) => i.id !== itemId))
+      try {
+        await moveContentItem(itemId, folderId)
+      } catch (err) {
+        console.error("[content] move error:", err)
+        // Re-fetch on failure to restore correct state
+        void loadItems(currentFolderId)
+      }
+    },
+    [currentFolderId, loadItems]
+  )
 
   return (
-    <div className="page-root relative min-h-screen px-6 pb-32 pt-8 sm:pt-10">
+    <div className="page-root relative min-h-screen px-6 pt-8 pb-32 sm:pt-10">
       <PageBackground />
       <div className="relative z-10 mx-auto max-w-6xl">
         <p className="section-label">Content Library</p>
 
         <div className="mb-8 flex items-start justify-between gap-4">
           <div className="flex items-center">
-            <h2 className="text-4xl tracking-widest text-foreground flex items-center">
+            <h2 className="flex items-center text-4xl tracking-widest text-foreground">
               Content Library<span className="blink-cursor">_</span>
             </h2>
           </div>
           {isCreator && (
             <button
               onClick={() => setIsCreatorMode((v) => !v)}
-              className="mt-1 flex shrink-0 items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="mt-1 flex shrink-0 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              {isCreatorMode
-                ? <ToggleRight className="h-5 w-5 text-foreground" />
-                : <ToggleLeft className="h-5 w-5" />}
+              {isCreatorMode ? (
+                <ToggleRight className="h-5 w-5 text-foreground" />
+              ) : (
+                <ToggleLeft className="h-5 w-5" />
+              )}
               Creator mode
             </button>
           )}
         </div>
 
-        <div className="rounded-2xl px-5 py-4 mb-10 border border-blue-500/30 bg-blue-400/10 flex items-start gap-3 backdrop-blur-md">
-          <svg className="mt-0.5 h-4 w-4 shrink-0 text-blue-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="mb-10 flex items-start gap-3 rounded-2xl border border-blue-500/30 bg-blue-400/10 px-5 py-4 backdrop-blur-md">
+          <svg
+            className="mt-0.5 h-4 w-4 shrink-0 text-blue-400/80"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <div>
             <p className="card-label mb-1 text-blue-400/80">Disclaimer</p>
-            <p className="text-xs text-blue-200/60 tracking-wider leading-relaxed">
-              Uploaded files are automatically scanned for malware and other threats using multiple engines powered by VirusTotal. However, absolute safety cannot be guaranteed.<br />
-              <span className="font-medium text-blue-300/80">Be cautious</span> when downloading or opening content, especially if the file has been flagged. Always follow best security practices when studying malware or downloading untrusted content.
+            <p className="text-xs leading-relaxed tracking-wider text-blue-200/60">
+              Uploaded files are automatically scanned for malware and other
+              threats using multiple engines powered by VirusTotal. However,
+              absolute safety cannot be guaranteed.
+              <br />
+              <span className="font-medium text-blue-300/80">
+                Be cautious
+              </span>{" "}
+              when downloading or opening content, especially if the file has
+              been flagged. Always follow best security practices when studying
+              malware or downloading untrusted content.
             </p>
-            <p className="mt-2 text-xs text-blue-200/60 font-bold tracking-wider leading-relaxed">
-            Neither 332 nor the operator of this service is or can be held responsible for any damage or loss associated with any content on this service.
+            <p className="mt-2 text-xs leading-relaxed font-bold tracking-wider text-blue-200/60">
+              Neither 332 nor the operator of this service is or can be held
+              responsible for any damage or loss associated with any content on
+              this service.
             </p>
           </div>
         </div>

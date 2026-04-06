@@ -1,10 +1,34 @@
 "use client"
 
 import { useState } from "react"
-import { Download, ExternalLink, File, FileText, Loader2, Music, Shield, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react"
+import {
+  Download,
+  ExternalLink,
+  File,
+  FileText,
+  Loader2,
+  Music,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  Trash2,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatFileSize, retryVtScan, type ContentItemMeta, type VtScanStatus, type VtScanStats } from "@/lib/content-api"
-import { AudioPlayerButton, AudioPlayerProgress, AudioPlayerTime, AudioPlayerDuration } from "@/components/ui/audio-player"
+import {
+  formatFileSize,
+  normalizeContentItemType,
+  retryVtScan,
+  type ContentItemMeta,
+  type VtScanStatus,
+  type VtScanStats,
+} from "@/lib/content-api"
+import {
+  AudioPlayerButton,
+  AudioPlayerProgress,
+  AudioPlayerTime,
+  AudioPlayerDuration,
+} from "@/components/ui/audio-player"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -24,7 +48,12 @@ interface ContentItemCardProps {
   onUpdate: (item: ContentItemMeta) => void
 }
 
-export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: ContentItemCardProps) {
+export function ContentItemCard({
+  item,
+  isCreator,
+  onDelete,
+  onUpdate,
+}: ContentItemCardProps) {
   const [imageExpanded, setImageExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -33,8 +62,15 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
   // When set, the VT dialog shows a "Download anyway" CTA for flagged files
   const [vtDownloadFn, setVtDownloadFn] = useState<(() => void) | null>(null)
 
-  const openVtInfo = () => { setVtDownloadFn(null); setVtOpen(true) }
-  const openVtGate = (fn: () => void) => { setVtDownloadFn(() => fn); setVtOpen(true) }
+  const openVtInfo = () => {
+    setVtDownloadFn(null)
+    setVtOpen(true)
+  }
+  const openVtGate = (fn: () => void) => {
+    setVtDownloadFn(() => fn)
+    setVtOpen(true)
+  }
+  const itemType = normalizeContentItemType(item.itemType, item.mimeType)
 
   const handleRetry = async () => {
     try {
@@ -42,7 +78,7 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
       onUpdate(updated)
       setVtOpen(false)
     } catch (err) {
-      console.error('[ContentItemCard] retry error:', err)
+      console.error("[ContentItemCard] retry error:", err)
     }
   }
 
@@ -54,17 +90,27 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
 
   return (
     <div
-      className={cn("glass-card group relative flex flex-col overflow-hidden rounded-xl cursor-grab active:cursor-grabbing", isDragging && "opacity-50")}
+      className={cn(
+        "glass-card group relative flex cursor-grab flex-col overflow-hidden rounded-xl active:cursor-grabbing",
+        isDragging && "opacity-50"
+      )}
       draggable
-      onDragStart={(e) => { e.dataTransfer.setData('application/x-content-item-id', item.id); e.dataTransfer.effectAllowed = 'move'; setIsDragging(true) }}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-content-item-id", item.id)
+        e.dataTransfer.effectAllowed = "move"
+        setIsDragging(true)
+      }}
       onDragEnd={() => setIsDragging(false)}
     >
       {/* Creator delete button */}
       {isCreator && (
         <button
-          onClick={(e) => { e.stopPropagation(); setConfirmOpen(true) }}
+          onClick={(e) => {
+            e.stopPropagation()
+            setConfirmOpen(true)
+          }}
           disabled={deleting}
-          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/80"
+          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/80"
           aria-label="Delete item"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -77,25 +123,39 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
           <AlertDialogHeader>
             <AlertDialogTitle>Delete item?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{item.title}" will be permanently deleted and cannot be recovered.
+              &quot;{item.title}&quot; will be permanently deleted and cannot be
+              recovered.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleDeleteConfirm}>Delete</AlertDialogAction>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+            >
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {item.itemType === "image" && (
+      {itemType === "image" && (
         <ImageCard item={item} onExpand={() => setImageExpanded(true)} />
       )}
-      {item.itemType === "audio" && <AudioCard item={item} />}
-      {item.itemType === "pdf" && <PdfCard item={item} onVtBadge={openVtInfo} onVtGate={openVtGate} />}
-      {item.itemType === "download" && <DownloadCard item={item} onVtBadge={openVtInfo} onVtGate={openVtGate} />}
+      {itemType === "audio" && <AudioCard item={item} />}
+      {itemType === "pdf" && (
+        <PdfCard item={item} onVtBadge={openVtInfo} onVtGate={openVtGate} />
+      )}
+      {itemType === "download" && (
+        <DownloadCard
+          item={item}
+          onVtBadge={openVtInfo}
+          onVtGate={openVtGate}
+        />
+      )}
 
       {/* Image expand dialog */}
-      {item.itemType === "image" && (
+      {itemType === "image" && (
         <Dialog open={imageExpanded} onOpenChange={setImageExpanded}>
           <DialogContent className="max-w-4xl p-2">
             <DialogTitle className="sr-only">{item.title}</DialogTitle>
@@ -124,11 +184,17 @@ export function ContentItemCard({ item, isCreator, onDelete, onUpdate }: Content
 
 // ── Image ────────────────────────────────────────────────────────────────────
 
-function ImageCard({ item, onExpand }: { item: ContentItemMeta; onExpand: () => void }) {
+function ImageCard({
+  item,
+  onExpand,
+}: {
+  item: ContentItemMeta
+  onExpand: () => void
+}) {
   return (
     <div className="flex flex-col">
       {/* Natural-ratio image — no forced aspect-square */}
-      <button onClick={onExpand} className="w-full text-left overflow-hidden">
+      <button onClick={onExpand} className="w-full overflow-hidden text-left">
         <img
           src={item.publicUrl}
           alt={item.title}
@@ -138,14 +204,18 @@ function ImageCard({ item, onExpand }: { item: ContentItemMeta; onExpand: () => 
       </button>
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-          <p className="text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
+          <p className="truncate text-sm font-medium text-foreground">
+            {item.title}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {formatFileSize(item.fileSize)}
+          </p>
         </div>
         <a
           href={item.publicUrl}
           download={item.title}
           onClick={(e) => e.stopPropagation()}
-          className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/8 hover:text-foreground transition-colors"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/8 hover:text-foreground"
           aria-label="Download image"
           title="Download"
         >
@@ -167,15 +237,24 @@ function AudioCard({ item }: { item: ContentItemMeta }) {
         <Music className="h-5 w-5 text-muted-foreground" />
       </div>
       <div>
-        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-        <p className="text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {item.title}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {formatFileSize(item.fileSize)}
+        </p>
       </div>
       <div className="flex items-center gap-3">
-        <AudioPlayerButton item={audioItem} size="sm" variant="ghost" className="h-8 w-8 rounded-full p-0" />
+        <AudioPlayerButton
+          item={audioItem}
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 rounded-full p-0"
+        />
         <div className="flex-1">
           <AudioPlayerProgress className="w-full" />
         </div>
-        <div className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+        <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
           <AudioPlayerTime />
           <span>/</span>
           <AudioPlayerDuration />
@@ -184,7 +263,7 @@ function AudioCard({ item }: { item: ContentItemMeta }) {
       <a
         href={item.publicUrl}
         download={item.title}
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
+        className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <Download className="h-3.5 w-3.5" />
         Download
@@ -199,15 +278,24 @@ function PdfCard({
   item,
   onVtBadge,
   onVtGate,
-}: { item: ContentItemMeta; onVtBadge: () => void; onVtGate: (fn: () => void) => void }) {
+}: {
+  item: ContentItemMeta
+  onVtBadge: () => void
+  onVtGate: (fn: () => void) => void
+}) {
   const status = item.vtScanStatus
   const isBlocked = status === "pending" || status === "scanning"
 
   const handleOpen = (e: React.MouseEvent) => {
-    if (isBlocked) { e.preventDefault(); return }
+    if (isBlocked) {
+      e.preventDefault()
+      return
+    }
     if (status === "flagged" || status === "error") {
       e.preventDefault()
-      onVtGate(() => window.open(item.publicUrl, "_blank", "noopener,noreferrer"))
+      onVtGate(() =>
+        window.open(item.publicUrl, "_blank", "noopener,noreferrer")
+      )
     }
   }
 
@@ -220,11 +308,17 @@ function PdfCard({
         <VtBadge status={status} stats={item.vtScanStats} onClick={onVtBadge} />
       </div>
       <div>
-        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {item.title}
+        </p>
         {item.description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {item.description}
+          </p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(item.fileSize)} · PDF</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {formatFileSize(item.fileSize)} · PDF
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <a
@@ -234,7 +328,9 @@ function PdfCard({
           onClick={handleOpen}
           className={cn(
             "inline-flex items-center gap-1.5 text-xs transition-colors",
-            isBlocked ? "cursor-not-allowed text-muted-foreground/40" : "text-muted-foreground hover:text-foreground",
+            isBlocked
+              ? "pointer-events-none cursor-not-allowed text-muted-foreground/40"
+              : "text-muted-foreground hover:text-foreground"
           )}
           aria-disabled={isBlocked}
           title={isBlocked ? "Awaiting scan" : "Open in new tab"}
@@ -246,7 +342,10 @@ function PdfCard({
           href={isBlocked ? undefined : item.publicUrl}
           download={item.title}
           onClick={(e) => {
-            if (isBlocked) { e.preventDefault(); return }
+            if (isBlocked) {
+              e.preventDefault()
+              return
+            }
             if (status === "flagged" || status === "error") {
               e.preventDefault()
               onVtGate(() => {
@@ -260,7 +359,9 @@ function PdfCard({
           }}
           className={cn(
             "inline-flex items-center gap-1.5 text-xs transition-colors",
-            isBlocked ? "cursor-not-allowed text-muted-foreground/40" : "text-muted-foreground hover:text-foreground",
+            isBlocked
+              ? "pointer-events-none cursor-not-allowed text-muted-foreground/40"
+              : "text-muted-foreground hover:text-foreground"
           )}
           aria-disabled={isBlocked}
           title={isBlocked ? "Awaiting scan" : "Download"}
@@ -279,7 +380,11 @@ function DownloadCard({
   item,
   onVtBadge,
   onVtGate,
-}: { item: ContentItemMeta; onVtBadge: () => void; onVtGate: (fn: () => void) => void }) {
+}: {
+  item: ContentItemMeta
+  onVtBadge: () => void
+  onVtGate: (fn: () => void) => void
+}) {
   const status = item.vtScanStatus
   const isBlocked = status === "pending" || status === "scanning"
   const needsGate = status === "flagged" || status === "error"
@@ -293,8 +398,14 @@ function DownloadCard({
   }
 
   const handleDownload = (e: React.MouseEvent) => {
-    if (isBlocked) { e.preventDefault(); return }
-    if (needsGate) { e.preventDefault(); onVtGate(triggerDownload) }
+    if (isBlocked) {
+      e.preventDefault()
+      return
+    }
+    if (needsGate) {
+      e.preventDefault()
+      onVtGate(triggerDownload)
+    }
   }
 
   return (
@@ -306,19 +417,27 @@ function DownloadCard({
         <VtBadge status={status} stats={item.vtScanStats} onClick={onVtBadge} />
       </div>
       <div className="flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {item.title}
+        </p>
         {item.description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {item.description}
+          </p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {formatFileSize(item.fileSize)}
+        </p>
       </div>
       <a
         href={isBlocked ? undefined : item.publicUrl}
         download={item.title}
         onClick={handleDownload}
         className={cn(
-          "inline-flex items-center gap-1.5 text-xs transition-colors w-fit",
-          isBlocked ? "cursor-not-allowed text-muted-foreground/40" : "text-muted-foreground hover:text-foreground",
+          "inline-flex w-fit items-center gap-1.5 text-xs transition-colors",
+          isBlocked
+            ? "pointer-events-none cursor-not-allowed text-muted-foreground/40"
+            : "text-muted-foreground hover:text-foreground"
         )}
         aria-disabled={isBlocked}
         title={isBlocked ? "Awaiting scan" : undefined}
@@ -333,17 +452,28 @@ function DownloadCard({
 // ── VT badge ──────────────────────────────────────────────────────────────────
 // Always rendered for scanned types (not for images/audio which are not_required).
 
-function VtBadge({ status, stats, onClick }: { status: VtScanStatus; stats: VtScanStats | null; onClick: () => void }) {
+function VtBadge({
+  status,
+  stats,
+  onClick,
+}: {
+  status: VtScanStatus
+  stats: VtScanStats | null
+  onClick: () => void
+}) {
   if (status === "not_required") return null
 
   const { icon, label, className } = vtBadgeProps(status, stats)
 
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onClick() }}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-opacity hover:opacity-80",
-        className,
+        className
       )}
       aria-label="VirusTotal scan result"
     >
@@ -363,7 +493,9 @@ function vtBadgeProps(status: VtScanStatus, stats: VtScanStats | null) {
         className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
       }
     case "clean": {
-      const total = stats ? Object.values(stats).reduce((a, b) => a + b, 0) : null
+      const total = stats
+        ? Object.values(stats).reduce((a, b) => a + b, 0)
+        : null
       return {
         icon: <ShieldCheck className="h-2.5 w-2.5" />,
         label: total !== null ? `Clean · ${total}` : "Clean",
@@ -374,7 +506,8 @@ function vtBadgeProps(status: VtScanStatus, stats: VtScanStats | null) {
       const count = (stats?.malicious ?? 0) + (stats?.suspicious ?? 0)
       return {
         icon: <ShieldAlert className="h-2.5 w-2.5" />,
-        label: count > 0 ? `${count} threat${count !== 1 ? "s" : ""}` : "Flagged",
+        label:
+          count > 0 ? `${count} threat${count !== 1 ? "s" : ""}` : "Flagged",
         className: "bg-destructive/10 text-destructive",
       }
     }
@@ -398,14 +531,22 @@ function vtBadgeProps(status: VtScanStatus, stats: VtScanStats | null) {
 interface VtDialogProps {
   open: boolean
   onClose: () => void
-  onDownload?: () => void   // if set → shows "Download anyway" confirm CTA
-  onRetry?: () => Promise<void>   // if set → shows "Retry scan" button (error state)
+  onDownload?: () => void // if set → shows "Download anyway" confirm CTA
+  onRetry?: () => Promise<void> // if set → shows "Retry scan" button (error state)
   status: VtScanStatus
   stats: VtScanStats | null
   vtUrl: string | null
 }
 
-function VtDialog({ open, onClose, onDownload, onRetry, status, stats, vtUrl }: VtDialogProps) {
+function VtDialog({
+  open,
+  onClose,
+  onDownload,
+  onRetry,
+  status,
+  stats,
+  vtUrl,
+}: VtDialogProps) {
   const [retrying, setRetrying] = useState(false)
 
   const handleDownload = () => {
@@ -423,7 +564,9 @@ function VtDialog({ open, onClose, onDownload, onRetry, status, stats, vtUrl }: 
     }
   }
 
-  const total = stats ? Object.values(stats).reduce((a: number, b: number) => a + b, 0) : null
+  const total = stats
+    ? Object.values(stats).reduce((a: number, b: number) => a + b, 0)
+    : null
   const malicious = stats?.malicious ?? 0
   const suspicious = stats?.suspicious ?? 0
 
@@ -431,7 +574,12 @@ function VtDialog({ open, onClose, onDownload, onRetry, status, stats, vtUrl }: 
   const body = vtDialogBody(status, stats, total, malicious, suspicious)
 
   return (
-    <AlertDialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose()
+      }}
+    >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
@@ -447,7 +595,7 @@ function VtDialog({ open, onClose, onDownload, onRetry, status, stats, vtUrl }: 
                   href={vtUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-foreground transition-colors"
+                  className="inline-flex items-center gap-1 underline underline-offset-2 transition-colors hover:text-foreground"
                 >
                   <ExternalLink className="h-3 w-3" />
                   View full VirusTotal report
@@ -484,21 +632,30 @@ function VtDialog({ open, onClose, onDownload, onRetry, status, stats, vtUrl }: 
 
 function vtDialogIcon(status: VtScanStatus) {
   switch (status) {
-    case "clean":    return <ShieldCheck className="h-5 w-5 text-green-500" />
-    case "flagged":  return <ShieldAlert className="h-5 w-5 text-destructive" />
-    case "error":    return <ShieldOff className="h-5 w-5 text-muted-foreground" />
-    default:         return <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
+    case "clean":
+      return <ShieldCheck className="h-5 w-5 text-green-500" />
+    case "flagged":
+      return <ShieldAlert className="h-5 w-5 text-destructive" />
+    case "error":
+      return <ShieldOff className="h-5 w-5 text-muted-foreground" />
+    default:
+      return <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
   }
 }
 
 function vtDialogHeading(status: VtScanStatus, onDownload?: () => void) {
   switch (status) {
-    case "clean":            return "No threats detected"
-    case "flagged":          return onDownload ? "This file may be unsafe" : "Threats detected"
-    case "error":            return "Scan could not complete"
+    case "clean":
+      return "No threats detected"
+    case "flagged":
+      return onDownload ? "This file may be unsafe" : "Threats detected"
+    case "error":
+      return "Scan could not complete"
     case "scanning":
-    case "pending":          return "Scan in progress"
-    default:                 return "VirusTotal scan"
+    case "pending":
+      return "Scan in progress"
+    default:
+      return "VirusTotal scan"
   }
 }
 
@@ -507,7 +664,7 @@ function vtDialogBody(
   stats: VtScanStats | null,
   total: number | null,
   malicious: number,
-  suspicious: number,
+  suspicious: number
 ) {
   switch (status) {
     case "clean":
@@ -516,9 +673,14 @@ function vtDialogBody(
         : "This file passed all security checks."
     case "flagged": {
       const parts: string[] = []
-      if (malicious > 0) parts.push(`${malicious} engine${malicious !== 1 ? "s" : ""} flagged it as malicious`)
+      if (malicious > 0)
+        parts.push(
+          `${malicious} engine${malicious !== 1 ? "s" : ""} flagged it as malicious`
+        )
       if (suspicious > 0) parts.push(`${suspicious} flagged it as suspicious`)
-      return parts.length > 0 ? parts.join(", ") + "." : "One or more security engines flagged this file."
+      return parts.length > 0
+        ? parts.join(", ") + "."
+        : "One or more security engines flagged this file."
     }
     case "error":
       return "VirusTotal could not complete the scan for this file. Proceed with caution."

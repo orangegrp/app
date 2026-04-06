@@ -5,6 +5,8 @@ import {
   ChevronRight,
   GripVertical,
   ImagePlus,
+  ListEnd,
+  ListStart,
   Loader2,
   Music2,
   Pencil,
@@ -452,7 +454,7 @@ function PlaylistDetailModal({
   canManage,
   onClose,
 }: PlaylistDetailModalProps) {
-  const { playPlaylist, removeTrackFromPlaylist } = useMusicContext()
+  const { playPlaylist, removeTrackFromPlaylist, addTracksToQueue, addTracksAsPlayNext } = useMusicContext()
   const [tracks, setTracks] = useState<
     Awaited<ReturnType<typeof fetchMusicPlaylist>>["playlist"]["tracks"] | null
   >(null)
@@ -614,6 +616,20 @@ function PlaylistDetailModal({
                 className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
               >
                 <Shuffle className="h-3 w-3" /> Shuffle
+              </button>
+              <button
+                onClick={() => { if (tracks) { addTracksAsPlayNext(tracks.map(t => t.id)); onClose() } }}
+                disabled={!tracks || tracks.length === 0}
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                <ListStart className="h-3 w-3" /> Play next
+              </button>
+              <button
+                onClick={() => { if (tracks) { addTracksToQueue(tracks.map(t => t.id)); onClose() } }}
+                disabled={!tracks || tracks.length === 0}
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                <ListEnd className="h-3 w-3" /> Add to queue
               </button>
             </div>
           </div>

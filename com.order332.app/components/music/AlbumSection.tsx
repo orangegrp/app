@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { Music2, Pencil, Play, Shuffle } from "lucide-react"
+import { ListEnd, ListStart, Music2, Pencil, Play, Shuffle } from "lucide-react"
 import {
   type MusicTrackMeta,
   updateMusicTrack,
@@ -330,6 +330,8 @@ function AlbumDetailModal({
   onPlayAll,
   onShuffle,
 }: AlbumDetailModalProps) {
+  const { addTracksToQueue, addTracksAsPlayNext } = useMusicContext()
+  const trackIds = tracks.map((t) => t.id)
   return (
     <Dialog
       open
@@ -363,6 +365,20 @@ function AlbumDetailModal({
                 className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
               >
                 <Shuffle className="h-3 w-3" /> Shuffle
+              </button>
+              <button
+                onClick={() => { addTracksAsPlayNext(trackIds); onClose() }}
+                disabled={tracks.length === 0}
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                <ListStart className="h-3 w-3" /> Play next
+              </button>
+              <button
+                onClick={() => { addTracksToQueue(trackIds); onClose() }}
+                disabled={tracks.length === 0}
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                <ListEnd className="h-3 w-3" /> Add to queue
               </button>
             </div>
           </div>

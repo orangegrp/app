@@ -129,6 +129,9 @@ export function AudioPlayerProvider<TData = unknown>({
   const [volume, setVolumeState] = useState<number>(1)
   const [isMuted, setIsMutedState] = useState<boolean>(false)
   const prevVolumeRef = useRef<number>(1)
+  // Tracks whether playback should be active (user intent), separate from
+  // the audio element's paused state which can be changed by the OS.
+  const shouldBePlayingRef = useRef(false)
 
   const setActiveItem = useCallback(
     async (item: AudioPlayerItem<TData> | null) => {
@@ -158,12 +161,20 @@ export function AudioPlayerProvider<TData = unknown>({
       if (!audioRef.current) return
 
       if (playPromiseRef.current) {
+        // Race against a short timeout so a stuck play promise (e.g. iOS
+        // lock-screen interruption) never prevents the next play() call.
+        const timeout = new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("play timeout")), 500)
+        )
         try {
-          await playPromiseRef.current
-        } catch (error) {
-          console.error("Play promise error:", error)
+          await Promise.race([playPromiseRef.current, timeout])
+        } catch {
+          // Ignore — stale rejection or timeout; proceed with new play attempt
         }
+        playPromiseRef.current = null
       }
+
+      shouldBePlayingRef.current = true
 
       if (item === undefined) {
         const playPromise = audioRef.current.play()
@@ -208,6 +219,7 @@ export function AudioPlayerProvider<TData = unknown>({
       }
     }
 
+    shouldBePlayingRef.current = false
     audioRef.current.pause()
     playPromiseRef.current = null
   }, [])
@@ -253,6 +265,34 @@ export function AudioPlayerProvider<TData = unknown>({
     },
     [activeItem]
   )
+
+  // Declare this as a music playback session so the OS keeps audio alive in background
+  useEffect(() => {
+    if (typeof navigator === "undefined") return
+    if ("audioSession" in navigator) {
+      try {
+        // @ts-expect-error — Audio Session API (Chrome 120+)
+        navigator.audioSession.type = "playback"
+      } catch { /* unsupported */ }
+    }
+  }, [])
+
+  // Resume playback after OS-forced pause (e.g. screen lock on iOS PWA)
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const handle = () => {
+      if (
+        document.visibilityState === "visible" &&
+        shouldBePlayingRef.current &&
+        audio.paused
+      ) {
+        audio.play().catch(() => { /* ignore — user may have paused intentionally */ })
+      }
+    }
+    document.addEventListener("visibilitychange", handle)
+    return () => document.removeEventListener("visibilitychange", handle)
+  }, [])
 
   // Animation frame for time tracking only
   useAnimationFrame(() => {

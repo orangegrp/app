@@ -154,6 +154,8 @@ function QueuePanelContent() {
     removeFromQueue,
     clearQueue,
     reorderQueue,
+    playTrack,
+    skipToQueueTrack,
   } = useMusicContext()
 
   const trackById = useMemo(
@@ -276,10 +278,13 @@ function QueuePanelContent() {
       removable?: boolean
       onRemove?: () => void
       dragIndex?: number
+      onClick?: () => void
     } = {}
   ) => (
     <div
       key={`${track.id}-${label}`}
+      role={options.onClick ? "button" : undefined}
+      onClick={options.isCurrent ? undefined : options.onClick}
       draggable={options.showHandle}
       onDragStart={
         options.showHandle
@@ -298,7 +303,7 @@ function QueuePanelContent() {
           : undefined
       }
       className={cn(
-        options.showHandle ? "group/qi cursor-grab active:cursor-grabbing" : "",
+        options.showHandle ? "group/qi cursor-grab active:cursor-grabbing" : options.onClick && !options.isCurrent ? "cursor-pointer" : "",
         options.showHandle &&
           dropIndex === (options.dragIndex ?? -1) &&
           dragIndexRef.current !== (options.dragIndex ?? -1) &&
@@ -429,6 +434,7 @@ function QueuePanelContent() {
                   dragIndex: i,
                   onRemove: () => removeFromQueue(i),
                   isCurrent: track.id === currentTrackId,
+                  onClick: () => skipToQueueTrack(track.id, i),
                 })
               )}
             </>
@@ -441,6 +447,7 @@ function QueuePanelContent() {
               {autoTracks.map((track, i) =>
                 renderTrackRow(track, manualTracks.length + i + 1, {
                   isCurrent: track.id === currentTrackId,
+                  onClick: () => playTrack(track.id),
                 })
               )}
             </>
@@ -720,9 +727,10 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                           text={currentTrack.title}
                           className="text-xl font-semibold tracking-wide text-foreground"
                         />
-                        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                          {currentTrack.artist}
-                        </p>
+                        <ScrollingTitle
+                          text={currentTrack.artist}
+                          className="mt-0.5 text-sm text-muted-foreground"
+                        />
                         {currentTrack.genre && (
                           <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
                             {currentTrack.genre}
@@ -886,9 +894,10 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                       text={currentTrack.title}
                       className="text-xl font-semibold tracking-wide text-foreground"
                     />
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {currentTrack.artist}
-                    </p>
+                    <ScrollingTitle
+                      text={currentTrack.artist}
+                      className="mt-1 text-sm text-muted-foreground"
+                    />
                     {currentTrack.genre && (
                       <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
                         {currentTrack.genre}

@@ -73,6 +73,9 @@ interface MusicContextValue {
   playPrev: () => void
   addToQueue: (id: string) => void
   playNextTrack: (id: string) => void
+  addTracksToQueue: (ids: string[]) => void
+  addTracksAsPlayNext: (ids: string[]) => void
+  skipToQueueTrack: (id: string, upNextIndex?: number) => void
   removeFromQueue: (index: number) => void
   clearQueue: () => void
   toggleShuffle: () => void
@@ -367,6 +370,24 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setUpNext((prev) => [id, ...prev])
   }, [])
 
+  const addTracksToQueue = useCallback((ids: string[]) => {
+    setUpNext((prev) => [...prev, ...ids])
+  }, [])
+
+  const addTracksAsPlayNext = useCallback((ids: string[]) => {
+    setUpNext((prev) => [...ids, ...prev])
+  }, [])
+
+  const skipToQueueTrack = useCallback(
+    (id: string, upNextIndex?: number) => {
+      if (upNextIndex !== undefined) {
+        setUpNext((prev) => prev.filter((_, i) => i !== upNextIndex))
+      }
+      _playById(id)
+    },
+    [_playById]
+  )
+
   const removeFromQueue = useCallback((index: number) => {
     setUpNext((prev) => prev.filter((_, i) => i !== index))
   }, [])
@@ -570,6 +591,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       playPrev,
       addToQueue,
       playNextTrack,
+      addTracksToQueue,
+      addTracksAsPlayNext,
+      skipToQueueTrack,
       removeFromQueue,
       clearQueue,
       reorderQueue,
@@ -597,6 +621,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       tracks, currentTrackId, currentTrack, loading, error,
       queue, shuffledQueue, upNext, shuffle, loop, nowPlayingOpen,
       playTrack, playNext, playPrev, addToQueue, playNextTrack,
+      addTracksToQueue, addTracksAsPlayNext, skipToQueueTrack,
       removeFromQueue, clearQueue, reorderQueue, toggleShuffle, setLoop,
       playAll, playAlbum, playPlaylist, addTrack, removeTrack, updateTrack,
       isCreatorMode, setCreatorMode, isCreator, playlists, playlistsLoading,

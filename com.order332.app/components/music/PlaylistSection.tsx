@@ -47,6 +47,10 @@ import { Button } from "@/components/ui/button"
 
 const SMALL_TILE_BUTTON_CLASS =
   "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
+const DETAIL_ACTION_BUTTON_CLASS =
+  "glass-button glass-button-ghost flex h-9 w-9 items-center justify-center rounded-full p-0 disabled:opacity-40"
+const DETAIL_ACTION_PRIMARY_BUTTON_CLASS =
+  "glass-button glass-button-ghost flex h-10 w-10 items-center justify-center rounded-full p-0 disabled:opacity-40"
 
 export function PlaylistSection() {
   const {
@@ -454,7 +458,12 @@ function PlaylistDetailModal({
   canManage,
   onClose,
 }: PlaylistDetailModalProps) {
-  const { playPlaylist, removeTrackFromPlaylist, addTracksToQueue, addTracksAsPlayNext } = useMusicContext()
+  const {
+    playPlaylist,
+    removeTrackFromPlaylist,
+    addTracksToQueue,
+    addTracksAsPlayNext,
+  } = useMusicContext()
   const [tracks, setTracks] = useState<
     Awaited<ReturnType<typeof fetchMusicPlaylist>>["playlist"]["tracks"] | null
   >(null)
@@ -582,7 +591,7 @@ function PlaylistDetailModal({
         className="flex max-h-[80vh] flex-col select-none"
       >
         <DialogHeader>
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-3">
             <div className="min-w-0">
               <DialogTitle className="truncate">{playlist.name}</DialogTitle>
               {playlist.description && (
@@ -591,12 +600,12 @@ function PlaylistDetailModal({
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {canManage && (
                 <button
                   onClick={() => coverInputRef.current?.click()}
                   disabled={!tracks || tracks.length === 0 || updatingCover}
-                  className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                  className={DETAIL_ACTION_BUTTON_CLASS}
                   aria-label="Add cover art"
                   title="Add cover art"
                 >
@@ -606,30 +615,48 @@ function PlaylistDetailModal({
               <button
                 onClick={() => handlePlay(undefined, false)}
                 disabled={!tracks || tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_PRIMARY_BUTTON_CLASS}
+                aria-label="Play playlist"
+                title="Play playlist"
               >
-                <Play className="h-3 w-3 fill-current" /> Play
+                <Play className="ml-0.5 h-4 w-4 fill-current" />
               </button>
               <button
                 onClick={() => handlePlay(undefined, true)}
                 disabled={!tracks || tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_BUTTON_CLASS}
+                aria-label="Shuffle playlist"
+                title="Shuffle playlist"
               >
-                <Shuffle className="h-3 w-3" /> Shuffle
+                <Shuffle className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => { if (tracks) { addTracksAsPlayNext(tracks.map(t => t.id)); onClose() } }}
+                onClick={() => {
+                  if (tracks) {
+                    addTracksAsPlayNext(tracks.map((t) => t.id))
+                    onClose()
+                  }
+                }}
                 disabled={!tracks || tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_BUTTON_CLASS}
+                aria-label="Play playlist next"
+                title="Play playlist next"
               >
-                <ListStart className="h-3 w-3" /> Play next
+                <ListStart className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => { if (tracks) { addTracksToQueue(tracks.map(t => t.id)); onClose() } }}
+                onClick={() => {
+                  if (tracks) {
+                    addTracksToQueue(tracks.map((t) => t.id))
+                    onClose()
+                  }
+                }}
                 disabled={!tracks || tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_BUTTON_CLASS}
+                aria-label="Add playlist to queue"
+                title="Add playlist to queue"
               >
-                <ListEnd className="h-3 w-3" /> Add to queue
+                <ListEnd className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>

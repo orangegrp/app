@@ -31,6 +31,10 @@ const MAX_VISIBLE = 5
 const WAVEFORM_HEIGHTS = [78, 62, 88]
 const SMALL_TILE_BUTTON_CLASS =
   "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
+const DETAIL_ACTION_BUTTON_CLASS =
+  "glass-button glass-button-ghost flex h-9 w-9 items-center justify-center rounded-full p-0 disabled:opacity-40"
+const DETAIL_ACTION_PRIMARY_BUTTON_CLASS =
+  "glass-button glass-button-ghost flex h-10 w-10 items-center justify-center rounded-full p-0 disabled:opacity-40"
 
 export function AlbumSection() {
   const { tracks, playAlbum, currentTrackId, isCreatorMode, updateTrack } =
@@ -180,7 +184,10 @@ function AlbumCard({
       )}
     >
       {/* Cover */}
-      <div className="relative aspect-square overflow-hidden bg-foreground/5 cursor-pointer" onClick={onShowDetail}>
+      <div
+        className="relative aspect-square cursor-pointer overflow-hidden bg-foreground/5"
+        onClick={onShowDetail}
+      >
         {album.cover ? (
           <img
             src={album.cover}
@@ -241,7 +248,7 @@ function AlbumCard({
 
       {/* Metadata */}
       <div
-        className="flex flex-col gap-0.5 px-3 py-2.5 cursor-pointer"
+        className="flex cursor-pointer flex-col gap-0.5 px-3 py-2.5"
         onClick={onShowDetail}
         role="button"
         style={{ cursor: "pointer" }}
@@ -344,41 +351,55 @@ function AlbumDetailModal({
         className="flex max-h-[80vh] flex-col select-none"
       >
         <DialogHeader>
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-3">
             <div className="min-w-0">
               <DialogTitle className="truncate">{albumName}</DialogTitle>
               <p className="mt-1 text-sm text-muted-foreground/80">
                 {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => onPlayAll()}
                 disabled={tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_PRIMARY_BUTTON_CLASS}
+                aria-label="Play album"
+                title="Play album"
               >
-                <Play className="h-3 w-3 fill-current" /> Play
+                <Play className="ml-0.5 h-4 w-4 fill-current" />
               </button>
               <button
                 onClick={() => onShuffle()}
                 disabled={tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_BUTTON_CLASS}
+                aria-label="Shuffle album"
+                title="Shuffle album"
               >
-                <Shuffle className="h-3 w-3" /> Shuffle
+                <Shuffle className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => { addTracksAsPlayNext(trackIds); onClose() }}
+                onClick={() => {
+                  addTracksAsPlayNext(trackIds)
+                  onClose()
+                }}
                 disabled={tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_BUTTON_CLASS}
+                aria-label="Play album next"
+                title="Play album next"
               >
-                <ListStart className="h-3 w-3" /> Play next
+                <ListStart className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => { addTracksToQueue(trackIds); onClose() }}
+                onClick={() => {
+                  addTracksToQueue(trackIds)
+                  onClose()
+                }}
                 disabled={tracks.length === 0}
-                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                className={DETAIL_ACTION_BUTTON_CLASS}
+                aria-label="Add album to queue"
+                title="Add album to queue"
               >
-                <ListEnd className="h-3 w-3" /> Add to queue
+                <ListEnd className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -390,24 +411,24 @@ function AlbumDetailModal({
               No tracks in this album.
             </p>
           ) : (
-            <div className="overflow-y-auto max-h-[60vh] space-y-1">
+            <div className="max-h-[60vh] space-y-1 overflow-y-auto">
               {tracks.map((track, i) => (
                 <button
                   key={track.id}
                   onClick={() => onPlay(track.id)}
-                  className="w-full flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5 text-left transition-colors"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/5"
                 >
-                  <span className="w-5 text-xs text-muted-foreground/50 tabular-nums shrink-0">
+                  <span className="w-5 shrink-0 text-xs text-muted-foreground/50 tabular-nums">
                     {i + 1}
                   </span>
                   {track.coverUrl ? (
                     <img
                       src={track.coverUrl}
                       alt=""
-                      className="h-8 w-8 rounded shrink-0 object-cover"
+                      className="h-8 w-8 shrink-0 rounded object-cover"
                     />
                   ) : (
-                    <div className="h-8 w-8 rounded shrink-0 bg-foreground/5 flex items-center justify-center">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-foreground/5">
                       <Music2 className="h-4 w-4 text-muted-foreground/30" />
                     </div>
                   )}
@@ -420,7 +441,7 @@ function AlbumDetailModal({
                     </p>
                   </div>
                   {track.durationSec && (
-                    <span className="text-xs text-muted-foreground/50 tabular-nums shrink-0">
+                    <span className="shrink-0 text-xs text-muted-foreground/50 tabular-nums">
                       {formatDuration(track.durationSec)}
                     </span>
                   )}

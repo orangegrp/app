@@ -116,7 +116,6 @@ export function MusicTrackCard({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
   const suppressTapRef = useRef(false)
   const menuTriggerRef = useRef<HTMLDivElement | null>(null)
   const lastPointerRef = useRef<PointerPoint | null>(null)
@@ -148,7 +147,7 @@ export function MusicTrackCard({
 
   const baseLongPressHandlers = useLongPress(() => {
     suppressTapRef.current = true
-    setMenuOpen(true)
+    triggerContextMenu(lastPointerRef.current)
   })
   const longPressHandlers = {
     ...baseLongPressHandlers,
@@ -172,7 +171,6 @@ export function MusicTrackCard({
   const [saving, setSaving] = useState(false)
   const handleMenuAction = useCallback((action?: () => void) => {
     action?.()
-    setMenuOpen(false)
   }, [])
   const coverInputRef = useRef<HTMLInputElement>(null)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
@@ -330,7 +328,7 @@ export function MusicTrackCard({
               >
                 <Share2 className="h-3 w-3" />
               </button>
-              <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
+              <ContextMenu>
                 <ContextMenuTrigger
                   className={iconOverlayButton}
                   aria-label="Show actions"

@@ -5,13 +5,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react"
 import {
   useAudioPlayer,
-  useAudioPlayerTime,
 } from "@/components/ui/audio-player"
 import {
   fetchMusicTracks,
@@ -129,7 +129,6 @@ export function useOptionalMusicContext(): MusicContextValue | null {
 
 export function MusicProvider({ children }: { children: ReactNode }) {
   const player = useAudioPlayer<MusicTrackMeta>()
-  const currentTime = useAudioPlayerTime()
   const user = useAuthStore((s) => s.user)
   const isMobile = useIsMobile()
   const isCreator = user
@@ -211,50 +210,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [hasMusic, !!user])
 
   const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
-
-  // ── Media Session ────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
-      return
-    if (!currentTrack) {
-      navigator.mediaSession.metadata = null
-      navigator.mediaSession.playbackState = "none"
-      return
-    }
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title,
-      artist: currentTrack.artist ?? "",
-      album: currentTrack.album ?? "",
-      artwork: currentTrack.coverUrl
-        ? [{ src: currentTrack.coverUrl, sizes: "512x512" }]
-        : [],
-    })
-  }, [currentTrack])
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
-      return
-    const duration = player.duration
-    if (!duration || !Number.isFinite(duration) || duration <= 0) return
-    try {
-      navigator.mediaSession.setPositionState({
-        duration,
-        playbackRate: player.playbackRate,
-        position: Math.min(Math.max(currentTime, 0), duration),
-      })
-    } catch (err) {
-      console.error("[music/context] media session position error", err)
-    }
-  }, [currentTime, player.duration, player.playbackRate])
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
-      return
-    navigator.mediaSession.playbackState = player.isPlaying
-      ? "playing"
-      : "paused"
-  }, [player.isPlaying])
 
   // ── Native loop ──────────────────────────────────────────────────────────────
 
@@ -368,51 +323,39 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     return () => audio.removeEventListener("ended", handle)
   }, [player.ref])
 
-  // ── Media Session action handlers ────────────────────────────────────────────
-
+  // ── URL expiry recovery ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
-      return
-    navigator.mediaSession.setActionHandler("play", () => player.play())
-    navigator.mediaSession.setActionHandler("pause", () => player.pause())
-    navigator.mediaSession.setActionHandler("previoustrack", () =>
-      playPrevRef.current()
-    )
-    navigator.mediaSession.setActionHandler("nexttrack", () =>
-      playNextRef.current()
-    )
-    return () => {
-      navigator.mediaSession.setActionHandler("play", null)
-      navigator.mediaSession.setActionHandler("pause", null)
-      navigator.mediaSession.setActionHandler("previoustrack", null)
-      navigator.mediaSession.setActionHandler("nexttrack", null)
-    }
-  }, [player.play, player.pause])
-
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
-      return
-    const handler = (details: MediaSessionActionDetails) => {
-      if (details.seekTime == null) return
-      const duration = player.duration ?? 0
-      const target = Math.min(
-        Math.max(details.seekTime, 0),
-        duration > 0 ? duration : details.seekTime
-      )
-      if (details.fastSeek && player.ref.current?.fastSeek) {
-        player.ref.current.fastSeek(target)
-      } else {
-        player.seek(target)
-      }
-      if (player.isPlaying) {
-        void player.play()
+    const audio = player.ref.current
+    if (!audio) return
+    let recovering = false
+    const handle = async () => {
+      const err = audio.error
+      if (!err) return
+      // MEDIA_ERR_NETWORK (2) or MEDIA_ERR_SRC_NOT_SUPPORTED (4) suggest expired/bad URL
+      if (err.code !== MediaError.MEDIA_ERR_NETWORK && err.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) return
+      if (recovering) return
+      recovering = true
+      try {
+        const { tracks: fresh } = await fetchMusicTracks()
+        setTracks(fresh)
+        // tracksRef will be updated on next render, so look up in fresh directly
+        const id = currentTrackIdRef.current
+        if (!id) return
+        const track = fresh.find((t) => t.id === id)
+        if (!track) return
+        // Replay from same position
+        const resumeAt = audio.currentTime
+        await player.play({ id: track.id, src: track.audioUrl, data: track })
+        if (resumeAt > 0) player.seek(resumeAt)
+      } catch (e) {
+        console.error("[music/context] URL refresh failed", e)
+      } finally {
+        recovering = false
       }
     }
-    navigator.mediaSession.setActionHandler("seekto", handler)
-    return () => {
-      navigator.mediaSession.setActionHandler("seekto", null)
-    }
-  }, [player, player.seek, player.play])
+    audio.addEventListener("error", handle)
+    return () => audio.removeEventListener("error", handle)
+  }, [player, player.ref])
 
   // ── Queue management ─────────────────────────────────────────────────────────
 
@@ -607,51 +550,63 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const contextValue = useMemo(
+    () => ({
+      tracks,
+      currentTrackId,
+      currentTrack,
+      loading,
+      error,
+      queue,
+      shuffledQueue,
+      upNext,
+      shuffle,
+      loop,
+      nowPlayingOpen,
+      openNowPlaying: () => setNowPlayingOpen(true),
+      closeNowPlaying: () => setNowPlayingOpen(false),
+      playTrack,
+      playNext,
+      playPrev,
+      addToQueue,
+      playNextTrack,
+      removeFromQueue,
+      clearQueue,
+      reorderQueue,
+      toggleShuffle,
+      setLoop,
+      playAll,
+      playAlbum,
+      playPlaylist,
+      addTrack,
+      removeTrack,
+      updateTrack,
+      isCreatorMode,
+      setCreatorMode,
+      isCreator,
+      playlists,
+      playlistsLoading,
+      refreshPlaylists,
+      createPlaylist,
+      deletePlaylist,
+      renamePlaylist,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
+    }),
+    [
+      tracks, currentTrackId, currentTrack, loading, error,
+      queue, shuffledQueue, upNext, shuffle, loop, nowPlayingOpen,
+      playTrack, playNext, playPrev, addToQueue, playNextTrack,
+      removeFromQueue, clearQueue, reorderQueue, toggleShuffle, setLoop,
+      playAll, playAlbum, playPlaylist, addTrack, removeTrack, updateTrack,
+      isCreatorMode, setCreatorMode, isCreator, playlists, playlistsLoading,
+      refreshPlaylists, createPlaylist, deletePlaylist, renamePlaylist,
+      addTrackToPlaylist, removeTrackFromPlaylist,
+    ]
+  )
+
   return (
-    <MusicContext.Provider
-      value={{
-        tracks,
-        currentTrackId,
-        currentTrack,
-        loading,
-        error,
-        queue,
-        shuffledQueue,
-        upNext,
-        shuffle,
-        loop,
-        nowPlayingOpen,
-        openNowPlaying: () => setNowPlayingOpen(true),
-        closeNowPlaying: () => setNowPlayingOpen(false),
-        playTrack,
-        playNext,
-        playPrev,
-        addToQueue,
-        playNextTrack,
-        removeFromQueue,
-        clearQueue,
-        reorderQueue,
-        toggleShuffle,
-        setLoop,
-        playAll,
-        playAlbum,
-        playPlaylist,
-        addTrack,
-        removeTrack,
-        updateTrack,
-        isCreatorMode,
-        setCreatorMode,
-        isCreator,
-        playlists,
-        playlistsLoading,
-        refreshPlaylists,
-        createPlaylist,
-        deletePlaylist,
-        renamePlaylist,
-        addTrackToPlaylist,
-        removeTrackFromPlaylist,
-      }}
-    >
+    <MusicContext.Provider value={contextValue}>
       {children}
     </MusicContext.Provider>
   )

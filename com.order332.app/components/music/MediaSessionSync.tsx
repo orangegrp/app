@@ -68,6 +68,16 @@ export function MediaSessionSync() {
     return () => clearInterval(id)
   }, []) // stable — reads via refs
 
+  // ── Reset position state on track change to avoid stale scrubber ─────────
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return
+    try {
+      navigator.mediaSession.setPositionState({})
+    } catch {
+      /* ignore */
+    }
+  }, [currentTrack])
+
   // ── Action handlers (registered once) ────────────────────────────────────
   useEffect(() => {
     if (!("mediaSession" in navigator)) return

@@ -138,6 +138,7 @@ export function AudioPlayerProvider<TData = unknown>({
         return
       }
       itemRef.current = item
+      _setActiveItem(item)
       const currentRate = audioRef.current.playbackRate
       audioRef.current.pause()
       audioRef.current.currentTime = 0
@@ -176,6 +177,7 @@ export function AudioPlayerProvider<TData = unknown>({
       }
 
       itemRef.current = item
+      _setActiveItem(item)
       const currentRate = audioRef.current.playbackRate
       if (!audioRef.current.paused) {
         audioRef.current.pause()
@@ -252,20 +254,83 @@ export function AudioPlayerProvider<TData = unknown>({
     [activeItem]
   )
 
+  // Animation frame for time tracking only
   useAnimationFrame(() => {
     if (audioRef.current) {
-      _setActiveItem(itemRef.current)
-      setReadyState(audioRef.current.readyState)
-      setNetworkState(audioRef.current.networkState)
       setTime(audioRef.current.currentTime)
-      setDuration(audioRef.current.duration)
-      setPaused(audioRef.current.paused)
-      setError(audioRef.current.error)
-      setPlaybackRateState(audioRef.current.playbackRate)
-      setVolumeState(audioRef.current.volume)
-      setIsMutedState(audioRef.current.muted)
     }
   })
+
+  // Event listeners for audio state changes
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const handlePlay = () => setPaused(false)
+    const handlePause = () => setPaused(true)
+    const handleDurationChange = () => setDuration(audio.duration)
+    const handleError = () => setError(audio.error)
+    const handleRateChange = () => setPlaybackRateState(audio.playbackRate)
+    const handleVolumeChange = () => {
+      setVolumeState(audio.volume)
+      setIsMutedState(audio.muted)
+    }
+    const handleBufferingStateChange = () => {
+      setReadyState(audio.readyState)
+      setNetworkState(audio.networkState)
+    }
+    const handleLoadStart = () => {
+      setReadyState(audio.readyState)
+      setNetworkState(audio.networkState)
+      setDuration(undefined)
+      setError(null)
+      _setActiveItem(itemRef.current)
+    }
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration)
+      setReadyState(audio.readyState)
+    }
+    const handleEmptied = () => {
+      setReadyState(0)
+      setNetworkState(0)
+      setDuration(undefined)
+      setPaused(true)
+      setError(null)
+    }
+    const handleEnded = () => setPaused(true)
+
+    audio.addEventListener("play", handlePlay)
+    audio.addEventListener("pause", handlePause)
+    audio.addEventListener("durationchange", handleDurationChange)
+    audio.addEventListener("error", handleError)
+    audio.addEventListener("ratechange", handleRateChange)
+    audio.addEventListener("volumechange", handleVolumeChange)
+    audio.addEventListener("waiting", handleBufferingStateChange)
+    audio.addEventListener("canplay", handleBufferingStateChange)
+    audio.addEventListener("canplaythrough", handleBufferingStateChange)
+    audio.addEventListener("stalled", handleBufferingStateChange)
+    audio.addEventListener("loadstart", handleLoadStart)
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata)
+    audio.addEventListener("emptied", handleEmptied)
+    audio.addEventListener("ended", handleEnded)
+
+    return () => {
+      audio.removeEventListener("play", handlePlay)
+      audio.removeEventListener("pause", handlePause)
+      audio.removeEventListener("durationchange", handleDurationChange)
+      audio.removeEventListener("error", handleError)
+      audio.removeEventListener("ratechange", handleRateChange)
+      audio.removeEventListener("volumechange", handleVolumeChange)
+      audio.removeEventListener("waiting", handleBufferingStateChange)
+      audio.removeEventListener("canplay", handleBufferingStateChange)
+      audio.removeEventListener("canplaythrough", handleBufferingStateChange)
+      audio.removeEventListener("stalled", handleBufferingStateChange)
+      audio.removeEventListener("loadstart", handleLoadStart)
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata)
+      audio.removeEventListener("emptied", handleEmptied)
+      audio.removeEventListener("ended", handleEnded)
+    }
+  }, [])
 
   const isPlaying = !paused
   const isBuffering =
@@ -317,7 +382,7 @@ export function AudioPlayerProvider<TData = unknown>({
     <AudioPlayerContext.Provider value={api as AudioPlayerApi<unknown>}>
       <AudioPlayerTimeContext.Provider value={time}>
         {/* x-webkit-airplay enables AirPlay on Safari; Remote Playback API handles routing */}
-        <audio ref={audioRef} className="hidden" crossOrigin="anonymous" x-webkit-airplay="allow" />
+        <audio ref={audioRef} className="hidden" crossOrigin="anonymous" x-webkit-airplay="allow" preload="metadata" />
         {children}
       </AudioPlayerTimeContext.Provider>
     </AudioPlayerContext.Provider>

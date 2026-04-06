@@ -6,10 +6,19 @@ import {
   type MusicTrackMeta,
   updateMusicTrack,
   uploadMusicTrackAsset,
+  formatDuration,
 } from "@/lib/music-api"
 import { cn } from "@/lib/utils"
 import { useMusicContext } from "./MusicContext"
 import { useAudioPlayer } from "@/components/ui/audio-player"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 interface AlbumInfo {
   name: string
@@ -28,6 +37,7 @@ export function AlbumSection() {
     useMusicContext()
   const player = useAudioPlayer()
   const [showAll, setShowAll] = useState(false)
+  const [detailAlbum, setDetailAlbum] = useState<string | null>(null)
 
   // Build album map (only tracks with an album field)
   const albumMap = new Map<string, AlbumInfo>()
@@ -79,6 +89,7 @@ export function AlbumSection() {
               isPlaying={isActive && player.isPlaying}
               onPlay={() => playAlbum(album.name, undefined, false)}
               onShuffle={() => playAlbum(album.name, undefined, true)}
+              onShowDetail={() => setDetailAlbum(album.name)}
               tracks={albumTracks}
               canEditCover={isCreatorMode}
               onUpdateTrack={updateTrack}
@@ -86,6 +97,27 @@ export function AlbumSection() {
           )
         })}
       </div>
+
+      {/* Album detail modal */}
+      {detailAlbum && (
+        <AlbumDetailModal
+          albumName={detailAlbum}
+          tracks={tracks.filter((t) => t.album === detailAlbum)}
+          onClose={() => setDetailAlbum(null)}
+          onPlay={(id) => {
+            playAlbum(detailAlbum, id, false)
+            setDetailAlbum(null)
+          }}
+          onPlayAll={() => {
+            playAlbum(detailAlbum, undefined, false)
+            setDetailAlbum(null)
+          }}
+          onShuffle={() => {
+            playAlbum(detailAlbum, undefined, true)
+            setDetailAlbum(null)
+          }}
+        />
+      )}
     </section>
   )
 }
@@ -96,6 +128,7 @@ interface AlbumCardProps {
   isPlaying: boolean
   onPlay: () => void
   onShuffle: () => void
+  onShowDetail: () => void
   tracks: MusicTrackMeta[]
   canEditCover: boolean
   onUpdateTrack: (track: MusicTrackMeta) => void
@@ -107,6 +140,7 @@ function AlbumCard({
   isPlaying,
   onPlay,
   onShuffle,
+  onShowDetail,
   tracks,
   canEditCover,
   onUpdateTrack,
@@ -141,13 +175,12 @@ function AlbumCard({
   return (
     <div
       className={cn(
-        "glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all select-none",
+        "glass-card group relative flex flex-col overflow-hidden rounded-xl transition-all select-none",
         isActive && "ring-1 ring-foreground/30"
       )}
-      onClick={onPlay}
     >
       {/* Cover */}
-      <div className="relative aspect-square overflow-hidden bg-foreground/5">
+      <div className="relative aspect-square overflow-hidden bg-foreground/5 cursor-pointer" onClick={onShowDetail}>
         {album.cover ? (
           <img
             src={album.cover}
@@ -171,9 +204,16 @@ function AlbumCard({
             isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           )}
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/18 shadow-[0_18px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/30 backdrop-blur-xl">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onPlay()
+            }}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/18 shadow-[0_18px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/30 backdrop-blur-xl hover:bg-white/24"
+            aria-label="Play album"
+          >
             <Play className="ml-0.5 h-5 w-5 fill-white text-white" />
-          </div>
+          </button>
         </div>
 
         {/* Active waveform */}
@@ -200,7 +240,12 @@ function AlbumCard({
       </div>
 
       {/* Metadata */}
-      <div className="flex flex-col gap-0.5 px-3 py-2.5">
+      <div
+        className="flex flex-col gap-0.5 px-3 py-2.5 cursor-pointer"
+        onClick={onShowDetail}
+        role="button"
+        style={{ cursor: "pointer" }}
+      >
         <p className="truncate text-sm font-medium text-foreground">
           {album.name}
         </p>
@@ -263,5 +308,118 @@ function AlbumCard({
         </>
       )}
     </div>
+  )
+}
+
+// ── Album detail modal ─────────────────────────────────────────────────────
+
+interface AlbumDetailModalProps {
+  albumName: string
+  tracks: MusicTrackMeta[]
+  onClose: () => void
+  onPlay: (trackId: string) => void
+  onPlayAll: () => void
+  onShuffle: () => void
+}
+
+function AlbumDetailModal({
+  albumName,
+  tracks,
+  onClose,
+  onPlay,
+  onPlayAll,
+  onShuffle,
+}: AlbumDetailModalProps) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose()
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[80vh] flex-col select-none"
+      >
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="truncate">{albumName}</DialogTitle>
+              <p className="mt-1 text-sm text-muted-foreground/80">
+                {tracks.length} {tracks.length === 1 ? "track" : "tracks"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onPlayAll()}
+                disabled={tracks.length === 0}
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                <Play className="h-3 w-3 fill-current" /> Play
+              </button>
+              <button
+                onClick={() => onShuffle()}
+                disabled={tracks.length === 0}
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+              >
+                <Shuffle className="h-3 w-3" /> Shuffle
+              </button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+          {tracks.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground/60">
+              No tracks in this album.
+            </p>
+          ) : (
+            <div className="overflow-y-auto max-h-[60vh] space-y-1">
+              {tracks.map((track, i) => (
+                <button
+                  key={track.id}
+                  onClick={() => onPlay(track.id)}
+                  className="w-full flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/5 text-left transition-colors"
+                >
+                  <span className="w-5 text-xs text-muted-foreground/50 tabular-nums shrink-0">
+                    {i + 1}
+                  </span>
+                  {track.coverUrl ? (
+                    <img
+                      src={track.coverUrl}
+                      alt=""
+                      className="h-8 w-8 rounded shrink-0 object-cover"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded shrink-0 bg-foreground/5 flex items-center justify-center">
+                      <Music2 className="h-4 w-4 text-muted-foreground/30" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {track.title}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {track.artist}
+                    </p>
+                  </div>
+                  {track.durationSec && (
+                    <span className="text-xs text-muted-foreground/50 tabular-nums shrink-0">
+                      {formatDuration(track.durationSec)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

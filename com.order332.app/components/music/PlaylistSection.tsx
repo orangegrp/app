@@ -1,10 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { ChevronRight, Loader2, Music2, Play, Plus, Shuffle, Trash2 } from "lucide-react"
+import { type DragEvent, useCallback, useEffect, useRef, useState } from "react"
+import {
+  ChevronRight,
+  GripVertical,
+  Loader2,
+  Music2,
+  Play,
+  Plus,
+  Shuffle,
+  Trash2,
+} from "lucide-react"
 import { fetchMusicPlaylist, type MusicPlaylistMeta } from "@/lib/music-api"
 import { useMusicContext } from "./MusicContext"
 import { useAuthStore } from "@/lib/auth-store"
+import { moveItem } from "@/lib/music-queue"
 import {
   Dialog,
   DialogContent,
@@ -25,14 +35,22 @@ import {
 import { Button } from "@/components/ui/button"
 
 export function PlaylistSection() {
-  const { playlists, playlistsLoading, createPlaylist, deletePlaylist, renamePlaylist, playPlaylist } = useMusicContext()
+  const {
+    playlists,
+    playlistsLoading,
+    createPlaylist,
+    deletePlaylist,
+    renamePlaylist,
+    playPlaylist,
+  } = useMusicContext()
   const user = useAuthStore((s) => s.user)
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState("")
   const [newDesc, setNewDesc] = useState("")
   const [creating, setCreating] = useState(false)
 
-  const [detailPlaylist, setDetailPlaylist] = useState<MusicPlaylistMeta | null>(null)
+  const [detailPlaylist, setDetailPlaylist] =
+    useState<MusicPlaylistMeta | null>(null)
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -52,10 +70,12 @@ export function PlaylistSection() {
   return (
     <section className="mb-10">
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-[10px] tracking-[0.2em] text-muted-foreground/50">PLAYLISTS</p>
+        <p className="text-[10px] tracking-[0.2em] text-muted-foreground/50">
+          PLAYLISTS
+        </p>
         <button
           onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           <Plus className="h-3.5 w-3.5" />
           New playlist
@@ -69,7 +89,8 @@ export function PlaylistSection() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {playlists.map((pl) => {
-            const canManage = user?.permissions === '*' || pl.createdBy === user?.id
+            const canManage =
+              user?.permissions === "*" || pl.createdBy === user?.id
             return (
               <PlaylistCard
                 key={pl.id}
@@ -89,7 +110,12 @@ export function PlaylistSection() {
       )}
 
       {/* Create playlist dialog */}
-      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) setCreateOpen(false) }}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(o) => {
+          if (!o) setCreateOpen(false)
+        }}
+      >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>New playlist</DialogTitle>
@@ -106,7 +132,9 @@ export function PlaylistSection() {
                 maxLength={200}
                 className="input-glass w-full"
                 autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreate()
+                }}
               />
             </div>
             <div>
@@ -124,8 +152,19 @@ export function PlaylistSection() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Button>
-            <Button size="sm" onClick={handleCreate} disabled={!newName.trim() || creating}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCreateOpen(false)}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCreate}
+              disabled={!newName.trim() || creating}
+            >
               {creating ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
@@ -136,7 +175,9 @@ export function PlaylistSection() {
       {detailPlaylist && (
         <PlaylistDetailModal
           playlist={detailPlaylist}
-          canManage={user?.permissions === '*' || detailPlaylist.createdBy === user?.id}
+          canManage={
+            user?.permissions === "*" || detailPlaylist.createdBy === user?.id
+          }
           onClose={() => setDetailPlaylist(null)}
         />
       )}
@@ -146,20 +187,43 @@ export function PlaylistSection() {
 
 // ── Playlist cover art ────────────────────────────────────────────────────────
 
-function PlaylistCoverArt({ coverUrls }: { coverUrls?: string[] }) {
-  if (!coverUrls?.length) {
+function PlaylistCoverArt({
+  coverUrls,
+  trackCount,
+}: {
+  coverUrls?: string[]
+  trackCount: number
+}) {
+  const covers = coverUrls ?? []
+  const visible = Math.min(trackCount, 4)
+  if (visible === 0) {
     return <Music2 className="h-12 w-12 text-muted-foreground/20" />
   }
-  if (coverUrls.length === 1) {
-    return <img src={coverUrls[0]} alt="" className="h-full w-full object-cover" loading="lazy" />
-  }
-  // 2×2 grid — pad with last image if fewer than 4
-  const cells = [0, 1, 2, 3].map((i) => coverUrls[Math.min(i, coverUrls.length - 1)])
+  const cells = Array.from({ length: 4 }, (_, index) => {
+    if (index >= visible) return null
+    return covers[index] ?? null
+  })
   return (
-    <div className="grid grid-cols-2 h-full w-full">
-      {cells.map((url, i) => (
-        <img key={i} src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-      ))}
+    <div className="grid h-full w-full grid-cols-2">
+      {cells.map((url, i) =>
+        url ? (
+          <img
+            key={i}
+            src={url}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            key={i}
+            className="flex h-full w-full items-center justify-center rounded-md bg-foreground/8 text-muted-foreground/30"
+            aria-hidden
+          >
+            <Music2 className="h-4 w-4" />
+          </div>
+        )
+      )}
     </div>
   )
 }
@@ -175,7 +239,14 @@ interface PlaylistCardProps {
   onPlay: (shuffle: boolean) => Promise<void>
 }
 
-function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay }: PlaylistCardProps) {
+function PlaylistCard({
+  playlist,
+  canManage,
+  onOpen,
+  onDelete,
+  onRename,
+  onPlay,
+}: PlaylistCardProps) {
   const [playing, setPlaying] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
@@ -186,11 +257,18 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
     e.stopPropagation()
     if (playlist.trackCount === 0) return
     setPlaying(true)
-    try { await onPlay(shuffle) } finally { setPlaying(false) }
+    try {
+      await onPlay(shuffle)
+    } finally {
+      setPlaying(false)
+    }
   }
 
   const handleRename = async () => {
-    if (!nameInput.trim() || nameInput.trim() === playlist.name) { setRenameOpen(false); return }
+    if (!nameInput.trim() || nameInput.trim() === playlist.name) {
+      setRenameOpen(false)
+      return
+    }
     setRenaming(true)
     try {
       await onRename(playlist.id, nameInput.trim())
@@ -207,23 +285,30 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
         onClick={onOpen}
       >
         {/* Cover art */}
-        <div className="relative aspect-square bg-foreground/5 flex items-center justify-center overflow-hidden">
-          <PlaylistCoverArt coverUrls={playlist.coverUrls} />
+        <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-foreground/5">
+          <PlaylistCoverArt
+            coverUrls={playlist.coverUrls}
+            trackCount={playlist.trackCount}
+          />
 
           {/* Hover overlay */}
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
             <button
               onClick={(e) => handlePlay(e, false)}
               disabled={playing || playlist.trackCount === 0}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-md ring-1 ring-white/20 hover:bg-white/20 disabled:opacity-40"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md hover:bg-white/20 disabled:opacity-40"
               aria-label="Play playlist"
             >
-              {playing ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <Play className="ml-0.5 h-4 w-4 fill-white text-white" />}
+              {playing ? (
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+              ) : (
+                <Play className="ml-0.5 h-4 w-4 fill-white text-white" />
+              )}
             </button>
             <button
               onClick={(e) => handlePlay(e, true)}
               disabled={playing || playlist.trackCount === 0}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-md ring-1 ring-white/20 hover:bg-white/20 disabled:opacity-40"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md hover:bg-white/20 disabled:opacity-40"
               aria-label="Shuffle playlist"
             >
               <Shuffle className="h-4 w-4 text-white" />
@@ -233,15 +318,24 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
 
         {/* Metadata */}
         <div className="flex flex-col gap-0.5 px-3 py-2.5">
-          <p className="truncate text-sm font-medium text-foreground">{playlist.name}</p>
-          <p className="text-xs text-muted-foreground/60">{playlist.trackCount} {playlist.trackCount === 1 ? 'track' : 'tracks'}</p>
+          <p className="truncate text-sm font-medium text-foreground">
+            {playlist.name}
+          </p>
+          <p className="text-xs text-muted-foreground/60">
+            {playlist.trackCount}{" "}
+            {playlist.trackCount === 1 ? "track" : "tracks"}
+          </p>
         </div>
 
         {/* Management buttons (creator / superuser) */}
         {canManage && (
-          <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
             <button
-              onClick={(e) => { e.stopPropagation(); setNameInput(playlist.name); setRenameOpen(true) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setNameInput(playlist.name)
+                setRenameOpen(true)
+              }}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
               aria-label="Rename playlist"
               title="Rename"
@@ -249,7 +343,10 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
               <ChevronRight className="h-3 w-3 rotate-[-90deg]" />
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setConfirmDelete(true)
+              }}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive/80"
               aria-label="Delete playlist"
               title="Delete"
@@ -261,9 +358,19 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
       </div>
 
       {/* Rename dialog */}
-      <Dialog open={renameOpen} onOpenChange={(o) => { if (!o) setRenameOpen(false) }}>
-        <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()}>
-          <DialogHeader><DialogTitle>Rename playlist</DialogTitle></DialogHeader>
+      <Dialog
+        open={renameOpen}
+        onOpenChange={(o) => {
+          if (!o) setRenameOpen(false)
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>Rename playlist</DialogTitle>
+          </DialogHeader>
           <input
             type="text"
             value={nameInput}
@@ -271,11 +378,24 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
             maxLength={200}
             className="input-glass w-full"
             autoFocus
-            onKeyDown={(e) => { if (e.key === 'Enter') handleRename() }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleRename()
+            }}
           />
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setRenameOpen(false)} disabled={renaming}>Cancel</Button>
-            <Button size="sm" onClick={handleRename} disabled={!nameInput.trim() || renaming}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRenameOpen(false)}
+              disabled={renaming}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleRename}
+              disabled={!nameInput.trim() || renaming}
+            >
               {renaming ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
@@ -292,10 +412,15 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(playlist.id) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(playlist.id)
+              }}
             >
               Delete
             </AlertDialogAction>
@@ -314,17 +439,49 @@ interface PlaylistDetailModalProps {
   onClose: () => void
 }
 
-function PlaylistDetailModal({ playlist, canManage, onClose }: PlaylistDetailModalProps) {
+function PlaylistDetailModal({
+  playlist,
+  canManage,
+  onClose,
+}: PlaylistDetailModalProps) {
   const { playPlaylist, removeTrackFromPlaylist } = useMusicContext()
-  const [tracks, setTracks] = useState<Awaited<ReturnType<typeof fetchMusicPlaylist>>['playlist']['tracks'] | null>(null)
+  const [tracks, setTracks] = useState<
+    Awaited<ReturnType<typeof fetchMusicPlaylist>>["playlist"]["tracks"] | null
+  >(null)
   const [loading, setLoading] = useState(true)
+  const dragIndexRef = useRef<number | null>(null)
+  const moveTrack = useCallback((from: number, to: number) => {
+    setTracks((prev) => (prev ? moveItem(prev, from, to) : prev))
+  }, [])
+  const handleDragStart = useCallback(
+    (index: number, event: DragEvent<HTMLDivElement>) => {
+      dragIndexRef.current = index
+      event.dataTransfer?.setData("text/plain", String(index))
+    },
+    []
+  )
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+  }, [])
+  const handleDrop = useCallback(
+    (index: number, event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      if (dragIndexRef.current === null) return
+      moveTrack(dragIndexRef.current, index)
+      dragIndexRef.current = null
+    },
+    [moveTrack]
+  )
+  const handleDragEnd = useCallback(() => {
+    dragIndexRef.current = null
+  }, [])
 
   useEffect(() => {
     fetchMusicPlaylist(playlist.id)
       .then(({ playlist: p }) => setTracks(p.tracks))
       .catch(() => setTracks([]))
       .finally(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlist.id])
 
   const handlePlay = (startId?: string, shuffle = false) => {
@@ -339,8 +496,16 @@ function PlaylistDetailModal({ playlist, canManage, onClose }: PlaylistDetailMod
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent showCloseButton={false} className="max-h-[80vh] flex flex-col">
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose()
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[80vh] flex-col"
+      >
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>{playlist.name}</DialogTitle>
@@ -348,14 +513,14 @@ function PlaylistDetailModal({ playlist, canManage, onClose }: PlaylistDetailMod
               <button
                 onClick={() => handlePlay(undefined, false)}
                 disabled={!tracks || tracks.length === 0}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs glass-button glass-button-ghost disabled:opacity-40"
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
               >
                 <Play className="h-3 w-3 fill-current" /> Play
               </button>
               <button
                 onClick={() => handlePlay(undefined, true)}
                 disabled={!tracks || tracks.length === 0}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs glass-button glass-button-ghost disabled:opacity-40"
+                className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
               >
                 <Shuffle className="h-3 w-3" /> Shuffle
               </button>
@@ -363,36 +528,62 @@ function PlaylistDetailModal({ playlist, canManage, onClose }: PlaylistDetailMod
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0 -mx-1 px-1">
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : !tracks || tracks.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground/60">No tracks in this playlist.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground/60">
+              No tracks in this playlist.
+            </p>
           ) : (
             <div className="flex flex-col gap-0.5">
               {tracks.map((track, i) => (
                 <div
                   key={track.id}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-foreground/5 group/ti cursor-pointer"
+                  draggable
+                  onDragStart={(event) => handleDragStart(i, event)}
+                  onDragOver={handleDragOver}
+                  onDrop={(event) => handleDrop(i, event)}
+                  onDragEnd={handleDragEnd}
+                  className="group/ti flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-foreground/5"
                   onClick={() => handlePlay(track.id, false)}
                 >
-                  <span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground/40">{i + 1}</span>
+                  <span className="flex h-5 w-5 items-center justify-center text-muted-foreground/40">
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="w-5 shrink-0 text-center text-xs text-muted-foreground/40 tabular-nums">
+                    {i + 1}
+                  </span>
                   <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-foreground/5">
-                    {track.coverUrl
-                      ? <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
-                      : <div className="flex h-full w-full items-center justify-center"><Music2 className="h-3.5 w-3.5 text-muted-foreground/30" /></div>
-                    }
+                    {track.coverUrl ? (
+                      <img
+                        src={track.coverUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Music2 className="h-3.5 w-3.5 text-muted-foreground/30" />
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-foreground">{track.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+                    <p className="truncate text-sm text-foreground">
+                      {track.title}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {track.artist}
+                    </p>
                   </div>
                   {canManage && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleRemoveTrack(track.id) }}
-                      className="shrink-0 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover/ti:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveTrack(track.id)
+                      }}
+                      className="shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover/ti:opacity-100 hover:text-destructive"
                       aria-label="Remove from playlist"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -405,7 +596,9 @@ function PlaylistDetailModal({ playlist, canManage, onClose }: PlaylistDetailMod
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

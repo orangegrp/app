@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Music2, Play, Shuffle } from "lucide-react"
+import { type MusicTrackMeta } from "@/lib/music-api"
 import { cn } from "@/lib/utils"
 import { useMusicContext } from "./MusicContext"
 import { useAudioPlayer } from "@/components/ui/audio-player"
@@ -45,11 +46,13 @@ export function AlbumSection() {
   return (
     <section className="mb-10">
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-[10px] tracking-[0.2em] text-muted-foreground/50">ALBUMS</p>
+        <p className="text-[10px] tracking-[0.2em] text-muted-foreground/50">
+          ALBUMS
+        </p>
         {albums.length > MAX_VISIBLE && (
           <button
             onClick={() => setShowAll((v) => !v)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {showAll ? "Show less" : `See all ${albums.length}`}
           </button>
@@ -68,6 +71,7 @@ export function AlbumSection() {
               isPlaying={isActive && player.isPlaying}
               onPlay={() => playAlbum(album.name, undefined, false)}
               onShuffle={() => playAlbum(album.name, undefined, true)}
+              tracks={albumTracks}
             />
           )
         })}
@@ -82,14 +86,22 @@ interface AlbumCardProps {
   isPlaying: boolean
   onPlay: () => void
   onShuffle: () => void
+  tracks: MusicTrackMeta[]
 }
 
-function AlbumCard({ album, isActive, isPlaying, onPlay, onShuffle }: AlbumCardProps) {
+function AlbumCard({
+  album,
+  isActive,
+  isPlaying,
+  onPlay,
+  onShuffle,
+  tracks,
+}: AlbumCardProps) {
   return (
     <div
       className={cn(
         "glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all",
-        isActive && "ring-1 ring-foreground/30",
+        isActive && "ring-1 ring-foreground/30"
       )}
       onClick={onPlay}
     >
@@ -101,7 +113,7 @@ function AlbumCard({ album, isActive, isPlaying, onPlay, onShuffle }: AlbumCardP
             alt={album.name}
             className={cn(
               "h-full w-full object-cover transition-transform duration-500",
-              isActive && "scale-105",
+              isActive && "scale-105"
             )}
             loading="lazy"
           />
@@ -115,10 +127,10 @@ function AlbumCard({ album, isActive, isPlaying, onPlay, onShuffle }: AlbumCardP
         <div
           className={cn(
             "absolute inset-0 flex items-center justify-center gap-3 bg-black/40 transition-opacity",
-            isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           )}
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 backdrop-blur-md ring-1 ring-white/20">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
             <Play className="ml-0.5 h-5 w-5 fill-white text-white" />
           </div>
         </div>
@@ -126,15 +138,18 @@ function AlbumCard({ album, isActive, isPlaying, onPlay, onShuffle }: AlbumCardP
         {/* Active waveform */}
         {isActive && (
           <div className="absolute bottom-2 left-2">
-            <div className="flex items-end gap-0.5 h-4">
+            <div className="flex h-4 items-end gap-0.5">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={cn("w-1 rounded-full bg-white", isPlaying && "animate-bounce")}
+                  className={cn(
+                    "w-1 rounded-full bg-white",
+                    isPlaying && "animate-bounce"
+                  )}
                   style={{
                     height: `${Math.random() * 50 + 50}%`,
                     animationDelay: `${i * 0.1}s`,
-                    animationDuration: '0.6s',
+                    animationDuration: "0.6s",
                   }}
                 />
               ))}
@@ -145,14 +160,33 @@ function AlbumCard({ album, isActive, isPlaying, onPlay, onShuffle }: AlbumCardP
 
       {/* Metadata */}
       <div className="flex flex-col gap-0.5 px-3 py-2.5">
-        <p className="truncate text-sm font-medium text-foreground">{album.name}</p>
-        <p className="text-xs text-muted-foreground/60">{album.trackCount} {album.trackCount === 1 ? 'track' : 'tracks'}</p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {album.name}
+        </p>
+        <p className="text-xs text-muted-foreground/60">
+          {album.trackCount} {album.trackCount === 1 ? "track" : "tracks"}
+        </p>
+        <div className="mt-1 flex flex-col gap-0.5 text-[11px] text-muted-foreground/70">
+          {tracks.slice(0, 4).map((track) => (
+            <span key={track.id} className="truncate">
+              {track.title}
+            </span>
+          ))}
+          {tracks.length > 4 && (
+            <span className="truncate text-[10px] text-muted-foreground/50">
+              +{tracks.length - 4} more
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Shuffle button */}
-      <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
         <button
-          onClick={(e) => { e.stopPropagation(); onShuffle() }}
+          onClick={(e) => {
+            e.stopPropagation()
+            onShuffle()
+          }}
           className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
           aria-label="Shuffle album"
           title="Shuffle album"

@@ -26,6 +26,7 @@ import { hasPermission } from "@/lib/permissions"
 import { useAuthStore } from "@/lib/auth-store"
 import { PERMISSIONS } from "@/lib/permissions"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { moveItem } from "@/lib/music-queue"
 
 function shuffleArray(arr: string[], firstId?: string): string[] {
   const copy = [...arr]
@@ -52,8 +53,9 @@ interface MusicContextValue {
   error: string | null
 
   // Playback queue state (exposed for UI)
-  queue: string[]           // current main queue (original order)
-  upNext: string[]          // manual "play next" additions
+  queue: string[] // current main queue (original order)
+  shuffledQueue: string[] // shuffle permutation used when active
+  upNext: string[] // manual "play next" additions
   shuffle: boolean
   loop: LoopMode
 
@@ -72,11 +74,16 @@ interface MusicContextValue {
   clearQueue: () => void
   toggleShuffle: () => void
   setLoop: (mode: LoopMode) => void
+  reorderQueue: (from: number, to: number) => void
 
   // Convenience: play all / play album / play playlist with optional shuffle
   playAll: (shuffle?: boolean) => void
   playAlbum: (album: string, startId?: string, shuffle?: boolean) => void
-  playPlaylist: (tracks: MusicTrackMeta[], startId?: string, shuffle?: boolean) => void
+  playPlaylist: (
+    tracks: MusicTrackMeta[],
+    startId?: string,
+    shuffle?: boolean
+  ) => void
 
   // Track management
   addTrack: (track: MusicTrackMeta) => void
@@ -92,11 +99,17 @@ interface MusicContextValue {
   playlists: MusicPlaylistMeta[]
   playlistsLoading: boolean
   refreshPlaylists: () => Promise<void>
-  createPlaylist: (name: string, description?: string | null) => Promise<MusicPlaylistMeta>
+  createPlaylist: (
+    name: string,
+    description?: string | null
+  ) => Promise<MusicPlaylistMeta>
   deletePlaylist: (id: string) => Promise<void>
   renamePlaylist: (id: string, name: string) => Promise<void>
   addTrackToPlaylist: (playlistId: string, trackId: string) => Promise<void>
-  removeTrackFromPlaylist: (playlistId: string, trackId: string) => Promise<void>
+  removeTrackFromPlaylist: (
+    playlistId: string,
+    trackId: string
+  ) => Promise<void>
 }
 
 const MusicContext = createContext<MusicContextValue | null>(null)
@@ -115,8 +128,12 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const player = useAudioPlayer<MusicTrackMeta>()
   const user = useAuthStore((s) => s.user)
   const isMobile = useIsMobile()
-  const isCreator = user ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC_UPLOAD) : false
-  const hasMusic = user ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC) : false
+  const isCreator = user
+    ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC_UPLOAD)
+    : false
+  const hasMusic = user
+    ? hasPermission(user.permissions, PERMISSIONS.APP_MUSIC)
+    : false
 
   // Track library
   const [tracks, setTracks] = useState<MusicTrackMeta[]>([])
@@ -131,7 +148,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [shuffledQueue, setShuffledQueue] = useState<string[]>([])
   const [upNext, setUpNext] = useState<string[]>([])
   const [shuffle, setShuffle] = useState(false)
-  const [loop, setLoop] = useState<LoopMode>('none')
+  const [loop, setLoop] = useState<LoopMode>("none")
 
   // Playlists
   const [playlists, setPlaylists] = useState<MusicPlaylistMeta[]>([])
@@ -160,22 +177,33 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   // Load tracks
   useEffect(() => {
     if (!user) return
-    if (!hasMusic) { setLoading(false); return }
+    if (!hasMusic) {
+      setLoading(false)
+      return
+    }
     fetchMusicTracks()
-      .then(({ tracks: fetched }) => { setTracks(fetched); setError(null) })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load tracks"))
+      .then(({ tracks: fetched }) => {
+        setTracks(fetched)
+        setError(null)
+      })
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load tracks")
+      )
       .finally(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMusic, !!user])
 
   // Load playlists
   useEffect(() => {
-    if (!user || !hasMusic) { setPlaylistsLoading(false); return }
+    if (!user || !hasMusic) {
+      setPlaylistsLoading(false)
+      return
+    }
     fetchMusicPlaylists()
       .then(({ playlists: fetched }) => setPlaylists(fetched))
       .catch(() => {})
       .finally(() => setPlaylistsLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMusic, !!user])
 
   const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
@@ -183,7 +211,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   // ── Media Session ────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
+      return
     if (!currentTrack) {
       navigator.mediaSession.metadata = null
       navigator.mediaSession.playbackState = "none"
@@ -193,13 +222,18 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       title: currentTrack.title,
       artist: currentTrack.artist ?? "",
       album: currentTrack.album ?? "",
-      artwork: currentTrack.coverUrl ? [{ src: currentTrack.coverUrl, sizes: "512x512" }] : [],
+      artwork: currentTrack.coverUrl
+        ? [{ src: currentTrack.coverUrl, sizes: "512x512" }]
+        : [],
     })
   }, [currentTrack])
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
-    navigator.mediaSession.playbackState = player.isPlaying ? "playing" : "paused"
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
+      return
+    navigator.mediaSession.playbackState = player.isPlaying
+      ? "playing"
+      : "paused"
   }, [player.isPlaying])
 
   // ── Native loop ──────────────────────────────────────────────────────────────
@@ -207,35 +241,53 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = player.ref.current
     if (!audio) return
-    audio.loop = loop === 'track'
+    audio.loop = loop === "track"
   }, [loop, player.ref])
 
   // ── Core play helper (internal) ──────────────────────────────────────────────
 
-  const _playById = useCallback((id: string) => {
-    const track = tracksRef.current.find((t) => t.id === id)
-    if (!track) return
-    setCurrentTrackId(id)
-    player.play({ id: track.id, src: track.audioUrl, data: track })
-    if (isMobile) setNowPlayingOpen(true)
-  }, [player, isMobile])
+  const _playById = useCallback(
+    (id: string) => {
+      const track = tracksRef.current.find((t) => t.id === id)
+      if (!track) return
+      setCurrentTrackId(id)
+      player.play({ id: track.id, src: track.audioUrl, data: track })
+      if (isMobile) setNowPlayingOpen(true)
+    },
+    [player, isMobile]
+  )
+
+  const ensureQueueLoaded = useCallback(() => {
+    if (queueRef.current.length > 0) return
+    const allIds = tracksRef.current.map((t) => t.id)
+    if (allIds.length === 0) return
+    setQueue(allIds)
+    if (shuffleRef.current) {
+      setShuffledQueue(
+        shuffleArray(allIds, currentTrackIdRef.current ?? undefined)
+      )
+    }
+  }, [])
 
   // ── Public playTrack ─────────────────────────────────────────────────────────
 
-  const playTrack = useCallback((id: string, newQueue?: string[]) => {
-    if (newQueue) {
-      setQueue(newQueue)
-      if (shuffleRef.current) {
-        const sh = shuffleArray(newQueue, id)
-        setShuffledQueue(sh)
+  const playTrack = useCallback(
+    (id: string, newQueue?: string[]) => {
+      if (newQueue) {
+        setQueue(newQueue)
+        if (shuffleRef.current) {
+          const sh = shuffleArray(newQueue, id)
+          setShuffledQueue(sh)
+        }
+      } else if (queueRef.current.length === 0) {
+        const allIds = tracksRef.current.map((t) => t.id)
+        setQueue(allIds)
+        if (shuffleRef.current) setShuffledQueue(shuffleArray(allIds, id))
       }
-    } else if (queueRef.current.length === 0) {
-      const allIds = tracksRef.current.map((t) => t.id)
-      setQueue(allIds)
-      if (shuffleRef.current) setShuffledQueue(shuffleArray(allIds, id))
-    }
-    _playById(id)
-  }, [_playById])
+      _playById(id)
+    },
+    [_playById]
+  )
 
   // ── playNext / playPrev ──────────────────────────────────────────────────────
 
@@ -243,7 +295,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const playPrevRef = useRef<() => void>(() => {})
 
   const playNext = useCallback(() => {
-    if (loopRef.current === 'track') return // native audio.loop handles it
+    if (loopRef.current === "track") return // native audio.loop handles it
 
     if (upNextRef.current.length > 0) {
       const [nextId, ...rest] = upNextRef.current
@@ -252,48 +304,63 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const effective = shuffleRef.current ? shuffledQueueRef.current : queueRef.current
+    const effective = shuffleRef.current
+      ? shuffledQueueRef.current
+      : queueRef.current
     if (effective.length === 0) return
-    const idx = effective.indexOf(currentTrackIdRef.current ?? '')
+    const idx = effective.indexOf(currentTrackIdRef.current ?? "")
     const nextIdx = idx + 1
 
     if (nextIdx < effective.length) {
       _playById(effective[nextIdx])
-    } else if (loopRef.current === 'all') {
+    } else if (loopRef.current === "all") {
       _playById(effective[0])
     }
   }, [_playById])
 
   const playPrev = useCallback(() => {
-    const effective = shuffleRef.current ? shuffledQueueRef.current : queueRef.current
+    const effective = shuffleRef.current
+      ? shuffledQueueRef.current
+      : queueRef.current
     if (effective.length === 0) return
-    const idx = effective.indexOf(currentTrackIdRef.current ?? '')
+    const idx = effective.indexOf(currentTrackIdRef.current ?? "")
     const prevIdx = idx <= 0 ? effective.length - 1 : idx - 1
     _playById(effective[prevIdx])
   }, [_playById])
 
   // Keep refs updated so auto-advance can call current version
-  useEffect(() => { playNextRef.current = playNext }, [playNext])
-  useEffect(() => { playPrevRef.current = playPrev }, [playPrev])
+  useEffect(() => {
+    playNextRef.current = playNext
+  }, [playNext])
+  useEffect(() => {
+    playPrevRef.current = playPrev
+  }, [playPrev])
 
   // ── Auto-advance on track end ─────────────────────────────────────────────────
 
   useEffect(() => {
     const audio = player.ref.current
     if (!audio) return
-    const handle = () => { if (loopRef.current !== 'track') playNextRef.current() }
-    audio.addEventListener('ended', handle)
-    return () => audio.removeEventListener('ended', handle)
+    const handle = () => {
+      if (loopRef.current !== "track") playNextRef.current()
+    }
+    audio.addEventListener("ended", handle)
+    return () => audio.removeEventListener("ended", handle)
   }, [player.ref])
 
   // ── Media Session action handlers ────────────────────────────────────────────
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator))
+      return
     navigator.mediaSession.setActionHandler("play", () => player.play())
     navigator.mediaSession.setActionHandler("pause", () => player.pause())
-    navigator.mediaSession.setActionHandler("previoustrack", () => playPrevRef.current())
-    navigator.mediaSession.setActionHandler("nexttrack", () => playNextRef.current())
+    navigator.mediaSession.setActionHandler("previoustrack", () =>
+      playPrevRef.current()
+    )
+    navigator.mediaSession.setActionHandler("nexttrack", () =>
+      playNextRef.current()
+    )
     return () => {
       navigator.mediaSession.setActionHandler("play", null)
       navigator.mediaSession.setActionHandler("pause", null)
@@ -317,69 +384,84 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clearQueue = useCallback(() => setUpNext([]), [])
+  const reorderQueue = useCallback((from: number, to: number) => {
+    setUpNext((prev) => moveItem(prev, from, to))
+  }, [])
 
   // ── Shuffle ───────────────────────────────────────────────────────────────────
 
   const toggleShuffle = useCallback(() => {
     setShuffle((prev) => {
       const next = !prev
+      ensureQueueLoaded()
       if (next && queueRef.current.length > 0) {
-        setShuffledQueue(shuffleArray(queueRef.current, currentTrackIdRef.current ?? undefined))
+        setShuffledQueue(
+          shuffleArray(queueRef.current, currentTrackIdRef.current ?? undefined)
+        )
       }
       return next
     })
-  }, [])
+  }, [ensureQueueLoaded])
 
   // ── Convenience play methods ─────────────────────────────────────────────────
 
-  const playAll = useCallback((doShuffle = false) => {
-    const all = tracksRef.current.map((t) => t.id)
-    if (all.length === 0) return
-    if (doShuffle) {
-      const sh = shuffleArray(all)
-      setShuffle(true)
-      setShuffledQueue(sh)
-      setQueue(all)
-      _playById(sh[0])
-    } else {
-      setShuffle(false)
-      setQueue(all)
-      _playById(all[0])
-    }
-  }, [_playById])
+  const playAll = useCallback(
+    (doShuffle = false) => {
+      const all = tracksRef.current.map((t) => t.id)
+      if (all.length === 0) return
+      if (doShuffle) {
+        const sh = shuffleArray(all)
+        setShuffle(true)
+        setShuffledQueue(sh)
+        setQueue(all)
+        _playById(sh[0])
+      } else {
+        setShuffle(false)
+        setQueue(all)
+        _playById(all[0])
+      }
+    },
+    [_playById]
+  )
 
-  const playAlbum = useCallback((album: string, startId?: string, doShuffle = false) => {
-    const albumTracks = tracksRef.current.filter((t) => t.album === album)
-    if (albumTracks.length === 0) return
-    const ids = albumTracks.map((t) => t.id)
-    if (doShuffle) {
-      const sh = shuffleArray(ids, startId)
-      setShuffle(true)
-      setShuffledQueue(sh)
-      setQueue(ids)
-      _playById(sh[0])
-    } else {
-      setShuffle(false)
-      setQueue(ids)
-      _playById(startId ?? ids[0])
-    }
-  }, [_playById])
+  const playAlbum = useCallback(
+    (album: string, startId?: string, doShuffle = false) => {
+      const albumTracks = tracksRef.current.filter((t) => t.album === album)
+      if (albumTracks.length === 0) return
+      const ids = albumTracks.map((t) => t.id)
+      if (doShuffle) {
+        const sh = shuffleArray(ids, startId)
+        setShuffle(true)
+        setShuffledQueue(sh)
+        setQueue(ids)
+        _playById(sh[0])
+      } else {
+        setShuffle(false)
+        setQueue(ids)
+        _playById(startId ?? ids[0])
+      }
+    },
+    [_playById]
+  )
 
-  const playPlaylist = useCallback((playlistTracks: MusicTrackMeta[], startId?: string, doShuffle = false) => {
-    if (playlistTracks.length === 0) return
-    const ids = playlistTracks.map((t) => t.id)
-    if (doShuffle) {
-      const sh = shuffleArray(ids, startId)
-      setShuffle(true)
-      setShuffledQueue(sh)
-      setQueue(ids)
-      _playById(sh[0])
-    } else {
-      setShuffle(false)
-      setQueue(ids)
-      _playById(startId ?? ids[0])
-    }
-  }, [_playById])
+  const playPlaylist = useCallback(
+    (playlistTracks: MusicTrackMeta[], startId?: string, doShuffle = false) => {
+      if (playlistTracks.length === 0) return
+      const ids = playlistTracks.map((t) => t.id)
+      if (doShuffle) {
+        const sh = shuffleArray(ids, startId)
+        setShuffle(true)
+        setShuffledQueue(sh)
+        setQueue(ids)
+        _playById(sh[0])
+      } else {
+        setShuffle(false)
+        setQueue(ids)
+        _playById(startId ?? ids[0])
+      }
+    },
+    [_playById]
+  )
 
   // ── Track library management ─────────────────────────────────────────────────
 
@@ -388,19 +470,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateTrack = useCallback((track: MusicTrackMeta) => {
-    setTracks((prev) => prev.map((t) => t.id === track.id ? track : t))
+    setTracks((prev) => prev.map((t) => (t.id === track.id ? track : t)))
   }, [])
 
-  const removeTrack = useCallback((id: string) => {
-    setTracks((prev) => prev.filter((t) => t.id !== id))
-    setQueue((prev) => prev.filter((qid) => qid !== id))
-    setShuffledQueue((prev) => prev.filter((qid) => qid !== id))
-    setUpNext((prev) => prev.filter((qid) => qid !== id))
-    if (currentTrackIdRef.current === id) {
-      player.pause()
-      setCurrentTrackId(null)
-    }
-  }, [player])
+  const removeTrack = useCallback(
+    (id: string) => {
+      setTracks((prev) => prev.filter((t) => t.id !== id))
+      setQueue((prev) => prev.filter((qid) => qid !== id))
+      setShuffledQueue((prev) => prev.filter((qid) => qid !== id))
+      setUpNext((prev) => prev.filter((qid) => qid !== id))
+      if (currentTrackIdRef.current === id) {
+        player.pause()
+        setCurrentTrackId(null)
+      }
+    },
+    [player]
+  )
 
   // ── Playlist management ──────────────────────────────────────────────────────
 
@@ -409,11 +494,17 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setPlaylists(fetched)
   }, [])
 
-  const createPlaylist = useCallback(async (name: string, description?: string | null): Promise<MusicPlaylistMeta> => {
-    const { playlist } = await apiCreatePlaylist(name, description)
-    setPlaylists((prev) => [playlist, ...prev])
-    return playlist
-  }, [])
+  const createPlaylist = useCallback(
+    async (
+      name: string,
+      description?: string | null
+    ): Promise<MusicPlaylistMeta> => {
+      const { playlist } = await apiCreatePlaylist(name, description)
+      setPlaylists((prev) => [playlist, ...prev])
+      return playlist
+    },
+    []
+  )
 
   const deletePlaylist = useCallback(async (id: string) => {
     await apiDeletePlaylist(id)
@@ -422,40 +513,90 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   const renamePlaylist = useCallback(async (id: string, name: string) => {
     const { playlist } = await apiUpdatePlaylist(id, { name })
-    setPlaylists((prev) => prev.map((p) => p.id === id ? playlist : p))
+    setPlaylists((prev) => prev.map((p) => (p.id === id ? playlist : p)))
   }, [])
 
-  const addTrackToPlaylist = useCallback(async (playlistId: string, trackId: string) => {
-    await apiAddTrackToPlaylist(playlistId, trackId)
-    setPlaylists((prev) => prev.map((p) =>
-      p.id === playlistId ? { ...p, trackCount: p.trackCount + 1, updatedAt: new Date().toISOString() } : p
-    ))
-  }, [])
+  const addTrackToPlaylist = useCallback(
+    async (playlistId: string, trackId: string) => {
+      await apiAddTrackToPlaylist(playlistId, trackId)
+      setPlaylists((prev) =>
+        prev.map((p) =>
+          p.id === playlistId
+            ? {
+                ...p,
+                trackCount: p.trackCount + 1,
+                updatedAt: new Date().toISOString(),
+              }
+            : p
+        )
+      )
+    },
+    []
+  )
 
-  const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string) => {
-    await apiRemoveTrackFromPlaylist(playlistId, trackId)
-    setPlaylists((prev) => prev.map((p) =>
-      p.id === playlistId ? { ...p, trackCount: Math.max(0, p.trackCount - 1), updatedAt: new Date().toISOString() } : p
-    ))
-  }, [])
+  const removeTrackFromPlaylist = useCallback(
+    async (playlistId: string, trackId: string) => {
+      await apiRemoveTrackFromPlaylist(playlistId, trackId)
+      setPlaylists((prev) =>
+        prev.map((p) =>
+          p.id === playlistId
+            ? {
+                ...p,
+                trackCount: Math.max(0, p.trackCount - 1),
+                updatedAt: new Date().toISOString(),
+              }
+            : p
+        )
+      )
+    },
+    []
+  )
 
   return (
-    <MusicContext.Provider value={{
-      tracks, currentTrackId, currentTrack, loading, error,
-      queue, upNext, shuffle, loop,
-      nowPlayingOpen,
-      openNowPlaying: () => setNowPlayingOpen(true),
-      closeNowPlaying: () => setNowPlayingOpen(false),
-      playTrack, playNext, playPrev,
-      addToQueue, playNextTrack, removeFromQueue, clearQueue,
-      toggleShuffle, setLoop,
-      playAll, playAlbum, playPlaylist,
-      addTrack, removeTrack, updateTrack,
-      isCreatorMode, setCreatorMode, isCreator,
-      playlists, playlistsLoading,
-      refreshPlaylists, createPlaylist, deletePlaylist, renamePlaylist,
-      addTrackToPlaylist, removeTrackFromPlaylist,
-    }}>
+    <MusicContext.Provider
+      value={{
+        tracks,
+        currentTrackId,
+        currentTrack,
+        loading,
+        error,
+        queue,
+        shuffledQueue,
+        upNext,
+        shuffle,
+        loop,
+        nowPlayingOpen,
+        openNowPlaying: () => setNowPlayingOpen(true),
+        closeNowPlaying: () => setNowPlayingOpen(false),
+        playTrack,
+        playNext,
+        playPrev,
+        addToQueue,
+        playNextTrack,
+        removeFromQueue,
+        clearQueue,
+        reorderQueue,
+        toggleShuffle,
+        setLoop,
+        playAll,
+        playAlbum,
+        playPlaylist,
+        addTrack,
+        removeTrack,
+        updateTrack,
+        isCreatorMode,
+        setCreatorMode,
+        isCreator,
+        playlists,
+        playlistsLoading,
+        refreshPlaylists,
+        createPlaylist,
+        deletePlaylist,
+        renamePlaylist,
+        addTrackToPlaylist,
+        removeTrackFromPlaylist,
+      }}
+    >
       {children}
     </MusicContext.Provider>
   )

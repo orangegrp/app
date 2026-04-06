@@ -6,7 +6,7 @@ export interface UseLongPressOptions {
 
 export function useLongPress(
   onLongPress: () => void,
-  { threshold = 450 }: UseLongPressOptions = {}
+  { threshold = 500 }: UseLongPressOptions = {}
 ) {
   const timer = useRef<NodeJS.Timeout | null>(null)
   const callbackRef = useRef(onLongPress)
@@ -39,7 +39,6 @@ export function useLongPress(
     onTouchStart: start,
     onTouchEnd: clear,
     onTouchCancel: clear,
-    onTouchMove: clear,
     onContextMenu: (event: MouseEvent) => event.preventDefault(),
   }
 }

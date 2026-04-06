@@ -117,6 +117,7 @@ export function MusicTrackCard({
   const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const suppressTapRef = useRef(false)
   const menuTriggerRef = useRef<HTMLDivElement | null>(null)
   const lastPointerRef = useRef<PointerPoint | null>(null)
 
@@ -145,9 +146,10 @@ export function MusicTrackCard({
     menuTriggerRef.current.dispatchEvent(evt)
   }, [])
 
-  const baseLongPressHandlers = useLongPress(() =>
-    triggerContextMenu(lastPointerRef.current)
-  )
+  const baseLongPressHandlers = useLongPress(() => {
+    suppressTapRef.current = true
+    setMenuOpen(true)
+  })
   const longPressHandlers = {
     ...baseLongPressHandlers,
     onMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -192,9 +194,9 @@ export function MusicTrackCard({
   const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
   const iconOverlayButton =
-    "glass-button glass-button-glass pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full text-white"
+    "glass-button glass-button-glass pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
   const playOverlayButton =
-    "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md"
+    "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/18 ring-1 ring-white/30 backdrop-blur-xl shadow-[0_18px_36px_rgba(0,0,0,0.35)]"
 
   const openEdit = (e?: ReactMouseEvent) => {
     e?.stopPropagation()
@@ -279,6 +281,12 @@ export function MusicTrackCard({
   return (
     <div
       {...longPressHandlers}
+      onClickCapture={(event) => {
+        if (!suppressTapRef.current) return
+        event.preventDefault()
+        event.stopPropagation()
+        suppressTapRef.current = false
+      }}
       className={cn(
         "glass-card group relative flex flex-col overflow-hidden rounded-xl transition-all select-none",
         isActive && "ring-1 ring-foreground/30"
@@ -307,6 +315,10 @@ export function MusicTrackCard({
             <div className="absolute top-2 right-2 flex gap-1 opacity-90 transition-opacity">
               <button
                 onClick={(e) => {
+                  if (suppressTapRef.current) {
+                    suppressTapRef.current = false
+                    return
+                  }
                   e.stopPropagation()
                   setShareOpen(true)
                 }}
@@ -322,6 +334,10 @@ export function MusicTrackCard({
                   aria-label="Show actions"
                   ref={menuTriggerRef}
                   onClick={(event) => {
+                    if (suppressTapRef.current) {
+                      suppressTapRef.current = false
+                      return
+                    }
                     event.stopPropagation()
                     const point =
                       event.nativeEvent.detail === 0 &&
@@ -400,6 +416,10 @@ export function MusicTrackCard({
             <div className="flex flex-1 items-center justify-center">
               <button
                 onClick={(e) => {
+                  if (suppressTapRef.current) {
+                    suppressTapRef.current = false
+                    return
+                  }
                   e.stopPropagation()
                   onPlay()
                 }}

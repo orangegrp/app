@@ -4,6 +4,7 @@ import { type DragEvent, useCallback, useEffect, useRef, useState } from "react"
 import {
   ChevronRight,
   GripVertical,
+  ImagePlus,
   Loader2,
   Music2,
   Pencil,
@@ -43,7 +44,7 @@ import {
 import { Button } from "@/components/ui/button"
 
 const SMALL_TILE_BUTTON_CLASS =
-  "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full text-white"
+  "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
 
 export function PlaylistSection() {
   const {
@@ -303,7 +304,7 @@ function PlaylistCard({
             <button
               onClick={(e) => handlePlay(e, false)}
               disabled={playing || playlist.trackCount === 0}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md hover:bg-white/20 disabled:opacity-40"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/18 shadow-[0_14px_30px_rgba(0,0,0,0.35)] ring-1 ring-white/30 backdrop-blur-xl hover:bg-white/24 disabled:opacity-40"
               aria-label="Play playlist"
             >
               {playing ? (
@@ -315,7 +316,7 @@ function PlaylistCard({
             <button
               onClick={(e) => handlePlay(e, true)}
               disabled={playing || playlist.trackCount === 0}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md hover:bg-white/20 disabled:opacity-40"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/18 shadow-[0_14px_30px_rgba(0,0,0,0.35)] ring-1 ring-white/30 backdrop-blur-xl hover:bg-white/24 disabled:opacity-40"
               aria-label="Shuffle playlist"
             >
               <Shuffle className="h-4 w-4 text-white" />
@@ -594,8 +595,10 @@ function PlaylistDetailModal({
                   onClick={() => coverInputRef.current?.click()}
                   disabled={!tracks || tracks.length === 0 || updatingCover}
                   className="glass-button glass-button-ghost flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs disabled:opacity-40"
+                  aria-label="Add cover art"
+                  title="Add cover art"
                 >
-                  Cover art
+                  <ImagePlus className="h-3.5 w-3.5" />
                 </button>
               )}
               <button

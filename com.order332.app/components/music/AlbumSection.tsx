@@ -21,7 +21,7 @@ interface AlbumInfo {
 const MAX_VISIBLE = 5
 const WAVEFORM_HEIGHTS = [78, 62, 88]
 const SMALL_TILE_BUTTON_CLASS =
-  "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full text-white"
+  "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
 
 export function AlbumSection() {
   const { tracks, playAlbum, currentTrackId, isCreatorMode, updateTrack } =
@@ -171,7 +171,7 @@ function AlbumCard({
             isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           )}
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/18 shadow-[0_18px_36px_rgba(0,0,0,0.35)] ring-1 ring-white/30 backdrop-blur-xl">
             <Play className="ml-0.5 h-5 w-5 fill-white text-white" />
           </div>
         </div>

@@ -178,7 +178,7 @@ export function AppSidebar({ collapsed, onToggle, musicWidget }: AppSidebarProps
       {musicWidget}
 
       {/* Profile trigger */}
-      <div className="relative border-t border-white/5 p-2">
+      <div className="relative border-t border-white/5 px-2 py-2.5 sm:h-[73px]">
         {/* Popover — fixed so it escapes the sidebar's backdrop-filter stacking context */}
         {popoverOpen && (
           <div

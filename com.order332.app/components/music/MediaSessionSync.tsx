@@ -151,40 +151,19 @@ export function MediaSessionSync() {
           updatePositionState()
         },
       ],
-      [
-        "seekbackward",
-        (details) => {
-          const audio = playerRef.current.ref.current
-          if (!audio) return
-          const offset = details.seekOffset ?? 10
-          playerRef.current.seek(Math.max(0, audio.currentTime - offset))
-          updatePositionState()
-        },
-      ],
-      [
-        "seekforward",
-        (details) => {
-          const audio = playerRef.current.ref.current
-          if (!audio) return
-          const duration = Number.isFinite(audio.duration)
-            ? audio.duration
-            : Infinity
-          const offset = details.seekOffset ?? 10
-          playerRef.current.seek(Math.min(duration, audio.currentTime + offset))
-          updatePositionState()
-        },
-      ],
     ]
 
-    for (const [action, handler] of handlers) {
-      try {
-        navigator.mediaSession.setActionHandler(action, handler)
-      } catch {
-        // Action not supported in this browser
+    const setHandlers = () => {
+      for (const [action, handler] of handlers) {
+        try {
+          navigator.mediaSession.setActionHandler(action, handler)
+        } catch {
+          // Action not supported in this browser
+        }
       }
     }
 
-    return () => {
+    const clearHandlers = () => {
       for (const [action] of handlers) {
         try {
           navigator.mediaSession.setActionHandler(action, null)
@@ -192,6 +171,30 @@ export function MediaSessionSync() {
           // Ignore unsupported cleanup failures
         }
       }
+    }
+
+    setHandlers()
+
+    const audio = playerRef.current.ref.current
+    const refreshHandlers = () => {
+      setHandlers()
+      updatePositionState()
+    }
+
+    if (audio) {
+      // iOS is more reliable when actions are re-asserted after real playback starts.
+      audio.addEventListener("play", refreshHandlers)
+      audio.addEventListener("playing", refreshHandlers)
+      audio.addEventListener("loadedmetadata", refreshHandlers)
+    }
+
+    return () => {
+      if (audio) {
+        audio.removeEventListener("play", refreshHandlers)
+        audio.removeEventListener("playing", refreshHandlers)
+        audio.removeEventListener("loadedmetadata", refreshHandlers)
+      }
+      clearHandlers()
     }
   }, [updatePositionState])
 

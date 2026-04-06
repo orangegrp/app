@@ -144,6 +144,26 @@ export function PlaylistSection() {
   )
 }
 
+// ── Playlist cover art ────────────────────────────────────────────────────────
+
+function PlaylistCoverArt({ coverUrls }: { coverUrls?: string[] }) {
+  if (!coverUrls?.length) {
+    return <Music2 className="h-12 w-12 text-muted-foreground/20" />
+  }
+  if (coverUrls.length === 1) {
+    return <img src={coverUrls[0]} alt="" className="h-full w-full object-cover" loading="lazy" />
+  }
+  // 2×2 grid — pad with last image if fewer than 4
+  const cells = [0, 1, 2, 3].map((i) => coverUrls[Math.min(i, coverUrls.length - 1)])
+  return (
+    <div className="grid grid-cols-2 h-full w-full">
+      {cells.map((url, i) => (
+        <img key={i} src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+      ))}
+    </div>
+  )
+}
+
 // ── Playlist card ─────────────────────────────────────────────────────────────
 
 interface PlaylistCardProps {
@@ -186,9 +206,9 @@ function PlaylistCard({ playlist, canManage, onOpen, onDelete, onRename, onPlay 
         className="glass-card group relative flex cursor-pointer flex-col overflow-hidden rounded-xl transition-all hover:ring-1 hover:ring-foreground/20"
         onClick={onOpen}
       >
-        {/* Cover grid placeholder */}
-        <div className="relative aspect-square bg-foreground/5 flex items-center justify-center">
-          <Music2 className="h-12 w-12 text-muted-foreground/20" />
+        {/* Cover art */}
+        <div className="relative aspect-square bg-foreground/5 flex items-center justify-center overflow-hidden">
+          <PlaylistCoverArt coverUrls={playlist.coverUrls} />
 
           {/* Hover overlay */}
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">

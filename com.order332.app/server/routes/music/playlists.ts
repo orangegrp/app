@@ -23,10 +23,58 @@ const updateSchema = z.object({
   description: z.string().max(1000).nullable().optional(),
 })
 
-// GET /music/playlists
+// GET /music/playlists — includes first 4 signed cover URLs per playlist for the 2x2 grid
 musicPlaylistRoutes.get('/', async (c) => {
   const playlists = await db.listMusicPlaylists()
-  return c.json({ playlists })
+  if (playlists.length === 0) return c.json({ playlists })
+
+  // Fetch junction rows for all playlists
+  const playlistIds = playlists.map((p) => p.id)
+  const { data: ptRows } = await supabase
+    .from('music_playlist_tracks')
+    .select('playlist_id, track_id')
+    .in('playlist_id', playlistIds)
+
+  // Group up to 4 track IDs per playlist (in arrival order)
+  const trackIdsByPlaylist = new Map<string, string[]>()
+  for (const row of ptRows ?? []) {
+    const arr = trackIdsByPlaylist.get(row.playlist_id) ?? []
+    if (arr.length < 4) { arr.push(row.track_id); trackIdsByPlaylist.set(row.playlist_id, arr) }
+  }
+
+  const allTrackIds = [...new Set([...trackIdsByPlaylist.values()].flat())]
+  const coverKeysByTrack = new Map<string, string>()
+  if (allTrackIds.length > 0) {
+    const { data: trackRows } = await supabase
+      .from('music_tracks')
+      .select('id, cover_key')
+      .in('id', allTrackIds)
+      .not('cover_key', 'is', null)
+    for (const row of trackRows ?? []) {
+      if (row.cover_key) coverKeysByTrack.set(row.id, row.cover_key)
+    }
+  }
+
+  // Build cover keys per playlist and sign them in one batch
+  const coverKeysByPlaylist = new Map<string, string[]>()
+  for (const [playlistId, trackIds] of trackIdsByPlaylist) {
+    const keys = trackIds.map((id) => coverKeysByTrack.get(id)).filter(Boolean) as string[]
+    if (keys.length > 0) coverKeysByPlaylist.set(playlistId, keys)
+  }
+
+  const allCoverKeys = [...new Set([...coverKeysByPlaylist.values()].flat())]
+  const signed = allCoverKeys.length > 0
+    ? await signUrls(MUSIC_TRACKS_BUCKET, allCoverKeys)
+    : new Map<string, string>()
+
+  return c.json({
+    playlists: playlists.map((p) => ({
+      ...p,
+      coverUrls: (coverKeysByPlaylist.get(p.id) ?? [])
+        .map((k) => signed.get(k))
+        .filter(Boolean) as string[],
+    })),
+  })
 })
 
 // POST /music/playlists

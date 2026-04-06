@@ -63,6 +63,31 @@ export async function uploadMusicLyrics({
   return uploadToMusicBucket({ userId, buffer, contentType, filenameHint, prefix: 'lyrics' })
 }
 
+/** Generates a storage key without uploading. Used for signed upload URL flow. */
+export function generateMusicStorageKey(
+  prefix: 'audio' | 'covers' | 'lyrics',
+  userId: string,
+  contentType: string,
+  filenameHint: string,
+): string {
+  const ext = extensionFromMime(contentType, filenameHint)
+  const safeBase = filenameHint.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 80) || 'file'
+  const rand = Math.random().toString(36).slice(2, 10)
+  return `${prefix}/${userId}/${Date.now()}-${rand}-${safeBase}.${ext}`
+}
+
+/** Creates a signed upload URL for the given storage key (client uploads directly). */
+export async function createMusicSignedUploadUrl(key: string): Promise<string> {
+  try { await ensureMusicTracksBucket() } catch (err) {
+    console.error('[music-upload] ensureMusicTracksBucket error:', err)
+  }
+  const { data, error } = await supabase.storage
+    .from(MUSIC_TRACKS_BUCKET)
+    .createSignedUploadUrl(key)
+  if (error || !data) throw new Error('Failed to create signed upload URL')
+  return data.signedUrl
+}
+
 async function uploadToMusicBucket({
   userId, buffer, contentType, filenameHint, prefix,
 }: MusicUploadParams & { prefix: string }): Promise<{ storageKey: string; publicUrl: string }> {

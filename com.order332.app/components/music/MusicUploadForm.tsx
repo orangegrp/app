@@ -246,7 +246,7 @@ export function MusicUploadForm({ onUploadComplete, onCancel }: MusicUploadFormP
         audioFile,
         coverFile,
         lyricsFile,
-        { title: title.trim(), artist: artist.trim(), genre: genre.trim() || undefined, durationSec },
+        { title: title.trim(), artist: artist.trim(), album: album.trim() || null, genre: genre.trim() || null, durationSec },
         setProgress,
       )
       onUploadComplete(track)

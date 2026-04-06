@@ -1,5 +1,4 @@
 import { apiGet, apiDelete, apiPatch, apiPost } from './api-client'
-import { useAuthStore } from './auth-store'
 
 export type LyricsType = 'lrc' | 'txt'
 export type LoopMode = 'none' | 'track' | 'all'
@@ -28,6 +27,7 @@ export interface MusicPlaylistMeta {
   name: string
   description: string | null
   trackCount: number
+  coverUrls: string[]
 }
 
 export interface MusicPlaylistWithTracks extends Omit<MusicPlaylistMeta, 'trackCount'> {
@@ -55,62 +55,69 @@ export async function fetchTrackLyrics(trackId: string): Promise<{ content: stri
 }
 
 /**
- * Uploads a music track with all associated files.
- * Uses XMLHttpRequest for upload progress support.
- * @param onProgress — called with 0–100 as bytes are sent
+ * Uploads a music track by:
+ * 1. Requesting signed upload URLs from the server
+ * 2. Uploading files directly to Supabase Storage (bypasses Vercel size limits)
+ * 3. Registering the track with the server using the resulting storage keys
+ *
+ * @param onProgress — called with 0–100 during the audio file upload
  */
 export async function uploadMusicTrack(
   audio: File,
   cover: File | null,
   lyrics: File | null,
-  meta: { title: string; artist: string; genre?: string; durationSec: number },
+  meta: { title: string; artist: string; album?: string | null; genre?: string | null; durationSec: number },
   onProgress?: (pct: number) => void,
 ): Promise<{ track: MusicTrackMeta }> {
+  // Step 1: Request signed upload URLs
+  const fileSpecs: Array<{ prefix: 'audio' | 'covers' | 'lyrics'; filename: string; contentType: string }> = [
+    { prefix: 'audio', filename: audio.name, contentType: audio.type },
+  ]
+  if (cover) fileSpecs.push({ prefix: 'covers', filename: cover.name, contentType: cover.type })
+  if (lyrics) fileSpecs.push({ prefix: 'lyrics', filename: lyrics.name, contentType: lyrics.type })
+
+  const { urls } = await apiPost<{ urls: Array<{ prefix: string; storageKey: string; signedUrl: string }> }>(
+    '/music/tracks/upload-urls',
+    { files: fileSpecs },
+  )
+
+  const audioUpload = urls.find((u) => u.prefix === 'audio')
+  if (!audioUpload) throw new Error('No audio upload URL returned')
+  const coverUpload = urls.find((u) => u.prefix === 'covers') ?? null
+  const lyricsUpload = urls.find((u) => u.prefix === 'lyrics') ?? null
+
+  // Step 2: Upload files directly to Supabase Storage via signed URLs
+  await _uploadViaXhr(audioUpload.signedUrl, audio, onProgress)
+  if (cover && coverUpload) await _uploadViaXhr(coverUpload.signedUrl, cover)
+  if (lyrics && lyricsUpload) await _uploadViaXhr(lyricsUpload.signedUrl, lyrics)
+
+  // Step 3: Register the track (server saves keys + metadata to DB)
+  return apiPost<{ track: MusicTrackMeta }>('/music/tracks', {
+    audioKey: audioUpload.storageKey,
+    coverKey: coverUpload?.storageKey ?? null,
+    lyricsKey: lyricsUpload?.storageKey ?? null,
+    lyricsType: lyrics ? (lyrics.name.toLowerCase().endsWith('.lrc') ? 'lrc' : 'txt') : null,
+    title: meta.title,
+    artist: meta.artist,
+    album: meta.album ?? null,
+    genre: meta.genre ?? null,
+    durationSec: meta.durationSec,
+  })
+}
+
+function _uploadViaXhr(signedUrl: string, file: File, onProgress?: (pct: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    const formData = new FormData()
-    formData.append('audio', audio)
-    if (cover) formData.append('cover', cover)
-    if (lyrics) formData.append('lyrics', lyrics)
-    formData.append('title', meta.title)
-    formData.append('artist', meta.artist)
-    if (meta.genre) formData.append('genre', meta.genre)
-    formData.append('duration_sec', String(meta.durationSec))
-
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/music/tracks')
-
-    const accessToken = useAuthStore.getState().accessToken
-    if (accessToken) {
-      xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`)
-    }
-
+    xhr.open('PUT', signedUrl)
+    xhr.setRequestHeader('Content-Type', file.type)
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100))
-        }
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
       }
     }
-
-    xhr.onload = () => {
-      if (xhr.status === 201) {
-        try {
-          resolve(JSON.parse(xhr.responseText) as { track: MusicTrackMeta })
-        } catch {
-          reject(new Error('Invalid response'))
-        }
-      } else {
-        try {
-          const err = JSON.parse(xhr.responseText) as { error?: string }
-          reject(new Error(err.error ?? 'Upload failed'))
-        } catch {
-          reject(new Error('Upload failed'))
-        }
-      }
-    }
-
-    xhr.onerror = () => reject(new Error('Network error'))
-    xhr.send(formData)
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Storage upload failed: ${xhr.status}`)))
+    xhr.onerror = () => reject(new Error('Network error during upload'))
+    xhr.send(file)
   })
 }
 

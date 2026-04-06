@@ -1,7 +1,6 @@
 import 'server-only'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { parseBuffer } from 'music-metadata'
 import { requireAuth } from '@/server/middleware/auth'
 import { requirePermission } from '@/server/middleware/rbac'
 import { rateLimitByUser } from '@/server/middleware/rate-limit'
@@ -9,16 +8,12 @@ import { PERMISSIONS } from '@/lib/permissions'
 import {
   MUSIC_TRACKS_BUCKET,
   MUSIC_AUDIO_ALLOWED_TYPES,
-  MUSIC_AUDIO_MAX_SIZE,
   MUSIC_COVER_ALLOWED_TYPES,
-  MUSIC_COVER_MAX_SIZE,
-  MUSIC_LYRICS_MAX_SIZE,
-  uploadMusicAudio,
-  uploadMusicCover,
-  uploadMusicLyrics,
+  generateMusicStorageKey,
+  createMusicSignedUploadUrl,
 } from '@/server/lib/music-upload'
 import { supabase } from '@/server/db/supabase/client'
-import { signUrl, signUrls } from '@/server/lib/signed-url'
+import { signUrls } from '@/server/lib/signed-url'
 import type { HonoEnv, MusicTrack } from '@/server/lib/types'
 
 export const musicTrackRoutes = new Hono<HonoEnv>()
@@ -60,204 +55,134 @@ musicTrackRoutes.get('/', async (c) => {
   return c.json({ tracks: result })
 })
 
-// POST /music/tracks — upload a new music track
+// POST /music/tracks/upload-urls — get signed upload URLs for direct client-to-Supabase upload
+// (bypasses Vercel's request body size limit)
+musicTrackRoutes.post(
+  '/upload-urls',
+  requirePermission(PERMISSIONS.APP_MUSIC_UPLOAD),
+  rateLimitByUser(10, 60_000),
+  async (c) => {
+    const user = c.get('user')
+    let body: { files?: unknown }
+    try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+
+    if (!Array.isArray(body.files) || body.files.length === 0 || body.files.length > 3) {
+      return c.json({ error: 'files must be an array of 1–3 items' }, 400)
+    }
+
+    const ALLOWED_PREFIXES = new Set(['audio', 'covers', 'lyrics'])
+    const results: { prefix: string; storageKey: string; signedUrl: string }[] = []
+
+    for (const file of body.files as unknown[]) {
+      if (typeof file !== 'object' || file === null) return c.json({ error: 'Invalid file spec' }, 400)
+      const { prefix, filename, contentType } = file as Record<string, unknown>
+
+      if (typeof prefix !== 'string' || !ALLOWED_PREFIXES.has(prefix)) {
+        return c.json({ error: `Invalid prefix: ${String(prefix)}` }, 400)
+      }
+      if (typeof contentType !== 'string') {
+        return c.json({ error: 'contentType is required' }, 400)
+      }
+
+      if (prefix === 'audio' && !MUSIC_AUDIO_ALLOWED_TYPES.has(contentType)) {
+        return c.json({ error: `Unsupported audio type: ${contentType}` }, 400)
+      }
+      if (prefix === 'covers' && !MUSIC_COVER_ALLOWED_TYPES.has(contentType)) {
+        return c.json({ error: `Unsupported cover type: ${contentType}` }, 400)
+      }
+      if (prefix === 'lyrics') {
+        const ok = contentType === 'text/plain' || contentType === 'application/octet-stream'
+        if (!ok) return c.json({ error: 'Lyrics must be text/plain' }, 400)
+      }
+
+      const key = generateMusicStorageKey(
+        prefix as 'audio' | 'covers' | 'lyrics',
+        user.id,
+        contentType,
+        typeof filename === 'string' ? filename : 'file',
+      )
+      try {
+        const signedUrl = await createMusicSignedUploadUrl(key)
+        results.push({ prefix, storageKey: key, signedUrl })
+      } catch {
+        return c.json({ error: 'Failed to create upload URL' }, 500)
+      }
+    }
+
+    return c.json({ urls: results })
+  },
+)
+
+// POST /music/tracks — register a track after files have been uploaded via signed URLs
 musicTrackRoutes.post(
   '/',
   requirePermission(PERMISSIONS.APP_MUSIC_UPLOAD),
   rateLimitByUser(5, 60_000),
   async (c) => {
-    let formData: FormData
-    try {
-      formData = await c.req.formData()
-    } catch {
-      return c.json({ error: 'Expected multipart/form-data' }, 400)
-    }
-
-    const audioFile = formData.get('audio')
-    if (!(audioFile instanceof File)) {
-      return c.json({ error: 'Missing audio file' }, 400)
-    }
-
-    if (!MUSIC_AUDIO_ALLOWED_TYPES.has(audioFile.type)) {
-      return c.json({ error: `Unsupported audio type: ${audioFile.type}` }, 400)
-    }
-    if (audioFile.size > MUSIC_AUDIO_MAX_SIZE) {
-      return c.json({ error: 'Audio file exceeds 100 MB limit' }, 400)
-    }
-
-    // Read form meta fields (may be overridden by embedded tags below)
-    const titleRaw = formData.get('title')
-    const artistRaw = formData.get('artist')
-    const genreRaw = formData.get('genre')
-    const durationRaw = formData.get('duration_sec')
-    const coverFile = formData.get('cover')
-    const lyricsFile = formData.get('lyrics')
-
-    // Validate cover if provided
-    if (coverFile instanceof File) {
-      if (!MUSIC_COVER_ALLOWED_TYPES.has(coverFile.type)) {
-        return c.json({ error: `Unsupported cover art type: ${coverFile.type}` }, 400)
-      }
-      if (coverFile.size > MUSIC_COVER_MAX_SIZE) {
-        return c.json({ error: 'Cover art exceeds 5 MB limit' }, 400)
-      }
-    }
-
-    // Validate lyrics if provided
-    if (lyricsFile instanceof File) {
-      if (lyricsFile.size > MUSIC_LYRICS_MAX_SIZE) {
-        return c.json({ error: 'Lyrics file exceeds 1 MB limit' }, 400)
-      }
-      // Accept text/plain or application/octet-stream (common for .lrc files)
-      const validLyricsMime = lyricsFile.type === 'text/plain' ||
-        lyricsFile.type === 'application/octet-stream' ||
-        lyricsFile.name.toLowerCase().endsWith('.lrc') ||
-        lyricsFile.name.toLowerCase().endsWith('.txt')
-      if (!validLyricsMime) {
-        return c.json({ error: 'Lyrics must be a .lrc or .txt file' }, 400)
-      }
-    }
-
     const user = c.get('user')
-    const uploadedStorageKeys: string[] = []
+    let body: Record<string, unknown>
+    try { body = await c.req.json() } catch { return c.json({ error: 'Expected JSON body' }, 400) }
 
-    try {
-      // Read audio into buffer (needed for both metadata extraction and upload)
-      const audioBuffer = await audioFile.arrayBuffer()
+    const audioKey = typeof body.audioKey === 'string' ? body.audioKey : null
+    if (!audioKey) return c.json({ error: 'audioKey is required' }, 400)
+    if (!audioKey.startsWith(`audio/${user.id}/`)) return c.json({ error: 'Invalid audioKey' }, 403)
 
-      // --- Extract embedded metadata (ID3 / Vorbis / etc.) ---
-      let embeddedTitle: string | null = null
-      let embeddedArtist: string | null = null
-      let embeddedGenre: string | null = null
-      let embeddedDuration: number | null = null
-      let embeddedCoverBuffer: Buffer | null = null
-      let embeddedCoverMime: string | null = null
+    const coverKey = typeof body.coverKey === 'string' ? body.coverKey : null
+    if (coverKey && !coverKey.startsWith(`covers/${user.id}/`)) return c.json({ error: 'Invalid coverKey' }, 403)
 
-      try {
-        const meta = await parseBuffer(Buffer.from(audioBuffer), { mimeType: audioFile.type })
-        embeddedTitle = meta.common.title?.trim() || null
-        embeddedArtist = (meta.common.artist || meta.common.albumartist)?.trim() || null
-        embeddedGenre = meta.common.genre?.[0]?.trim() || null
-        embeddedDuration = meta.format.duration ? Math.round(meta.format.duration) : null
-        if (meta.common.picture?.length) {
-          const pic = meta.common.picture[0]
-          embeddedCoverBuffer = Buffer.from(pic.data)
-          embeddedCoverMime = pic.format
-        }
-      } catch (metaErr) {
-        console.warn('[music/tracks] metadata parse warning:', metaErr)
-      }
+    const lyricsKey = typeof body.lyricsKey === 'string' ? body.lyricsKey : null
+    if (lyricsKey && !lyricsKey.startsWith(`lyrics/${user.id}/`)) return c.json({ error: 'Invalid lyricsKey' }, 403)
 
-      // Form values take priority; embedded tags fill gaps; filename is last resort for title
-      const titleFromForm = typeof titleRaw === 'string' && titleRaw.trim() ? titleRaw.trim() : null
-      const artistFromForm = typeof artistRaw === 'string' && artistRaw.trim() ? artistRaw.trim() : null
-      const genreFromForm = typeof genreRaw === 'string' && genreRaw.trim() ? genreRaw.trim() : null
-      const durationFromForm = typeof durationRaw === 'string' ? Math.max(0, Math.round(Number(durationRaw))) : 0
+    const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : ''
+    const artist = typeof body.artist === 'string' ? body.artist.trim().slice(0, 200) : ''
+    if (!title || !artist) return c.json({ error: 'title and artist are required' }, 400)
 
-      const title = (titleFromForm || embeddedTitle || audioFile.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')).slice(0, 200)
-      const artist = (artistFromForm || embeddedArtist || 'Unknown Artist').slice(0, 200)
-      const genre = (genreFromForm || embeddedGenre)?.slice(0, 100) ?? null
-      const durationSec = durationFromForm || embeddedDuration || 0
+    const album = typeof body.album === 'string' ? (body.album.trim().slice(0, 200) || null) : null
+    const genre = typeof body.genre === 'string' ? (body.genre.trim().slice(0, 100) || null) : null
+    const durationSec = typeof body.durationSec === 'number' ? Math.max(0, Math.round(body.durationSec)) : 0
+    const lyricsType = body.lyricsType === 'lrc' || body.lyricsType === 'txt' ? body.lyricsType : null
 
-      const { storageKey: audioKey, publicUrl: audioUrl } = await uploadMusicAudio({
-        userId: user.id,
-        buffer: audioBuffer,
-        contentType: audioFile.type,
-        filenameHint: audioFile.name,
+    const audioUrl = supabase.storage.from(MUSIC_TRACKS_BUCKET).getPublicUrl(audioKey).data.publicUrl
+    const coverUrl = coverKey ? supabase.storage.from(MUSIC_TRACKS_BUCKET).getPublicUrl(coverKey).data.publicUrl : null
+    const lyricsUrl = lyricsKey ? supabase.storage.from(MUSIC_TRACKS_BUCKET).getPublicUrl(lyricsKey).data.publicUrl : null
+
+    const { data, error } = await supabase
+      .from('music_tracks')
+      .insert({
+        uploaded_by: user.id,
+        title,
+        artist,
+        album,
+        genre,
+        duration_sec: durationSec,
+        audio_key: audioKey,
+        audio_url: audioUrl,
+        cover_key: coverKey,
+        cover_url: coverUrl,
+        lyrics_key: lyricsKey,
+        lyrics_url: lyricsUrl,
+        lyrics_type: lyricsType,
       })
-      uploadedStorageKeys.push(audioKey)
+      .select()
+      .single()
 
-      // Upload cover (form file takes priority, then embedded tag art)
-      let coverKey: string | null = null
-      let coverUrl: string | null = null
-      if (coverFile instanceof File) {
-        const coverBuffer = await coverFile.arrayBuffer()
-        const result = await uploadMusicCover({
-          userId: user.id,
-          buffer: coverBuffer,
-          contentType: coverFile.type,
-          filenameHint: coverFile.name,
-        })
-        coverKey = result.storageKey
-        coverUrl = result.publicUrl
-        uploadedStorageKeys.push(coverKey)
-      } else if (embeddedCoverBuffer && embeddedCoverMime && MUSIC_COVER_ALLOWED_TYPES.has(embeddedCoverMime)) {
-        const result = await uploadMusicCover({
-          userId: user.id,
-          buffer: embeddedCoverBuffer.buffer as ArrayBuffer,
-          contentType: embeddedCoverMime,
-          filenameHint: 'cover',
-        })
-        coverKey = result.storageKey
-        coverUrl = result.publicUrl
-        uploadedStorageKeys.push(coverKey)
-      }
-
-      // Upload lyrics (optional)
-      let lyricsKey: string | null = null
-      let lyricsUrl: string | null = null
-      let lyricsType: 'lrc' | 'txt' | null = null
-      if (lyricsFile instanceof File) {
-        const lyricsBuffer = await lyricsFile.arrayBuffer()
-        const result = await uploadMusicLyrics({
-          userId: user.id,
-          buffer: lyricsBuffer,
-          contentType: lyricsFile.type,
-          filenameHint: lyricsFile.name,
-        })
-        lyricsKey = result.storageKey
-        lyricsUrl = result.publicUrl
-        lyricsType = lyricsFile.name.toLowerCase().endsWith('.lrc') ? 'lrc' : 'txt'
-        uploadedStorageKeys.push(lyricsKey)
-      }
-
-      const { data, error } = await supabase
-        .from('music_tracks')
-        .insert({
-          uploaded_by: user.id,
-          title,
-          artist,
-          genre,
-          duration_sec: durationSec,
-          audio_key: audioKey,
-          audio_url: audioUrl,
-          cover_key: coverKey,
-          cover_url: coverUrl,
-          lyrics_key: lyricsKey,
-          lyrics_url: lyricsUrl,
-          lyrics_type: lyricsType,
-        })
-        .select()
-        .single()
-
-      if (error || !data) {
-        // Best-effort cleanup of orphaned storage objects
-        await supabase.storage.from('music-tracks').remove(uploadedStorageKeys).catch(() => {})
-        console.error('[music/tracks] insert error:', error)
-        return c.json({ error: 'Failed to save track' }, 500)
-      }
-
-      const track = rowToMusicTrack(data)
-      const postKeysToSign = [track.audioKey, track.coverKey ?? null, track.lyricsKey ?? null]
-        .filter(Boolean) as string[]
-      const postSigned = await signUrls(MUSIC_TRACKS_BUCKET, postKeysToSign)
-      return c.json({
-        track: {
-          ...track,
-          audioUrl: postSigned.get(track.audioKey) ?? track.audioUrl,
-          coverUrl: track.coverKey ? (postSigned.get(track.coverKey) ?? track.coverUrl) : track.coverUrl,
-          lyricsUrl: track.lyricsKey ? (postSigned.get(track.lyricsKey) ?? track.lyricsUrl) : track.lyricsUrl,
-        },
-      }, 201)
-    } catch (err) {
-      // Best-effort cleanup
-      if (uploadedStorageKeys.length > 0) {
-        await supabase.storage.from('music-tracks').remove(uploadedStorageKeys).catch(() => {})
-      }
-      console.error('[music/tracks] upload error:', err)
-      return c.json({ error: 'Upload failed' }, 500)
+    if (error || !data) {
+      console.error('[music/tracks] register error:', error)
+      return c.json({ error: 'Failed to save track' }, 500)
     }
-  }
+
+    const track = rowToMusicTrack(data)
+    const keysToSign = [track.audioKey, track.coverKey ?? null, track.lyricsKey ?? null].filter(Boolean) as string[]
+    const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+    return c.json({
+      track: {
+        ...track,
+        audioUrl: signed.get(track.audioKey) ?? track.audioUrl,
+        coverUrl: track.coverKey ? (signed.get(track.coverKey) ?? track.coverUrl) : track.coverUrl,
+        lyricsUrl: track.lyricsKey ? (signed.get(track.lyricsKey) ?? track.lyricsUrl) : track.lyricsUrl,
+      },
+    }, 201)
+  },
 )
 
 // PATCH /music/tracks/:id — update track metadata (own items only, or superuser)

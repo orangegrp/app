@@ -61,6 +61,7 @@
     "html5-qrcode": "^2.3.8",
     "input-otp": "^1.4.2",
     "jose": "^6.2.2",
+    "jszip": "^3.10.1",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.7.0",
     "music-metadata": "^11.12.3",

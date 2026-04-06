@@ -1,19 +1,29 @@
-'use client'
+"use client"
 
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { ToggleLeft, ToggleRight } from 'lucide-react'
-import { PageBackground } from '@/components/layout/PageBackground'
-import { MusicTrackGrid } from '@/components/music/MusicTrackGrid'
-import { MusicUploadForm } from '@/components/music/MusicUploadForm'
-import { AlbumSection } from '@/components/music/AlbumSection'
-import { PlaylistSection } from '@/components/music/PlaylistSection'
-import { useMusicContext } from '@/components/music/MusicContext'
+import { useEffect, useRef, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { ToggleLeft, ToggleRight } from "lucide-react"
+import { PageBackground } from "@/components/layout/PageBackground"
+import { MusicTrackGrid } from "@/components/music/MusicTrackGrid"
+import { MusicUploadForm } from "@/components/music/MusicUploadForm"
+import { AlbumSection } from "@/components/music/AlbumSection"
+import { PlaylistSection } from "@/components/music/PlaylistSection"
+import { useMusicContext } from "@/components/music/MusicContext"
 
 export default function MusicPage() {
-  const { isCreator, isCreatorMode, setCreatorMode, addTrack, loading, error, playTrack, openNowPlaying, tracks } = useMusicContext()
+  const {
+    isCreator,
+    isCreatorMode,
+    setCreatorMode,
+    addTrack,
+    loading,
+    error,
+    playTrack,
+    openNowPlaying,
+    tracks,
+  } = useMusicContext()
   const searchParams = useSearchParams()
-  const trackParam = searchParams.get('track')
+  const trackParam = searchParams.get("track")
   const autoPlayedRef = useRef<string | null>(null)
 
   // Auto-play a track linked from a share URL (?track=<id>).
@@ -32,7 +42,7 @@ export default function MusicPage() {
   const [showUploadForm, setShowUploadForm] = useState(false)
 
   return (
-    <div className="page-root relative min-h-screen px-6 pt-8 pb-[calc(var(--mobile-nav-height)+5rem)] sm:pb-28 sm:pt-10">
+    <div className="page-root relative min-h-screen px-6 pt-8 pb-[calc(var(--mobile-nav-height)+5rem)] sm:pt-10 sm:pb-28">
       <PageBackground />
       <div className="relative z-10 mx-auto max-w-6xl">
         <p className="section-label">Music</p>
@@ -48,11 +58,13 @@ export default function MusicPage() {
                 setCreatorMode(next)
                 if (!next) setShowUploadForm(false)
               }}
-              className="mt-1 flex shrink-0 items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="mt-1 flex shrink-0 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              {isCreatorMode
-                ? <ToggleRight className="h-5 w-5 text-foreground" />
-                : <ToggleLeft className="h-5 w-5" />}
+              {isCreatorMode ? (
+                <ToggleRight className="h-5 w-5 text-foreground" />
+              ) : (
+                <ToggleLeft className="h-5 w-5" />
+              )}
               Creator mode
             </button>
           )}
@@ -71,9 +83,8 @@ export default function MusicPage() {
 
         {isCreatorMode && showUploadForm && (
           <MusicUploadForm
-            onUploadComplete={(track) => {
-              addTrack(track)
-              setShowUploadForm(false)
+            onUploadComplete={(uploadedTracks) => {
+              uploadedTracks.forEach((track) => addTrack(track))
             }}
             onCancel={() => setShowUploadForm(false)}
           />
@@ -92,7 +103,9 @@ export default function MusicPage() {
             <AlbumSection />
             <PlaylistSection />
             <div>
-              <p className="mb-4 text-[10px] tracking-[0.2em] text-muted-foreground/50">ALL TRACKS</p>
+              <p className="mb-4 text-[10px] tracking-[0.2em] text-muted-foreground/50">
+                ALL TRACKS
+              </p>
               <MusicTrackGrid />
             </div>
           </>

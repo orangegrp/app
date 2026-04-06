@@ -19,6 +19,9 @@ interface AlbumInfo {
 }
 
 const MAX_VISIBLE = 5
+const WAVEFORM_HEIGHTS = [78, 62, 88]
+const SMALL_TILE_BUTTON_CLASS =
+  "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full text-white"
 
 export function AlbumSection() {
   const { tracks, playAlbum, currentTrackId, isCreatorMode, updateTrack } =
@@ -177,16 +180,16 @@ function AlbumCard({
         {isActive && (
           <div className="absolute bottom-2 left-2">
             <div className="flex h-4 items-end gap-0.5">
-              {[1, 2, 3].map((i) => (
+              {WAVEFORM_HEIGHTS.map((height, i) => (
                 <div
-                  key={i}
+                  key={height}
                   className={cn(
                     "w-1 rounded-full bg-white",
                     isPlaying && "animate-bounce"
                   )}
                   style={{
-                    height: `${Math.random() * 50 + 50}%`,
-                    animationDelay: `${i * 0.1}s`,
+                    height: `${height}%`,
+                    animationDelay: `${(i + 1) * 0.1}s`,
                     animationDuration: "0.6s",
                   }}
                 />
@@ -225,7 +228,7 @@ function AlbumCard({
             e.stopPropagation()
             onShuffle()
           }}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+          className={SMALL_TILE_BUTTON_CLASS}
           aria-label="Shuffle album"
           title="Shuffle album"
         >
@@ -239,7 +242,7 @@ function AlbumCard({
               e.stopPropagation()
               if (!updatingCover) coverInputRef.current?.click()
             }}
-            className="absolute top-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100 hover:bg-foreground/80"
+            className={`${SMALL_TILE_BUTTON_CLASS} absolute top-2 left-2 opacity-0 transition group-hover:opacity-100`}
             aria-label="Edit album art"
             title="Edit album art"
             disabled={updatingCover}

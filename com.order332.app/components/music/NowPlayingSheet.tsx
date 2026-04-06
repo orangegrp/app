@@ -1,6 +1,6 @@
 "use client"
 
-import { type DragEvent, useEffect, useRef, useState } from "react"
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import {
@@ -156,18 +156,28 @@ function QueuePanelContent() {
     reorderQueue,
   } = useMusicContext()
 
-  const autoQueueIds = getUpcomingAutoQueue(
-    queue,
-    shuffledQueue,
-    shuffle,
-    currentTrackId
+  const trackById = useMemo(
+    () => new Map(tracks.map((track) => [track.id, track])),
+    [tracks]
   )
-  const manualTracks = upNext
-    .map((id) => tracks.find((t) => t.id === id))
-    .filter((t): t is MusicTrackMeta => !!t)
-  const autoTracks = autoQueueIds
-    .map((id) => tracks.find((t) => t.id === id))
-    .filter((t): t is MusicTrackMeta => !!t)
+  const autoQueueIds = useMemo(
+    () => getUpcomingAutoQueue(queue, shuffledQueue, shuffle, currentTrackId),
+    [queue, shuffledQueue, shuffle, currentTrackId]
+  )
+  const manualTracks = useMemo(
+    () =>
+      upNext
+        .map((id) => trackById.get(id))
+        .filter((t): t is MusicTrackMeta => !!t),
+    [upNext, trackById]
+  )
+  const autoTracks = useMemo(
+    () =>
+      autoQueueIds
+        .map((id) => trackById.get(id))
+        .filter((t): t is MusicTrackMeta => !!t),
+    [autoQueueIds, trackById]
+  )
 
   const effectiveQueue = shuffle ? shuffledQueue : queue
   const currentIndex = currentTrackId
@@ -175,10 +185,16 @@ function QueuePanelContent() {
     : -1
   const previousIds =
     currentIndex > 0 ? effectiveQueue.slice(0, currentIndex) : []
-  const previousTracks = previousIds
-    .map((id) => tracks.find((t) => t.id === id))
-    .filter((t): t is MusicTrackMeta => !!t)
-  const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
+  const previousTracks = useMemo(
+    () =>
+      previousIds
+        .map((id) => trackById.get(id))
+        .filter((t): t is MusicTrackMeta => !!t),
+    [previousIds, trackById]
+  )
+  const currentTrack = currentTrackId
+    ? (trackById.get(currentTrackId) ?? null)
+    : null
 
   const dragIndexRef = useRef<number | null>(null)
 
@@ -186,6 +202,21 @@ function QueuePanelContent() {
     dragIndexRef.current = index
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer?.setData("text/plain", String(index))
+    const preview = event.currentTarget.cloneNode(true) as HTMLDivElement
+    preview.style.position = "fixed"
+    preview.style.top = "-9999px"
+    preview.style.left = "-9999px"
+    preview.style.width = `${event.currentTarget.getBoundingClientRect().width}px`
+    preview.style.pointerEvents = "none"
+    preview.style.opacity = "0.95"
+    preview.style.transform = "scale(0.98)"
+    preview.style.boxShadow = "0 10px 30px rgba(0,0,0,0.35)"
+    preview.style.borderRadius = "12px"
+    preview.style.background = "var(--glass-bg-overlay)"
+    preview.style.backdropFilter = "var(--glass-blur-panel)"
+    document.body.append(preview)
+    event.dataTransfer.setDragImage(preview, 24, 24)
+    requestAnimationFrame(() => preview.remove())
   }
 
   const onDrop = (index: number, event: DragEvent<HTMLDivElement>) => {

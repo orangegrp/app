@@ -65,6 +65,7 @@ type PointerPoint = {
 
 const COVER_ACCEPT = ["image/jpeg", "image/png", "image/webp"].join(",")
 const LYRICS_ACCEPT = ".lrc,.txt,text/plain"
+const WAVEFORM_HEIGHTS = [78, 62, 88]
 
 const GENRES = [
   "Pop",
@@ -136,6 +137,8 @@ export function MusicTrackCard({
       bubbles: true,
       cancelable: true,
       view: window,
+      button: 2,
+      buttons: 2,
       clientX,
       clientY,
     })
@@ -189,7 +192,7 @@ export function MusicTrackCard({
   const [editGenre, setEditGenre] = useState("")
   const showingPlay = isActive && isPlaying
   const iconOverlayButton =
-    "pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+    "glass-button glass-button-glass pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full text-white"
   const playOverlayButton =
     "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur-md"
 
@@ -301,7 +304,7 @@ export function MusicTrackCard({
 
         <div className="pointer-events-none absolute inset-0">
           <div className="flex h-full flex-col justify-between p-3">
-            <div className="flex justify-end gap-2 opacity-90 transition-opacity">
+            <div className="absolute top-2 right-2 flex gap-1 opacity-90 transition-opacity">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -311,7 +314,7 @@ export function MusicTrackCard({
                 className={iconOverlayButton}
                 aria-label="Share track"
               >
-                <Share2 className="h-4 w-4" />
+                <Share2 className="h-3 w-3" />
               </button>
               <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
                 <ContextMenuTrigger
@@ -330,7 +333,7 @@ export function MusicTrackCard({
                     triggerContextMenu(point)
                   }}
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <MoreHorizontal className="h-3 w-3" />
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem
@@ -421,16 +424,16 @@ export function MusicTrackCard({
         {isActive && (
           <div className="absolute bottom-2 left-2">
             <div className="flex h-4 items-end gap-0.5">
-              {[1, 2, 3].map((i) => (
+              {WAVEFORM_HEIGHTS.map((height, i) => (
                 <div
-                  key={i}
+                  key={height}
                   className={cn(
                     "w-1 rounded-full bg-white",
                     isPlaying && "animate-bounce"
                   )}
                   style={{
-                    height: `${Math.random() * 50 + 50}%`,
-                    animationDelay: `${i * 0.1}s`,
+                    height: `${height}%`,
+                    animationDelay: `${(i + 1) * 0.1}s`,
                     animationDuration: "0.6s",
                   }}
                 />

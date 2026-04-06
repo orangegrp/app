@@ -40,6 +40,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 
+const SMALL_TILE_BUTTON_CLASS =
+  "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full text-white"
+
 export function PlaylistSection() {
   const {
     playlists,
@@ -342,7 +345,7 @@ function PlaylistCard({
                 setNameInput(playlist.name)
                 setRenameOpen(true)
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-foreground/80"
+              className={SMALL_TILE_BUTTON_CLASS}
               aria-label="Rename playlist"
               title="Rename"
             >
@@ -353,7 +356,7 @@ function PlaylistCard({
                 e.stopPropagation()
                 setConfirmDelete(true)
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-destructive/80"
+              className={SMALL_TILE_BUTTON_CLASS}
               aria-label="Delete playlist"
               title="Delete"
             >
@@ -478,7 +481,23 @@ function PlaylistDetailModal({
   const handleDragStart = useCallback(
     (index: number, event: DragEvent<HTMLDivElement>) => {
       dragIndexRef.current = index
+      event.dataTransfer.effectAllowed = "move"
       event.dataTransfer?.setData("text/plain", String(index))
+      const preview = event.currentTarget.cloneNode(true) as HTMLDivElement
+      preview.style.position = "fixed"
+      preview.style.top = "-9999px"
+      preview.style.left = "-9999px"
+      preview.style.width = `${event.currentTarget.getBoundingClientRect().width}px`
+      preview.style.pointerEvents = "none"
+      preview.style.opacity = "0.95"
+      preview.style.transform = "scale(0.98)"
+      preview.style.boxShadow = "0 10px 30px rgba(0,0,0,0.35)"
+      preview.style.borderRadius = "12px"
+      preview.style.background = "var(--glass-bg-overlay)"
+      preview.style.backdropFilter = "var(--glass-blur-panel)"
+      document.body.append(preview)
+      event.dataTransfer.setDragImage(preview, 24, 24)
+      requestAnimationFrame(() => preview.remove())
     },
     []
   )

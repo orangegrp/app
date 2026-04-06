@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, type MouseEvent } from "react"
 
 export interface UseLongPressOptions {
   threshold?: number
@@ -6,7 +6,7 @@ export interface UseLongPressOptions {
 
 export function useLongPress(
   onLongPress: () => void,
-  { threshold = 550 }: UseLongPressOptions = {}
+  { threshold = 450 }: UseLongPressOptions = {}
 ) {
   const timer = useRef<NodeJS.Timeout | null>(null)
   const callbackRef = useRef(onLongPress)
@@ -39,6 +39,7 @@ export function useLongPress(
     onTouchStart: start,
     onTouchEnd: clear,
     onTouchCancel: clear,
-    onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
+    onTouchMove: clear,
+    onContextMenu: (event: MouseEvent) => event.preventDefault(),
   }
 }

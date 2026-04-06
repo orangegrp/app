@@ -10,11 +10,10 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import {
-  useAudioPlayer,
-} from "@/components/ui/audio-player"
+import { useAudioPlayer } from "@/components/ui/audio-player"
 import {
   fetchMusicTracks,
+  refreshMusicTrackSource,
   fetchMusicPlaylists,
   addTrackToPlaylist as apiAddTrackToPlaylist,
   removeTrackFromPlaylist as apiRemoveTrackFromPlaylist,
@@ -30,6 +29,11 @@ import { useAuthStore } from "@/lib/auth-store"
 import { PERMISSIONS } from "@/lib/permissions"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { moveItem } from "@/lib/music-queue"
+import {
+  getCachedTrackSource,
+  purgeMusicCacheForUser,
+  warmTrackCache,
+} from "@/lib/music-cache"
 
 function shuffleArray(arr: string[], firstId?: string): string[] {
   const copy = [...arr]
@@ -171,6 +175,16 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const upNextRef = useRef(upNext)
   const shuffleRef = useRef(shuffle)
   const loopRef = useRef(loop)
+  const playSequenceRef = useRef(0)
+  const activeCachedSrcReleaseRef = useRef<(() => void) | null>(null)
+  const deferredCachedSrcReleaseRef = useRef<(() => void) | null>(null)
+  const deferredCachedSrcTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null)
+  const prefetchAbortRef = useRef<AbortController | null>(null)
+  const prefetchedTrackIdRef = useRef<string | null>(null)
+  const recoveringSrcRef = useRef(false)
+  const previousUserIdRef = useRef<string | null>(null)
 
   tracksRef.current = tracks
   currentTrackIdRef.current = currentTrackId
@@ -212,7 +226,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMusic, !!user])
 
-  const currentTrack = tracks.find((t) => t.id === currentTrackId) ?? null
+  const tracksById = useMemo(() => {
+    const map = new Map<string, MusicTrackMeta>()
+    for (const track of tracks) map.set(track.id, track)
+    return map
+  }, [tracks])
+
+  const currentTrack = currentTrackId
+    ? (tracksById.get(currentTrackId) ?? null)
+    : null
 
   // ── Native loop ──────────────────────────────────────────────────────────────
 
@@ -224,15 +246,116 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   // ── Core play helper (internal) ──────────────────────────────────────────────
 
+  const flushDeferredCachedSourceRelease = useCallback(() => {
+    if (deferredCachedSrcTimerRef.current) {
+      clearTimeout(deferredCachedSrcTimerRef.current)
+      deferredCachedSrcTimerRef.current = null
+    }
+    deferredCachedSrcReleaseRef.current?.()
+    deferredCachedSrcReleaseRef.current = null
+  }, [])
+
+  const releaseActiveCachedSource = useCallback(
+    (deferMs = 0) => {
+      const release = activeCachedSrcReleaseRef.current
+      activeCachedSrcReleaseRef.current = null
+      if (!release) return
+
+      if (deferMs <= 0) {
+        release()
+        return
+      }
+
+      flushDeferredCachedSourceRelease()
+      deferredCachedSrcReleaseRef.current = release
+      deferredCachedSrcTimerRef.current = setTimeout(() => {
+        deferredCachedSrcReleaseRef.current?.()
+        deferredCachedSrcReleaseRef.current = null
+        deferredCachedSrcTimerRef.current = null
+      }, deferMs)
+    },
+    [flushDeferredCachedSourceRelease]
+  )
+
   const _playById = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const track = tracksRef.current.find((t) => t.id === id)
       if (!track) return
+
+      if (player.activeItem?.id === track.id) {
+        setCurrentTrackId(id)
+        try {
+          await player.play()
+        } catch (error) {
+          console.error("[music/context] playback resume failed", error)
+          return
+        }
+
+        if (user?.id) {
+          void warmTrackCache({
+            userId: user.id,
+            trackId: track.id,
+            sourceUrl: track.audioUrl,
+          })
+        }
+        if (isMobile) setNowPlayingOpen(true)
+        return
+      }
+
+      const sequence = ++playSequenceRef.current
       setCurrentTrackId(id)
-      player.play({ id: track.id, src: track.audioUrl, data: track })
+
+      let src = track.audioUrl
+      let releaseCachedSrc: (() => void) | null = null
+
+      if (user?.id) {
+        const cached = await getCachedTrackSource(user.id, track.id)
+        if (sequence !== playSequenceRef.current) {
+          cached?.release()
+          return
+        }
+        if (cached) {
+          src = cached.src
+          releaseCachedSrc = cached.release
+        }
+      }
+
+      releaseActiveCachedSource(2500)
+      activeCachedSrcReleaseRef.current = releaseCachedSrc
+
+      try {
+        await player.play({ id: track.id, src, data: track })
+      } catch (error) {
+        releaseCachedSrc?.()
+        if (src !== track.audioUrl) {
+          activeCachedSrcReleaseRef.current = null
+          try {
+            await player.play({
+              id: track.id,
+              src: track.audioUrl,
+              data: track,
+            })
+          } catch (networkError) {
+            console.error("[music/context] playback failed", networkError)
+            return
+          }
+        } else {
+          console.error("[music/context] playback failed", error)
+          return
+        }
+      }
+
+      if (user?.id) {
+        void warmTrackCache({
+          userId: user.id,
+          trackId: track.id,
+          sourceUrl: track.audioUrl,
+        })
+      }
+
       if (isMobile) setNowPlayingOpen(true)
     },
-    [player, isMobile]
+    [isMobile, player, releaseActiveCachedSource, user?.id]
   )
 
   const ensureQueueLoaded = useCallback(() => {
@@ -262,7 +385,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setQueue(allIds)
         if (shuffleRef.current) setShuffledQueue(shuffleArray(allIds, id))
       }
-      _playById(id)
+      void _playById(id)
     },
     [_playById]
   )
@@ -278,7 +401,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (upNextRef.current.length > 0) {
       const [nextId, ...rest] = upNextRef.current
       setUpNext(rest)
-      _playById(nextId)
+      void _playById(nextId)
       return
     }
 
@@ -290,9 +413,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const nextIdx = idx + 1
 
     if (nextIdx < effective.length) {
-      _playById(effective[nextIdx])
+      void _playById(effective[nextIdx])
     } else if (loopRef.current === "all") {
-      _playById(effective[0])
+      void _playById(effective[0])
     }
   }, [_playById])
 
@@ -303,7 +426,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (effective.length === 0) return
     const idx = effective.indexOf(currentTrackIdRef.current ?? "")
     const prevIdx = idx <= 0 ? effective.length - 1 : idx - 1
-    _playById(effective[prevIdx])
+    void _playById(effective[prevIdx])
   }, [_playById])
 
   // Keep refs updated so auto-advance can call current version
@@ -330,35 +453,131 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = player.ref.current
     if (!audio) return
-    let recovering = false
     const handle = async () => {
       const err = audio.error
       if (!err) return
       // MEDIA_ERR_NETWORK (2) or MEDIA_ERR_SRC_NOT_SUPPORTED (4) suggest expired/bad URL
-      if (err.code !== MediaError.MEDIA_ERR_NETWORK && err.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) return
-      if (recovering) return
-      recovering = true
+      if (
+        err.code !== MediaError.MEDIA_ERR_NETWORK &&
+        err.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+      )
+        return
+
+      if (audio.currentSrc.startsWith("blob:")) return
+      if (recoveringSrcRef.current) return
+
+      recoveringSrcRef.current = true
       try {
-        const { tracks: fresh } = await fetchMusicTracks()
-        setTracks(fresh)
-        // tracksRef will be updated on next render, so look up in fresh directly
         const id = currentTrackIdRef.current
         if (!id) return
-        const track = fresh.find((t) => t.id === id)
-        if (!track) return
+
+        const { track } = await refreshMusicTrackSource(id)
+        setTracks((prev) => prev.map((t) => (t.id === track.id ? track : t)))
+
+        releaseActiveCachedSource(2500)
+
         // Replay from same position
         const resumeAt = audio.currentTime
         await player.play({ id: track.id, src: track.audioUrl, data: track })
         if (resumeAt > 0) player.seek(resumeAt)
+
+        if (user?.id) {
+          void warmTrackCache({
+            userId: user.id,
+            trackId: track.id,
+            sourceUrl: track.audioUrl,
+          })
+        }
       } catch (e) {
         console.error("[music/context] URL refresh failed", e)
       } finally {
-        recovering = false
+        recoveringSrcRef.current = false
       }
     }
     audio.addEventListener("error", handle)
     return () => audio.removeEventListener("error", handle)
-  }, [player, player.ref])
+  }, [player, player.ref, releaseActiveCachedSource, user?.id])
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current
+    const nextUserId = user?.id ?? null
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      void purgeMusicCacheForUser(previousUserId)
+    }
+
+    if (previousUserId !== nextUserId) {
+      prefetchAbortRef.current?.abort()
+      prefetchAbortRef.current = null
+      prefetchedTrackIdRef.current = null
+      flushDeferredCachedSourceRelease()
+      releaseActiveCachedSource()
+    }
+
+    previousUserIdRef.current = nextUserId
+  }, [flushDeferredCachedSourceRelease, releaseActiveCachedSource, user?.id])
+
+  useEffect(() => {
+    if (!user?.id || !currentTrackId) {
+      prefetchAbortRef.current?.abort()
+      prefetchAbortRef.current = null
+      prefetchedTrackIdRef.current = null
+      return
+    }
+
+    let nextTrackId: string | null = null
+
+    if (upNext.length > 0) {
+      nextTrackId = upNext[0]
+    } else {
+      const effective = shuffle ? shuffledQueue : queue
+      if (effective.length > 0) {
+        const idx = effective.indexOf(currentTrackId)
+        if (idx >= 0 && idx + 1 < effective.length) {
+          nextTrackId = effective[idx + 1]
+        } else if (idx >= 0 && loop === "all") {
+          nextTrackId = effective[0] ?? null
+        }
+      }
+    }
+
+    if (!nextTrackId || nextTrackId === currentTrackId) {
+      prefetchAbortRef.current?.abort()
+      prefetchAbortRef.current = null
+      prefetchedTrackIdRef.current = null
+      return
+    }
+
+    if (prefetchedTrackIdRef.current === nextTrackId) return
+
+    const nextTrack = tracksRef.current.find((t) => t.id === nextTrackId)
+    if (!nextTrack) return
+
+    prefetchAbortRef.current?.abort()
+    const controller = new AbortController()
+    prefetchAbortRef.current = controller
+    prefetchedTrackIdRef.current = nextTrackId
+
+    void warmTrackCache({
+      userId: user.id,
+      trackId: nextTrack.id,
+      sourceUrl: nextTrack.audioUrl,
+      signal: controller.signal,
+    }).finally(() => {
+      if (prefetchAbortRef.current === controller) {
+        prefetchAbortRef.current = null
+      }
+    })
+  }, [currentTrackId, loop, queue, shuffledQueue, shuffle, upNext, user?.id])
+
+  useEffect(() => {
+    return () => {
+      prefetchAbortRef.current?.abort()
+      prefetchAbortRef.current = null
+      flushDeferredCachedSourceRelease()
+      releaseActiveCachedSource()
+    }
+  }, [flushDeferredCachedSourceRelease, releaseActiveCachedSource])
 
   // ── Queue management ─────────────────────────────────────────────────────────
 
@@ -383,7 +602,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       if (upNextIndex !== undefined) {
         setUpNext((prev) => prev.filter((_, i) => i !== upNextIndex))
       }
-      _playById(id)
+      void _playById(id)
     },
     [_playById]
   )
@@ -433,11 +652,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setShuffle(true)
         setShuffledQueue(sh)
         setQueue(all)
-        _playById(sh[0])
+        void _playById(sh[0])
       } else {
         setShuffle(false)
         setQueue(all)
-        _playById(all[0])
+        void _playById(all[0])
       }
     },
     [_playById]
@@ -453,11 +672,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setShuffle(true)
         setShuffledQueue(sh)
         setQueue(ids)
-        _playById(sh[0])
+        void _playById(sh[0])
       } else {
         setShuffle(false)
         setQueue(ids)
-        _playById(startId ?? ids[0])
+        void _playById(startId ?? ids[0])
       }
     },
     [_playById]
@@ -472,11 +691,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setShuffle(true)
         setShuffledQueue(sh)
         setQueue(ids)
-        _playById(sh[0])
+        void _playById(sh[0])
       } else {
         setShuffle(false)
         setQueue(ids)
-        _playById(startId ?? ids[0])
+        void _playById(startId ?? ids[0])
       }
     },
     [_playById]
@@ -499,11 +718,12 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setShuffledQueue((prev) => prev.filter((qid) => qid !== id))
       setUpNext((prev) => prev.filter((qid) => qid !== id))
       if (currentTrackIdRef.current === id) {
+        releaseActiveCachedSource()
         player.pause()
         setCurrentTrackId(null)
       }
     },
-    [player]
+    [player, releaseActiveCachedSource]
   )
 
   // ── Playlist management ──────────────────────────────────────────────────────
@@ -618,15 +838,47 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       removeTrackFromPlaylist,
     }),
     [
-      tracks, currentTrackId, currentTrack, loading, error,
-      queue, shuffledQueue, upNext, shuffle, loop, nowPlayingOpen,
-      playTrack, playNext, playPrev, addToQueue, playNextTrack,
-      addTracksToQueue, addTracksAsPlayNext, skipToQueueTrack,
-      removeFromQueue, clearQueue, reorderQueue, toggleShuffle, setLoop,
-      playAll, playAlbum, playPlaylist, addTrack, removeTrack, updateTrack,
-      isCreatorMode, setCreatorMode, isCreator, playlists, playlistsLoading,
-      refreshPlaylists, createPlaylist, deletePlaylist, renamePlaylist,
-      addTrackToPlaylist, removeTrackFromPlaylist,
+      tracks,
+      currentTrackId,
+      currentTrack,
+      loading,
+      error,
+      queue,
+      shuffledQueue,
+      upNext,
+      shuffle,
+      loop,
+      nowPlayingOpen,
+      playTrack,
+      playNext,
+      playPrev,
+      addToQueue,
+      playNextTrack,
+      addTracksToQueue,
+      addTracksAsPlayNext,
+      skipToQueueTrack,
+      removeFromQueue,
+      clearQueue,
+      reorderQueue,
+      toggleShuffle,
+      setLoop,
+      playAll,
+      playAlbum,
+      playPlaylist,
+      addTrack,
+      removeTrack,
+      updateTrack,
+      isCreatorMode,
+      setCreatorMode,
+      isCreator,
+      playlists,
+      playlistsLoading,
+      refreshPlaylists,
+      createPlaylist,
+      deletePlaylist,
+      renamePlaylist,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
     ]
   )
 

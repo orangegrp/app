@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo } from 'react'
-import { useAudioPlayerTime } from '@/components/ui/audio-player'
+import { useMemo } from "react"
+import { useAudioPlayerTime } from "@/components/ui/audio-player"
 
 export interface LrcLine {
   /** Timestamp in milliseconds. */
@@ -21,10 +21,19 @@ export interface LrcLine {
  * - Empty/whitespace-only lines → included as { text: '' } for spacing
  */
 export function parseLrc(content: string): LrcLine[] {
-  const metadataTags = new Set(['ar', 'ti', 'al', 'by', 'offset', 'length', 're', 've'])
+  const metadataTags = new Set([
+    "ar",
+    "ti",
+    "al",
+    "by",
+    "offset",
+    "length",
+    "re",
+    "ve",
+  ])
   const lines: LrcLine[] = []
 
-  for (const rawLine of content.split('\n')) {
+  for (const rawLine of content.split("\n")) {
     const line = rawLine.trimEnd()
     if (!line) continue
 
@@ -43,7 +52,8 @@ export function parseLrc(content: string): LrcLine[] {
       const ss = parseInt(match[2], 10)
       const frac = match[3]
       // Normalise to milliseconds: 2-digit frac = centiseconds (*10), 3-digit = milliseconds
-      const fracMs = frac.length === 3 ? parseInt(frac, 10) : parseInt(frac, 10) * 10
+      const fracMs =
+        frac.length === 3 ? parseInt(frac, 10) : parseInt(frac, 10) * 10
       timestamps.push(mm * 60_000 + ss * 1_000 + fracMs)
       lastTagEnd = match.index + match[0].length
     }
@@ -65,16 +75,27 @@ export function parseLrc(content: string): LrcLine[] {
  * Returns the index of the currently active LRC line given playback time in seconds.
  * Returns -1 if before the first line.
  */
-export function getActiveLrcLineIndex(lines: LrcLine[], currentTimeSec: number): number {
+export function getActiveLrcLineIndex(
+  lines: LrcLine[],
+  currentTimeSec: number
+): number {
+  if (lines.length === 0) return -1
+
   const currentTimeMs = currentTimeSec * 1000
+  let low = 0
+  let high = lines.length - 1
   let active = -1
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].timeMs <= currentTimeMs) {
-      active = i
+
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    if (lines[mid].timeMs <= currentTimeMs) {
+      active = mid
+      low = mid + 1
     } else {
-      break
+      high = mid - 1
     }
   }
+
   return active
 }
 
@@ -86,7 +107,7 @@ export function useLrcSync(lines: LrcLine[]): { activeIndex: number } {
   const currentTimeSec = useAudioPlayerTime()
   const activeIndex = useMemo(
     () => getActiveLrcLineIndex(lines, currentTimeSec),
-    [lines, currentTimeSec],
+    [lines, currentTimeSec]
   )
   return { activeIndex }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { parseLrc, useLrcSync } from "@/hooks/useLrc"
 
@@ -11,7 +11,11 @@ interface LyricsDisplayProps {
   onSeek?: (timeSec: number) => void
 }
 
-export function LyricsDisplay({ lyricsContent, lyricsType, onSeek }: LyricsDisplayProps) {
+export function LyricsDisplay({
+  lyricsContent,
+  lyricsType,
+  onSeek,
+}: LyricsDisplayProps) {
   if (lyricsType === "txt") {
     return <PlainLyrics content={lyricsContent} />
   }
@@ -20,7 +24,7 @@ export function LyricsDisplay({ lyricsContent, lyricsType, onSeek }: LyricsDispl
 
 function PlainLyrics({ content }: { content: string }) {
   return (
-    <pre className="whitespace-pre-wrap font-sans text-base leading-8 text-muted-foreground">
+    <pre className="font-sans text-base leading-8 whitespace-pre-wrap text-muted-foreground">
       {content}
     </pre>
   )
@@ -33,7 +37,7 @@ function SyncedLyrics({
   content: string
   onSeek?: (timeSec: number) => void
 }) {
-  const lines = parseLrc(content)
+  const lines = useMemo(() => parseLrc(content), [content])
   const { activeIndex } = useLrcSync(lines)
   // Scroll anchor is a non-focusable <span> so scrollIntoView never steals focus
   const activeRef = useRef<HTMLSpanElement>(null)
@@ -45,7 +49,10 @@ function SyncedLyrics({
   if (lines.length === 0) return <PlainLyrics content={content} />
 
   return (
-    <div className="flex flex-col items-center gap-0.5 py-6 text-center" style={{ fontFamily: 'Pixellari, VT323, monospace' }}>
+    <div
+      className="flex flex-col items-center gap-0.5 py-6 text-center"
+      style={{ fontFamily: "Pixellari, VT323, monospace" }}
+    >
       {lines.map((line, i) => {
         const isActive = i === activeIndex
         const isPast = i < activeIndex
@@ -63,7 +70,7 @@ function SyncedLyrics({
                   : "text-muted-foreground/55",
               onSeek
                 ? "cursor-pointer hover:text-foreground/80"
-                : "cursor-default",
+                : "cursor-default"
             )}
           >
             {/* Non-focusable scroll anchor — must not be a button/input */}

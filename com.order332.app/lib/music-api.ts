@@ -56,6 +56,14 @@ export async function fetchMusicTracks(
   return apiGet<{ tracks: MusicTrackMeta[] }>(path)
 }
 
+export async function refreshMusicTrackSource(
+  id: string
+): Promise<{ track: MusicTrackMeta }> {
+  return apiGet<{ track: MusicTrackMeta }>(
+    `/music/tracks/${encodeURIComponent(id)}/source`
+  )
+}
+
 export async function deleteMusicTrack(id: string): Promise<{ ok: boolean }> {
   return apiDelete<{ ok: boolean }>(`/music/tracks/${encodeURIComponent(id)}`)
 }

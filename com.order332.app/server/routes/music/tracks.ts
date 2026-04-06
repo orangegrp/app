@@ -60,6 +60,42 @@ musicTrackRoutes.get("/", async (c) => {
   return c.json({ tracks: result })
 })
 
+// GET /music/tracks/:id/source — refresh signed playback/source URLs for one track
+musicTrackRoutes.get("/:id/source", rateLimitByUser(120, 60_000), async (c) => {
+  const id = c.req.param("id")
+
+  const { data, error } = await supabase
+    .from("music_tracks")
+    .select("*")
+    .eq("id", id)
+    .single()
+
+  if (error || !data) {
+    return c.json({ error: "Track not found" }, 404)
+  }
+
+  const track = rowToMusicTrack(data)
+  const keysToSign = [
+    track.audioKey,
+    track.coverKey ?? null,
+    track.lyricsKey ?? null,
+  ].filter(Boolean) as string[]
+  const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+
+  return c.json({
+    track: {
+      ...track,
+      audioUrl: signed.get(track.audioKey) ?? track.audioUrl,
+      coverUrl: track.coverKey
+        ? (signed.get(track.coverKey) ?? track.coverUrl)
+        : track.coverUrl,
+      lyricsUrl: track.lyricsKey
+        ? (signed.get(track.lyricsKey) ?? track.lyricsUrl)
+        : track.lyricsUrl,
+    },
+  })
+})
+
 // POST /music/tracks/upload-urls — get signed upload URLs for direct client-to-Supabase upload
 // (bypasses Vercel's request body size limit)
 musicTrackRoutes.post(

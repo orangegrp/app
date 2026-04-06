@@ -41,10 +41,12 @@ function useSwipeToDismiss(onDismiss: () => void) {
   const lastY = useRef(0)
   const lastTime = useRef(0)
   const dragging = useRef(false)
+  const pendingDelta = useRef(0)
+  const moveFrame = useRef<number | null>(null)
   const onDismissRef = useRef(onDismiss)
   useEffect(() => {
     onDismissRef.current = onDismiss
-  })
+  }, [onDismiss])
 
   const animateOut = useCallback((then?: () => void) => {
     const el = sheetRef.current
@@ -84,7 +86,12 @@ function useSwipeToDismiss(onDismiss: () => void) {
       lastTime.current = Date.now()
       if (delta > 0) {
         e.preventDefault()
-        el.style.transform = `translateY(${delta}px)`
+        pendingDelta.current = delta
+        if (moveFrame.current !== null) return
+        moveFrame.current = requestAnimationFrame(() => {
+          moveFrame.current = null
+          el.style.transform = `translateY(${pendingDelta.current}px)`
+        })
       }
     }
 
@@ -101,6 +108,11 @@ function useSwipeToDismiss(onDismiss: () => void) {
         el.style.transition = "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)"
         el.style.transform = "translateY(0)"
       }
+
+      if (moveFrame.current !== null) {
+        cancelAnimationFrame(moveFrame.current)
+        moveFrame.current = null
+      }
     }
 
     el.addEventListener("touchstart", handleTouchStart, { passive: true })
@@ -110,8 +122,13 @@ function useSwipeToDismiss(onDismiss: () => void) {
       el.removeEventListener("touchstart", handleTouchStart)
       el.removeEventListener("touchmove", handleTouchMove)
       el.removeEventListener("touchend", handleTouchEnd)
+
+      if (moveFrame.current !== null) {
+        cancelAnimationFrame(moveFrame.current)
+        moveFrame.current = null
+      }
     }
-  })
+  }, [animateOut])
 
   return { sheetRef, overlayRef, close: animateOut }
 }

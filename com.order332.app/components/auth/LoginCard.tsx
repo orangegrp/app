@@ -1,5 +1,6 @@
 "use client"
 import Image from "next/image"
+import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuthStore } from "@/lib/auth-store"
@@ -7,7 +8,6 @@ import { hardNavigateTo } from "@/lib/hard-navigation"
 import { consumePostLoginRedirect } from "@/lib/qr-login-redirect"
 import { isPWAContext } from "@/lib/pwa"
 import { MagicLinkForm } from "./MagicLinkForm"
-import { QRLoginPanel } from "./QRLoginPanel"
 import { capture, captureException, identify } from "@/lib/analytics"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -15,6 +15,18 @@ const isDev =
   process.env.NODE_ENV === "development" &&
   process.env.NEXT_PUBLIC_DEV_LOGIN_ENABLED === "true"
 type Tab = "passkey" | "discord" | "magic" | "qr"
+
+const QRLoginPanel = dynamic(
+  () => import("./QRLoginPanel").then((mod) => mod.QRLoginPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex justify-center py-3">
+        <Spinner size="sm" />
+      </div>
+    ),
+  }
+)
 
 function DiscordIcon() {
   return (

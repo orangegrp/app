@@ -227,6 +227,7 @@ export function AudioPlayerProvider<TData = unknown>({
   const seek = useCallback((time: number) => {
     if (!audioRef.current) return
     audioRef.current.currentTime = time
+    setTime(time)
   }, [])
 
   const setPlaybackRate = useCallback((rate: number) => {
@@ -299,13 +300,6 @@ export function AudioPlayerProvider<TData = unknown>({
     return () => document.removeEventListener("visibilitychange", handle)
   }, [])
 
-  // Animation frame for time tracking only
-  useAnimationFrame(() => {
-    if (audioRef.current) {
-      setTime(audioRef.current.currentTime)
-    }
-  })
-
   // Event listeners for audio state changes
   useEffect(() => {
     const audio = audioRef.current
@@ -320,6 +314,7 @@ export function AudioPlayerProvider<TData = unknown>({
       setVolumeState(audio.volume)
       setIsMutedState(audio.muted)
     }
+    const handleTimeUpdate = () => setTime(audio.currentTime)
     const handleBufferingStateChange = () => {
       setReadyState(audio.readyState)
       setNetworkState(audio.networkState)
@@ -329,6 +324,7 @@ export function AudioPlayerProvider<TData = unknown>({
       setNetworkState(audio.networkState)
       setDuration(undefined)
       setError(null)
+      setTime(0)
       _setActiveItem(itemRef.current)
     }
     const handleLoadedMetadata = () => {
@@ -341,6 +337,7 @@ export function AudioPlayerProvider<TData = unknown>({
       setDuration(undefined)
       setPaused(true)
       setError(null)
+      setTime(0)
     }
     const handleEnded = () => setPaused(true)
 
@@ -350,6 +347,7 @@ export function AudioPlayerProvider<TData = unknown>({
     audio.addEventListener("error", handleError)
     audio.addEventListener("ratechange", handleRateChange)
     audio.addEventListener("volumechange", handleVolumeChange)
+    audio.addEventListener("timeupdate", handleTimeUpdate)
     audio.addEventListener("waiting", handleBufferingStateChange)
     audio.addEventListener("canplay", handleBufferingStateChange)
     audio.addEventListener("canplaythrough", handleBufferingStateChange)
@@ -366,6 +364,7 @@ export function AudioPlayerProvider<TData = unknown>({
       audio.removeEventListener("error", handleError)
       audio.removeEventListener("ratechange", handleRateChange)
       audio.removeEventListener("volumechange", handleVolumeChange)
+      audio.removeEventListener("timeupdate", handleTimeUpdate)
       audio.removeEventListener("waiting", handleBufferingStateChange)
       audio.removeEventListener("canplay", handleBufferingStateChange)
       audio.removeEventListener("canplaythrough", handleBufferingStateChange)
@@ -376,6 +375,19 @@ export function AudioPlayerProvider<TData = unknown>({
       audio.removeEventListener("ended", handleEnded)
     }
   }, [])
+
+  // Supplement event-based updates with a lightweight timer while playing.
+  // This keeps scrubber motion fluid without forcing 60fps context updates.
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || paused) return
+
+    const timer = window.setInterval(() => {
+      setTime(audio.currentTime)
+    }, 250)
+
+    return () => window.clearInterval(timer)
+  }, [activeItem?.id, paused])
 
   const isPlaying = !paused
   const isBuffering =
@@ -652,36 +664,6 @@ export function AudioPlayerButton<TData = unknown>({
   )
 }
 
-type Callback = (delta: number) => void
-
-function useAnimationFrame(callback: Callback) {
-  const requestRef = useRef<number | null>(null)
-  const previousTimeRef = useRef<number | null>(null)
-  const callbackRef = useRef<Callback>(callback)
-
-  useEffect(() => {
-    callbackRef.current = callback
-  }, [callback])
-
-  useEffect(() => {
-    const animate = (time: number) => {
-      if (previousTimeRef.current !== null) {
-        const delta = time - previousTimeRef.current
-        callbackRef.current(delta)
-      }
-      previousTimeRef.current = time
-      requestRef.current = requestAnimationFrame(animate)
-    }
-
-    requestRef.current = requestAnimationFrame(animate)
-
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current)
-      previousTimeRef.current = null
-    }
-  }, [])
-}
-
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const
 
 export interface AudioPlayerSpeedProps extends React.ComponentProps<
@@ -781,11 +763,11 @@ export function AudioPlayerVolume({
 
   // Safari / WebKit does not support programmatic volume control on iOS
   // and has inconsistent support on macOS — hide the slider on those browsers.
-  const [isWebKit, setIsWebKit] = useState(false)
-  useEffect(() => {
+  const [isWebKit] = useState(() => {
+    if (typeof navigator === "undefined") return false
     const ua = navigator.userAgent
-    setIsWebKit(/Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgA/i.test(ua))
-  }, [])
+    return /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|EdgA/i.test(ua)
+  })
   if (isWebKit) return null
 
   return (

@@ -1,8 +1,8 @@
-import { create } from 'zustand'
+import { create } from "zustand"
 
 export interface AuthUser {
   id: string
-  permissions: string   // CSV: "app.webpc,app.labs" or "*"
+  permissions: string // CSV: "app.webpc,app.labs" or "*"
   isPwa: boolean
   discordUsername?: string
   discordAvatar?: string
@@ -38,6 +38,13 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set((state) => ({
       user: state.user ? { ...state.user, ...partial } : null,
     })),
-  clearAuth: () => set({ accessToken: null, user: null, isLoading: false }),
+  clearAuth: () => {
+    set({ accessToken: null, user: null, isLoading: false })
+    if (typeof window !== "undefined") {
+      void import("@/lib/music-cache")
+        .then(({ purgeAllMusicCache }) => purgeAllMusicCache())
+        .catch(() => {})
+    }
+  },
   setLoading: (isLoading) => set({ isLoading }),
 }))

@@ -208,7 +208,7 @@ passkeyRoutes.post("/register/finish", async (c) => {
 
 // POST /auth/challenge
 // Generates WebAuthn authentication options.
-passkeyRoutes.post("/challenge", async (c) => {
+passkeyRoutes.post("/challenge", rateLimit(30, 60_000), async (c) => {
   const { options, challenge } = await createAuthenticationOptions()
 
   const expiresAt = new Date(Date.now() + WEBAUTHN_CHALLENGE_LIFETIME * 1000)

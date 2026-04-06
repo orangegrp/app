@@ -1,26 +1,26 @@
-'use client'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/lib/auth-store'
-import { useSidebarStore } from '@/lib/sidebar-store'
-import { fetchAndMergeUserProfile } from '@/lib/fetch-user-profile'
-import { isPWAContext } from '@/lib/pwa'
-import { AppSidebar } from '@/components/layout/AppSidebar'
-import { MobileTabBar } from '@/components/layout/MobileTabBar'
-import { FloatingNavControls } from '@/components/layout/FloatingNavControls'
-import { InstallPrompt } from '@/components/pwa/InstallPrompt'
-import { UpdatePrompt } from '@/components/pwa/UpdatePrompt'
-import { WelcomeWizardDialog } from '@/components/onboarding/WelcomeWizardDialog'
-import { DashboardPageTransition } from '@/components/layout/DashboardPageTransition'
-import { Spinner } from '@/components/ui/spinner'
-import { PageBackground } from '@/components/layout/PageBackground'
-import { ProductImprovementAnalyticsNotice } from '@/components/consent/ProductImprovementAnalyticsNotice'
-import { AudioPlayerProvider } from '@/components/ui/audio-player'
-import { MusicProvider, useMusicContext } from '@/components/music/MusicContext'
-import { MusicPlayerBar } from '@/components/music/MusicPlayerBar'
-import { NowPlayingSheet } from '@/components/music/NowPlayingSheet'
-import { MediaSessionSync } from '@/components/music/MediaSessionSync'
-import { SidebarMusicMini } from '@/components/layout/SidebarMusicMini'
+"use client"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useAuthStore } from "@/lib/auth-store"
+import { useSidebarStore } from "@/lib/sidebar-store"
+import { fetchAndMergeUserProfile } from "@/lib/fetch-user-profile"
+import { isPWAContext } from "@/lib/pwa"
+import { AppSidebar } from "@/components/layout/AppSidebar"
+import { MobileTabBar } from "@/components/layout/MobileTabBar"
+import { FloatingNavControls } from "@/components/layout/FloatingNavControls"
+import { InstallPrompt } from "@/components/pwa/InstallPrompt"
+import { UpdatePrompt } from "@/components/pwa/UpdatePrompt"
+import { WelcomeWizardDialog } from "@/components/onboarding/WelcomeWizardDialog"
+import { DashboardPageTransition } from "@/components/layout/DashboardPageTransition"
+import { Spinner } from "@/components/ui/spinner"
+import { PageBackground } from "@/components/layout/PageBackground"
+import { ProductImprovementAnalyticsNotice } from "@/components/consent/ProductImprovementAnalyticsNotice"
+import { AudioPlayerProvider } from "@/components/ui/audio-player"
+import { MusicProvider, useMusicContext } from "@/components/music/MusicContext"
+import { MusicPlayerBar } from "@/components/music/MusicPlayerBar"
+import { NowPlayingSheet } from "@/components/music/NowPlayingSheet"
+import { MediaSessionSync } from "@/components/music/MediaSessionSync"
+import { SidebarMusicMini } from "@/components/layout/SidebarMusicMini"
 
 /**
  * Inner shell — must be a child of AudioPlayerProvider + MusicProvider so it can
@@ -53,21 +53,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       />
       <FloatingNavControls sidebarWidth={sidebarCollapsed ? 60 : 224} />
 
-      {/* Desktop main content */}
+      {/* Main content */}
       <main
         className={[
-          'transition-[padding-left] duration-200 ease-in-out',
-          'hidden sm:block',
-          sidebarCollapsed ? 'sm:pl-[60px]' : 'sm:pl-56',
-        ].join(' ')}
+          "transition-[padding-left] duration-200 ease-in-out",
+          "block",
+          sidebarCollapsed ? "sm:pl-[60px]" : "sm:pl-56",
+        ].join(" ")}
       >
         <DashboardPageTransition>{children}</DashboardPageTransition>
       </main>
-
-      {/* Mobile main content */}
-      <div className="sm:hidden">
-        <DashboardPageTransition>{children}</DashboardPageTransition>
-      </div>
 
       {/* Persistent player — visible on all pages while music is playing */}
       <MusicPlayerBar onOpenNowPlaying={openNowPlaying} />
@@ -79,10 +74,16 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function HomeLayout({ children }: { children: React.ReactNode }) {
+export default function HomeLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const store = useAuthStore()
   const router = useRouter()
-  const [isChecking, setIsChecking] = useState(() => !useAuthStore.getState().accessToken)
+  const [isChecking, setIsChecking] = useState(
+    () => !useAuthStore.getState().accessToken
+  )
 
   useEffect(() => {
     if (store.accessToken) {
@@ -91,32 +92,38 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
       return
     }
 
-    fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isPwa: isPWAContext() }),
-      credentials: 'include',
+      credentials: "include",
     })
       .then(async (res) => {
         if (!res.ok) {
           store.clearAuth()
-          router.replace('/login')
+          router.replace("/login")
           return
         }
-        const { accessToken } = await res.json() as { accessToken: string }
-        const [, b64] = accessToken.split('.')
-        const payload = JSON.parse(atob(b64.replace(/-/g, '+').replace(/_/g, '/'))) as {
+        const { accessToken } = (await res.json()) as { accessToken: string }
+        const [, b64] = accessToken.split(".")
+        const payload = JSON.parse(
+          atob(b64.replace(/-/g, "+").replace(/_/g, "/"))
+        ) as {
           sub: string
           permissions: string
           isPwa: boolean
         }
-        store.setAuth(accessToken, { id: payload.sub, permissions: payload.permissions, isPwa: payload.isPwa })
+        store.setAuth(accessToken, {
+          id: payload.sub,
+          permissions: payload.permissions,
+          isPwa: payload.isPwa,
+        })
         await fetchAndMergeUserProfile(accessToken)
         setIsChecking(false)
       })
       .catch(() => {
         store.clearAuth()
-        router.replace('/login')
+        router.replace("/login")
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -124,7 +131,7 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
     return (
       <div className="page-root relative flex min-h-screen items-center justify-center">
         <PageBackground />
-        <div className="relative z-10 glass-card rounded-2xl px-8 py-7 flex flex-col items-center gap-4">
+        <div className="glass-card relative z-10 flex flex-col items-center gap-4 rounded-2xl px-8 py-7">
           <Spinner size="md" clockwise />
         </div>
       </div>

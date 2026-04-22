@@ -3,15 +3,34 @@
 import { useCallback, useRef, useState } from "react"
 import { CloudUpload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { uploadContentItem, isVideoMimeType, type ContentItemMeta } from "@/lib/content-api"
+import {
+  uploadContentItem,
+  isVideoMimeType,
+  type ContentItemMeta,
+} from "@/lib/content-api"
 import { Button } from "@/components/ui/button"
 
-const SIZE_LIMITS_TEXT = "Images (20 MB) · Audio (100 MB) · PDFs (50 MB) · Other files (100 MB)"
+const PROXY_UPLOAD_MAX_BYTES = 3 * 1024 * 1024
+const SIZE_LIMITS_TEXT = "Maximum upload size: 3 MB"
 const ACCEPTED_TYPES = [
-  "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
-  "audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/x-m4a",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "audio/flac",
+  "audio/aac",
+  "audio/mp4",
+  "audio/x-m4a",
   "application/pdf",
-  "application/zip", "application/x-zip-compressed", "application/octet-stream", "text/plain", "text/csv",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/octet-stream",
+  "text/plain",
+  "text/csv",
 ].join(",")
 
 interface ContentUploadAreaProps {
@@ -19,7 +38,10 @@ interface ContentUploadAreaProps {
   currentFolderId?: string | null
 }
 
-export function ContentUploadArea({ onUploadComplete, currentFolderId }: ContentUploadAreaProps) {
+export function ContentUploadArea({
+  onUploadComplete,
+  currentFolderId,
+}: ContentUploadAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -29,22 +51,33 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  const handleFile = useCallback((file: File) => {
-    setError(null)
-    if (isVideoMimeType(file.type)) {
-      setError("Video uploads are not available yet.")
-      return
-    }
-    setSelectedFile(file)
-    if (!title) setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
-  }, [title])
+  const handleFile = useCallback(
+    (file: File) => {
+      setError(null)
+      if (isVideoMimeType(file.type)) {
+        setError("Video uploads are not available yet.")
+        return
+      }
+      if (file.size > PROXY_UPLOAD_MAX_BYTES) {
+        setError("File exceeds 3 MB limit for proxy uploads.")
+        return
+      }
+      setSelectedFile(file)
+      if (!title)
+        setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "))
+    },
+    [title]
+  )
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
-  }, [handleFile])
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setDragOver(false)
+      const file = e.dataTransfer.files[0]
+      if (file) handleFile(file)
+    },
+    [handleFile]
+  )
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -60,8 +93,12 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
     try {
       const { item } = await uploadContentItem(
         selectedFile,
-        { title: title.trim(), description: description.trim() || undefined, folderId: currentFolderId },
-        setProgress,
+        {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          folderId: currentFolderId,
+        },
+        setProgress
       )
       onUploadComplete(item)
       setSelectedFile(null)
@@ -88,7 +125,10 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
 
       {/* Drop zone */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         onClick={() => !selectedFile && fileInputRef.current?.click()}
@@ -97,7 +137,7 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
           dragOver
             ? "border-foreground/40 bg-foreground/5"
             : "border-foreground/10 hover:border-foreground/20 hover:bg-foreground/2",
-          selectedFile && "cursor-default",
+          selectedFile && "cursor-default"
         )}
       >
         <input
@@ -111,13 +151,19 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
         {selectedFile ? (
           <div className="flex w-full items-center justify-between px-4">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">{selectedFile.name}</p>
+              <p className="truncate text-sm font-medium text-foreground">
+                {selectedFile.name}
+              </p>
               <p className="text-xs text-muted-foreground">
-                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB · {selectedFile.type}
+                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB ·{" "}
+                {selectedFile.type}
               </p>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); clearFile() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                clearFile()
+              }}
               className="ml-4 flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-foreground/10"
             >
               <X className="h-3.5 w-3.5 text-muted-foreground" />
@@ -127,9 +173,14 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
           <div className="flex flex-col items-center gap-2 text-center">
             <CloudUpload className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Drag & drop or <span className="text-foreground underline underline-offset-2">browse</span>
+              Drag & drop or{" "}
+              <span className="text-foreground underline underline-offset-2">
+                browse
+              </span>
             </p>
-            <p className="text-xs text-muted-foreground/60">{SIZE_LIMITS_TEXT}</p>
+            <p className="text-xs text-muted-foreground/60">
+              {SIZE_LIMITS_TEXT}
+            </p>
           </div>
         )}
       </div>
@@ -138,7 +189,7 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
       {selectedFile && (
         <div className="mt-4 flex flex-col gap-3">
           <div>
-            <label className="mb-1.5 block text-xs text-muted-foreground tracking-wider">
+            <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
               Title <span className="text-destructive">*</span>
             </label>
             <input
@@ -151,8 +202,9 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-muted-foreground tracking-wider">
-              Description <span className="text-muted-foreground/50">(optional)</span>
+            <label className="mb-1.5 block text-xs tracking-wider text-muted-foreground">
+              Description{" "}
+              <span className="text-muted-foreground/50">(optional)</span>
             </label>
             <textarea
               value={description}
@@ -183,9 +235,7 @@ export function ContentUploadArea({ onUploadComplete, currentFolderId }: Content
       )}
 
       {/* Error */}
-      {error && (
-        <p className="mt-3 text-sm text-destructive">{error}</p>
-      )}
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
       {/* Submit */}
       {selectedFile && (

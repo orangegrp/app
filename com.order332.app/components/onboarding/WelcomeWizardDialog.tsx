@@ -323,18 +323,18 @@ export function WelcomeWizardDialog(): React.ReactNode {
               <div className="flex flex-col">
                 <DialogHeader>
                   <DialogTitle className="text-xl tracking-widest text-foreground">
-                    Welcome to 332 app<span className="blink-cursor">_</span>
+                    Welcome to the 332 app<span className="blink-cursor">_</span>
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      332 app is your invite-only hub for community tools:
-                      content uploads, music, blog workflows, AI features, and
-                      browser-based WebPC.
+                      The 332 app is your invite-only hub for community tools:
+                      a free content library, music, publishing on the 332 blog, latest AI features, and
+                      more.
                     </span>
                     <span className="block">
                       {signedInWithDiscord
-                        ? "Take a minute to set up how you appear, lock in account security, and review the key rules."
-                        : "Take a minute to set up how you appear, optionally link Discord, and review how the app works."}
+                        ? "Take a minute to set up how you appear, setup additional account security, and complete onboarding."
+                        : "Take a minute to set up how you appear, optionally link Discord, and complete onboarding."}
                     </span>
                   </DialogDescription>
                 </DialogHeader>
@@ -511,31 +511,31 @@ export function WelcomeWizardDialog(): React.ReactNode {
               <div className="flex flex-col">
                 <DialogHeader>
                   <DialogTitle className="text-xl tracking-widest text-foreground">
-                    Use 332 app responsibly
+                    Legal stuff
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      Quick Terms highlights that matter for everyday use.
+                      A few important things, before you continue:
                     </span>
                   </DialogDescription>
                 </DialogHeader>
                 <div className="mt-2 space-y-2 text-xs leading-snug tracking-normal text-muted-foreground sm:text-sm">
                   {[
                     {
-                      title: "Age and access",
-                      body: "13+ only, with some areas marked 16+.",
+                      title: "Age",
+                      body: "You need to be at least 13 years old to use the 332 app.",
                     },
                     {
-                      title: "Safety and legality",
-                      body: "No illegal content, harassment, abuse, or explicit sexual content.",
+                      title: "User safety",
+                      body: "No illegal content, harassment, abuse, or explicit sexual content is allowed to be submitted through UGC features.",
                     },
                     {
                       title: "Security and abuse",
-                      body: "No hacking, account bypasses, or abusive automation.",
+                      body: "No unauthorized hacking, account bypasses, or abusive automation of AI features.",
                     },
                     {
                       title: "Admin enforcement",
-                      body: "Admins can suspend or remove access for misuse or security concerns.",
+                      body: "Admins can suspend or remove access for misuse or security concerns at any time.",
                     },
                   ].map((rule, idx) => (
                     <div
@@ -582,17 +582,16 @@ export function WelcomeWizardDialog(): React.ReactNode {
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      You keep ownership of your content; these are the
-                      practical tradeoffs to know.
+                      When you use UGC ("User Generated Content") features, remember:
                     </span>
                   </DialogDescription>
                 </DialogHeader>
                 <div className="mt-2 space-y-2 text-xs leading-snug tracking-normal text-muted-foreground sm:text-sm">
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    You keep copyright for what you upload and create.
+                    You still keep copyright for what you upload and create.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    You grant 332 app a licence to host and serve content while
+                    You grant 332 app a licence to host and serve your content while
                     it is on the platform.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
@@ -600,12 +599,11 @@ export function WelcomeWizardDialog(): React.ReactNode {
                     important.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    AI output can be wrong; review it before publishing or
+                    AI output can be wrong, incomplete, or misleading, so review it before publishing or
                     acting on it.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    Uploads may be scanned by VirusTotal, and AI audio features
-                    use ElevenLabs processing.
+                    All uploads are scanned for malicious software by an external service.
                   </p>
                 </div>
                 <DialogFooter className="mt-3 gap-2 pt-3 sm:justify-between">
@@ -636,7 +634,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      We collect only what is needed to run and secure 332 app.
+                      We collect only what is needed to run and improve the 332 app.
                     </span>
                   </DialogDescription>
                 </DialogHeader>
@@ -649,7 +647,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
                     We do not sell your data or share it for advertising.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    Product analytics can be turned off anytime in Settings.
+                    App analytics can be turned off anytime in Settings.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
                     You can request access, correction, deletion, export, or

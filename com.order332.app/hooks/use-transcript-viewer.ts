@@ -1,12 +1,6 @@
 "use client"
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { CharacterAlignmentResponseModel } from "@elevenlabs/elevenlabs-js/api/types/CharacterAlignmentResponseModel"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,7 +27,7 @@ export type TranscriptSegment = TranscriptWord | GapSegment
  * a fully composed segment array. When omitted, the default word/gap grouper is used.
  */
 export type SegmentComposer = (
-  alignment: CharacterAlignmentResponseModel,
+  alignment: CharacterAlignmentResponseModel
 ) => TranscriptSegment[]
 
 export interface UseTranscriptViewerResult {
@@ -70,22 +64,30 @@ interface UseTranscriptViewerOptions {
  * Words are contiguous non-whitespace characters; gaps are runs of whitespace.
  */
 function defaultSegmentComposer(
-  alignment: CharacterAlignmentResponseModel,
+  alignment: CharacterAlignmentResponseModel
 ): TranscriptSegment[] {
-  const { characters, characterStartTimesSeconds, characterEndTimesSeconds } = alignment
+  const { characters, characterStartTimesSeconds, characterEndTimesSeconds } =
+    alignment
   const segments: TranscriptSegment[] = []
   let segmentIndex = 0
   let i = 0
 
   while (i < characters.length) {
-    const isSpace = characters[i] === " " || characters[i] === "\n" || characters[i] === "\t"
+    const isSpace =
+      characters[i] === " " || characters[i] === "\n" || characters[i] === "\t"
 
     // Collect a run of same-kind characters
     const start = i
     while (
       i < characters.length &&
-      ((isSpace && (characters[i] === " " || characters[i] === "\n" || characters[i] === "\t")) ||
-        (!isSpace && characters[i] !== " " && characters[i] !== "\n" && characters[i] !== "\t"))
+      ((isSpace &&
+        (characters[i] === " " ||
+          characters[i] === "\n" ||
+          characters[i] === "\t")) ||
+        (!isSpace &&
+          characters[i] !== " " &&
+          characters[i] !== "\n" &&
+          characters[i] !== "\t"))
     ) {
       i++
     }
@@ -95,9 +97,21 @@ function defaultSegmentComposer(
     const endTime = characterEndTimesSeconds[i - 1] ?? startTime
 
     if (isSpace) {
-      segments.push({ kind: "gap", segmentIndex: segmentIndex++, text, startTime, endTime })
+      segments.push({
+        kind: "gap",
+        segmentIndex: segmentIndex++,
+        text,
+        startTime,
+        endTime,
+      })
     } else {
-      segments.push({ kind: "word", segmentIndex: segmentIndex++, text, startTime, endTime })
+      segments.push({
+        kind: "word",
+        segmentIndex: segmentIndex++,
+        text,
+        startTime,
+        endTime,
+      })
     }
   }
 
@@ -119,7 +133,6 @@ export function useTranscriptViewer({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isScrubbing, setIsScrubbing] = useState(false)
   const wasPlayingRef = useRef(false)
 
   // Build segments from alignment
@@ -133,11 +146,26 @@ export function useTranscriptViewer({
     const audio = audioRef.current
     if (!audio) return
 
-    const handlePlay = () => { setIsPlaying(true); onPlay?.() }
-    const handlePause = () => { setIsPlaying(false); onPause?.() }
-    const handleTimeUpdate = () => { setCurrentTime(audio.currentTime); onTimeUpdate?.() }
-    const handleDurationChange = () => { setDuration(audio.duration || 0); onDurationChange?.() }
-    const handleEnded = () => { setIsPlaying(false); onEnded?.() }
+    const handlePlay = () => {
+      setIsPlaying(true)
+      onPlay?.()
+    }
+    const handlePause = () => {
+      setIsPlaying(false)
+      onPause?.()
+    }
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime)
+      onTimeUpdate?.()
+    }
+    const handleDurationChange = () => {
+      setDuration(audio.duration || 0)
+      onDurationChange?.()
+    }
+    const handleEnded = () => {
+      setIsPlaying(false)
+      onEnded?.()
+    }
 
     audio.addEventListener("play", handlePlay)
     audio.addEventListener("pause", handlePause)
@@ -170,7 +198,11 @@ export function useTranscriptViewer({
       }
     }
 
-    return { spokenSegments: spoken, currentWord: current, unspokenSegments: unspoken }
+    return {
+      spokenSegments: spoken,
+      currentWord: current,
+      unspokenSegments: unspoken,
+    }
   }, [segments, currentTime])
 
   const play = useCallback(() => {
@@ -189,13 +221,11 @@ export function useTranscriptViewer({
   }, [])
 
   const startScrubbing = useCallback(() => {
-    setIsScrubbing(true)
     wasPlayingRef.current = !(audioRef.current?.paused ?? true)
     audioRef.current?.pause()
   }, [])
 
   const endScrubbing = useCallback(() => {
-    setIsScrubbing(false)
     if (wasPlayingRef.current) {
       audioRef.current?.play().catch(console.error)
     }

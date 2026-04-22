@@ -1,6 +1,7 @@
 "use client"
 
 import { type DragEvent, useEffect, useMemo, useRef, useState } from "react"
+import Image from "next/image"
 import { Drawer as DrawerPrimitive } from "vaul"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import {
@@ -187,14 +188,12 @@ function QueuePanelContent() {
   const currentIndex = currentTrackId
     ? effectiveQueue.findIndex((id) => id === currentTrackId)
     : -1
-  const previousIds =
-    currentIndex > 0 ? effectiveQueue.slice(0, currentIndex) : []
   const previousTracks = useMemo(
     () =>
-      previousIds
+      (currentIndex > 0 ? effectiveQueue.slice(0, currentIndex) : [])
         .map((id) => trackById.get(id))
         .filter((t): t is MusicTrackMeta => !!t),
-    [previousIds, trackById]
+    [currentIndex, effectiveQueue, trackById]
   )
   const currentTrack = currentTrackId
     ? (trackById.get(currentTrackId) ?? null)
@@ -305,7 +304,11 @@ function QueuePanelContent() {
           : undefined
       }
       className={cn(
-        options.showHandle ? "group/qi cursor-grab active:cursor-grabbing" : options.onClick && !options.isCurrent ? "cursor-pointer" : "",
+        options.showHandle
+          ? "group/qi cursor-grab active:cursor-grabbing"
+          : options.onClick && !options.isCurrent
+            ? "cursor-pointer"
+            : "",
         options.showHandle &&
           dropIndex === (options.dragIndex ?? -1) &&
           dragIndexRef.current !== (options.dragIndex ?? -1) &&
@@ -333,9 +336,12 @@ function QueuePanelContent() {
         )}
       >
         {track.coverUrl ? (
-          <img
+          <Image
             src={track.coverUrl}
             alt=""
+            width={32}
+            height={32}
+            unoptimized
             className="h-full w-full object-cover"
           />
         ) : (
@@ -710,9 +716,12 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                     <div className="flex min-h-full flex-col justify-center px-5 py-4">
                       <div className="mx-auto aspect-square max-h-[50vh] w-full max-w-[50vh] shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                         {currentTrack.coverUrl ? (
-                          <img
+                          <Image
                             src={currentTrack.coverUrl}
                             alt={`${currentTrack.title} cover`}
+                            width={512}
+                            height={512}
+                            unoptimized
                             className={cn(
                               "h-full w-full object-cover transition-transform duration-1000",
                               player.isPlaying && "scale-105"
@@ -756,9 +765,12 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                     <div className="flex shrink-0 items-center gap-3 px-5 pt-2 pb-3">
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-foreground/5">
                         {currentTrack.coverUrl ? (
-                          <img
+                          <Image
                             src={currentTrack.coverUrl}
                             alt=""
+                            width={40}
+                            height={40}
+                            unoptimized
                             className="h-full w-full object-cover"
                           />
                         ) : (
@@ -878,9 +890,12 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                 <div className="flex w-full flex-col items-center">
                   <div className="mb-6 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                     {currentTrack.coverUrl ? (
-                      <img
+                      <Image
                         src={currentTrack.coverUrl}
                         alt={`${currentTrack.title} cover`}
+                        width={240}
+                        height={240}
+                        unoptimized
                         className={cn(
                           "h-full w-full object-cover transition-transform duration-1000",
                           player.isPlaying && "scale-105"

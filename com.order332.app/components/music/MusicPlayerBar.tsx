@@ -1,6 +1,7 @@
 "use client"
 
 import { Music2, Pause, Play, SkipBack, SkipForward } from "lucide-react"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
@@ -74,7 +75,14 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
         >
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-foreground/5">
             {currentTrack.coverUrl ? (
-              <img src={currentTrack.coverUrl} alt="" className="h-full w-full object-cover" />
+              <Image
+                src={currentTrack.coverUrl}
+                alt=""
+                width={40}
+                height={40}
+                unoptimized
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <Music2 className="h-4 w-4 text-muted-foreground/40" />
@@ -82,8 +90,12 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
             )}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">{currentTrack.title}</p>
-            <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
+            <p className="truncate text-sm font-medium text-foreground">
+              {currentTrack.title}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {currentTrack.artist}
+            </p>
           </div>
         </button>
 
@@ -91,25 +103,27 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
         <div className="flex shrink-0 items-center justify-center gap-2">
           <button
             onClick={playPrev}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
             aria-label="Previous"
           >
             <SkipBack className="h-4 w-4" />
           </button>
 
           <button
-            onClick={() => player.isPlaying ? player.pause() : player.play()}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
+            onClick={() => (player.isPlaying ? player.pause() : player.play())}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
             aria-label={player.isPlaying ? "Pause" : "Play"}
           >
-            {player.isPlaying
-              ? <Pause className="h-4 w-4 fill-current" />
-              : <Play className="ml-0.5 h-4 w-4 fill-current" />}
+            {player.isPlaying ? (
+              <Pause className="h-4 w-4 fill-current" />
+            ) : (
+              <Play className="ml-0.5 h-4 w-4 fill-current" />
+            )}
           </button>
 
           <button
             onClick={playNext}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-foreground transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
             aria-label="Next"
           >
             <SkipForward className="h-4 w-4" />
@@ -118,7 +132,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
 
         {/* Right: time + volume — desktop only */}
         <div className="hidden items-center justify-end gap-3 sm:flex">
-          <div className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
             <AudioPlayerTime />
             <span>/</span>
             <AudioPlayerDuration />
@@ -134,7 +148,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
       {/* Mobile — above tab bar, only on /music/* (OS media session handles off-page controls) */}
       {isOnMusicPage && (
         <div
-          className="fixed inset-x-0 z-40 sm:hidden overflow-hidden rounded-t-2xl"
+          className="fixed inset-x-0 z-40 overflow-hidden rounded-t-2xl sm:hidden"
           style={{ bottom: "var(--mobile-nav-height)" }}
         >
           {barContent}
@@ -147,7 +161,7 @@ export function MusicPlayerBar({ onOpenNowPlaying }: MusicPlayerBarProps) {
           className={cn(
             "fixed inset-x-0 bottom-0 z-40 hidden sm:block",
             "transition-[padding-left] duration-200 ease-in-out",
-            sidebarCollapsed ? "sm:pl-[60px]" : "sm:pl-56",
+            sidebarCollapsed ? "sm:pl-[60px]" : "sm:pl-56"
           )}
         >
           {barContent}

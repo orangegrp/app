@@ -16,9 +16,11 @@ function createAudioAnalyser(
   mediaStream: MediaStream,
   options: AudioAnalyserOptions = {}
 ) {
-  const audioContext = new (window.AudioContext ||
+  const audioContext = new (
+    window.AudioContext ||
     (window as unknown as { webkitAudioContext: typeof AudioContext })
-      .webkitAudioContext)()
+      .webkitAudioContext
+  )()
   const source = audioContext.createMediaStreamSource(mediaStream)
   const analyser = audioContext.createAnalyser()
 
@@ -65,15 +67,7 @@ export function useAudioVolume(
   const frameId = useRef<number | undefined>(undefined)
 
   // Memoize options to prevent unnecessary re-renders
-  const memoizedOptions = useMemo(
-    () => options,
-    [
-      options.fftSize,
-      options.smoothingTimeConstant,
-      options.minDecibels,
-      options.maxDecibels,
-    ]
-  )
+  const memoizedOptions = useMemo(() => options, [options])
 
   useEffect(() => {
     if (!mediaStream) {
@@ -160,19 +154,7 @@ export function useMultibandVolume(
   mediaStream?: MediaStream | null,
   options: MultiBandVolumeOptions = {}
 ) {
-  const opts = useMemo(
-    () => ({ ...multibandDefaults, ...options }),
-    [
-      options.bands,
-      options.loPass,
-      options.hiPass,
-      options.updateInterval,
-      options.analyserOptions?.fftSize,
-      options.analyserOptions?.smoothingTimeConstant,
-      options.analyserOptions?.minDecibels,
-      options.analyserOptions?.maxDecibels,
-    ]
-  )
+  const opts = useMemo(() => ({ ...multibandDefaults, ...options }), [options])
 
   const [frequencyBands, setFrequencyBands] = useState<number[]>(() =>
     new Array(opts.bands).fill(0)
@@ -341,8 +323,7 @@ export type AgentState =
   | "speaking"
   | "thinking"
 
-export interface BarVisualizerProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface BarVisualizerProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Voice assistant state */
   state?: AgentState
   /** Number of bars to display */
@@ -478,7 +459,7 @@ const BarVisualizerComponent = React.forwardRef<
         className={cn(
           "relative flex justify-center gap-1.5",
           centerAlign ? "items-center" : "items-end",
-          "bg-muted h-32 w-full overflow-hidden rounded-lg p-4",
+          "h-32 w-full overflow-hidden rounded-lg bg-muted p-4",
           className
         )}
         style={{

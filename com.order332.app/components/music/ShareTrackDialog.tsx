@@ -6,7 +6,6 @@ import { Drawer as DrawerPrimitive } from "vaul"
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"

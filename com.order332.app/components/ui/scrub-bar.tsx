@@ -6,7 +6,6 @@ import {
   useCallback,
   useContext,
   useRef,
-  type ComponentProps,
   type HTMLAttributes,
 } from "react"
 
@@ -137,7 +136,7 @@ function ScrubBarTrack({ className, children, ...props }: ScrubBarTrackProps) {
       ref={trackRef}
       data-slot="scrub-bar-track"
       className={cn(
-        "relative h-2 w-full grow cursor-pointer touch-none rounded-full transition-none select-none bg-foreground/[0.08] border border-foreground/[0.09]",
+        "relative h-2 w-full grow cursor-pointer touch-none rounded-full border border-foreground/[0.09] bg-foreground/[0.08] transition-none select-none",
         className
       )}
       onPointerDown={handlePointerDown}
@@ -161,7 +160,10 @@ function ScrubBarProgress({ className, ...props }: ScrubBarProgressProps) {
   return (
     <div
       data-slot="scrub-bar-progress"
-      className={cn("bg-foreground/60 absolute inset-y-0 left-0 rounded-full", className)}
+      className={cn(
+        "absolute inset-y-0 left-0 rounded-full bg-foreground/60",
+        className
+      )}
       style={{ width: `${progress}%` }}
       {...props}
     />
@@ -177,7 +179,7 @@ function ScrubBarThumb({ className, children, ...props }: ScrubBarThumbProps) {
     <div
       data-slot="scrub-bar-thumb"
       className={cn(
-        "bg-primary absolute top-1/2 block h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50",
+        "absolute top-1/2 block h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary transition-colors disabled:pointer-events-none disabled:opacity-50",
         className
       )}
       style={{ left: `${progress}%` }}

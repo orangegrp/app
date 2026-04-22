@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import {
   Download,
   ExternalLink,
@@ -159,9 +160,12 @@ export function ContentItemCard({
         <Dialog open={imageExpanded} onOpenChange={setImageExpanded}>
           <DialogContent className="max-w-4xl p-2">
             <DialogTitle className="sr-only">{item.title}</DialogTitle>
-            <img
+            <Image
               src={item.publicUrl}
               alt={item.title}
+              width={1200}
+              height={900}
+              unoptimized
               className="max-h-[80vh] w-full rounded-lg object-contain"
             />
           </DialogContent>
@@ -195,9 +199,12 @@ function ImageCard({
     <div className="flex flex-col">
       {/* Natural-ratio image — no forced aspect-square */}
       <button onClick={onExpand} className="w-full overflow-hidden text-left">
-        <img
+        <Image
           src={item.publicUrl}
           alt={item.title}
+          width={1200}
+          height={900}
+          unoptimized
           className="w-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />

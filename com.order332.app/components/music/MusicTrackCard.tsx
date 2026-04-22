@@ -9,6 +9,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type TouchEvent as ReactTouchEvent,
 } from "react"
+import Image from "next/image"
 import {
   ListEnd,
   ListStart,
@@ -131,7 +132,6 @@ export function MusicTrackCard({
   playlists,
   onAddToPlaylist,
 }: MusicTrackCardProps) {
-  const [deleting, setDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -478,7 +478,6 @@ export function MusicTrackCard({
   }
 
   const handleDeleteConfirm = () => {
-    setDeleting(true)
     setConfirmOpen(false)
     onDelete(track.id)
   }
@@ -500,9 +499,12 @@ export function MusicTrackCard({
       {/* Cover art */}
       <div className="relative aspect-square overflow-hidden bg-foreground/5">
         {track.coverUrl ? (
-          <img
+          <Image
             src={track.coverUrl}
             alt={`${track.title} cover`}
+            width={640}
+            height={640}
+            unoptimized
             className={cn(
               "h-full w-full object-cover transition-transform duration-500",
               isActive && "scale-105"
@@ -778,9 +780,12 @@ export function MusicTrackCard({
                 className="flex h-32 items-center justify-center rounded-xl border border-dashed border-foreground/10 bg-foreground/5 transition hover:border-foreground/30"
               >
                 {coverPreview ? (
-                  <img
+                  <Image
                     src={coverPreview}
                     alt="Cover preview"
+                    width={256}
+                    height={256}
+                    unoptimized
                     className="h-full w-full rounded-xl object-cover"
                   />
                 ) : (

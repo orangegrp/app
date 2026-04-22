@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import NextImage from "next/image"
 import {
   CheckCircle2,
   CloudUpload,
@@ -1102,9 +1103,12 @@ function TrackCard({
             )}
           >
             {item.coverPreview ? (
-              <img
+              <NextImage
                 src={item.coverPreview}
                 alt="Cover"
+                width={96}
+                height={96}
+                unoptimized
                 className="h-full w-full object-cover"
               />
             ) : (

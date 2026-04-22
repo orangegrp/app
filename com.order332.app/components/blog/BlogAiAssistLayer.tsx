@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import {
   useCallback,
@@ -8,9 +8,9 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from 'react'
-import { createPortal } from 'react-dom'
-import { toast } from 'sonner'
+} from "react"
+import { createPortal } from "react-dom"
+import { toast } from "sonner"
 import {
   Bold,
   CheckSquare,
@@ -27,45 +27,50 @@ import {
   Strikethrough,
   UnfoldHorizontal,
   Wand2,
-} from 'lucide-react'
+} from "lucide-react"
 import {
   blogAiAssistCreateImage,
   blogAiAssistRequest,
   consumeBlogAiTextStream,
   type BlogAiAssistAction,
-} from '@/lib/blog-ai-api'
-import { BLOG_AI_MAX_INPUT_CHARS } from '@/lib/blog-ai-assist-limits'
-import type { MarkdownEditorHandle } from '@/components/blog/MarkdownEditor'
+} from "@/lib/blog-ai-api"
+import { BLOG_AI_MAX_INPUT_CHARS } from "@/lib/blog-ai-assist-limits"
 import {
   roundedRectInnerMetrics,
   roundedRectPathD,
   roundedRectPerimeter,
-} from '@/lib/blog-ai-glow-path'
-import { mergeDomRects } from '@/lib/blog-editor-ai-types'
-import { computeToolbarPosition } from '@/lib/blog-selection-toolbar-position'
-import { BLOG_TRANSLATE_LANGUAGE_OPTIONS } from '@/lib/blog-translate-languages'
-import { cn } from '@/lib/utils'
-import { Button, buttonVariants } from '@/components/ui/button'
+} from "@/lib/blog-ai-glow-path"
+import { mergeDomRects } from "@/lib/blog-editor-ai-types"
+import { computeToolbarPosition } from "@/lib/blog-selection-toolbar-position"
+import { BLOG_TRANSLATE_LANGUAGE_OPTIONS } from "@/lib/blog-translate-languages"
+import { cn } from "@/lib/utils"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
+} from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 
 export interface BlogAiEditorHandle {
-  getSelectionMeta: () => import('@/lib/blog-editor-ai-types').BlogEditorSelectionMeta | null
+  getSelectionMeta: () =>
+    | import("@/lib/blog-editor-ai-types").BlogEditorSelectionMeta
+    | null
   getSelectionRect: () => DOMRect | null
   getSelectionRects: () => DOMRect[]
   isAllSelected: () => boolean
@@ -85,7 +90,7 @@ export type BlogSelectionFormatActions = {
 }
 
 function escapeMdAlt(alt: string): string {
-  return alt.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]')
+  return alt.replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]")
 }
 
 function clipRectToViewport(rect: DOMRect): DOMRect {
@@ -129,8 +134,14 @@ const BLOG_AI_SNAKE_PERIMETER_REF = 900
 
 /** Perimeter trail: solid line + blurred white sweep; dash length scales with selection size.
  *  GPU-composited: CSS @keyframes for stroke-dashoffset, CSS filter: blur() for glow layers. */
-function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }) {
-  const id = useId().replace(/:/g, '')
+function BlogAiGlowSegment({
+  rect,
+  glowPad,
+}: {
+  rect: DOMRect
+  glowPad: number
+}) {
+  const id = useId().replace(/:/g, "")
 
   const w = rect.width + glowPad * 2
   const h = rect.height + glowPad * 2
@@ -139,13 +150,17 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
   if (w < 2 || h < 2) return null
 
   const pathD = roundedRectPathD(w, h, r, BLOG_AI_GLOW_PATH_INSET)
-  const { w: iw, h: ih, r: ir } = roundedRectInnerMetrics(w, h, r, BLOG_AI_GLOW_PATH_INSET)
+  const {
+    w: iw,
+    h: ih,
+    r: ir,
+  } = roundedRectInnerMetrics(w, h, r, BLOG_AI_GLOW_PATH_INSET)
   const P = roundedRectPerimeter(iw, ih, ir)
 
   const t = Math.min(P / BLOG_AI_SNAKE_PERIMETER_REF, 1)
   const snakeFrac = Math.min(
     0.46,
-    Math.max(0.16, 0.18 + 0.28 * t + 0.06 * Math.min(minDim / 200, 1)),
+    Math.max(0.16, 0.18 + 0.28 * t + 0.06 * Math.min(minDim / 200, 1))
   )
   const dashDraw = snakeFrac * P
   const dashGap = P - dashDraw
@@ -155,10 +170,10 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
   if (!pathD || P < 4) return null
 
   const svgStyle: React.CSSProperties = {
-    position: 'absolute',
+    position: "absolute",
     inset: 0,
-    overflow: 'visible',
-    pointerEvents: 'none',
+    overflow: "visible",
+    pointerEvents: "none",
   }
 
   const sharedPath = (stroke: string, strokeWidth: number) => (
@@ -183,7 +198,7 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
         width: w,
         height: h,
         borderRadius: r,
-        transform: 'translateZ(0)',
+        transform: "translateZ(0)",
       }}
       aria-hidden
     >
@@ -193,20 +208,32 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
       {/* Layer 1: diffuse glow — CSS blur is GPU-composited (vs SVG feGaussianBlur which is CPU) */}
       <div
         className="blog-ai-glow-blur blog-ai-glow-trail-pulse"
-        style={{ filter: 'blur(6px) brightness(1.4)', willChange: 'filter' }}
+        style={{ filter: "blur(6px) brightness(1.4)", willChange: "filter" }}
       >
-        <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} style={svgStyle} aria-hidden>
-          {sharedPath('#ffffff', 5.25)}
+        <svg
+          viewBox={`0 0 ${w} ${h}`}
+          width={w}
+          height={h}
+          style={svgStyle}
+          aria-hidden
+        >
+          {sharedPath("#ffffff", 5.25)}
         </svg>
       </div>
 
       {/* Layer 2: tight bright head */}
       <div
         className="blog-ai-glow-blur blog-ai-glow-trail-pulse"
-        style={{ filter: 'blur(3px) brightness(1.5)', willChange: 'filter' }}
+        style={{ filter: "blur(3px) brightness(1.5)", willChange: "filter" }}
       >
-        <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} style={svgStyle} aria-hidden>
-          {sharedPath('#ffffff', 3)}
+        <svg
+          viewBox={`0 0 ${w} ${h}`}
+          width={w}
+          height={h}
+          style={svgStyle}
+          aria-hidden
+        >
+          {sharedPath("#ffffff", 3)}
         </svg>
       </div>
 
@@ -218,7 +245,7 @@ function BlogAiGlowSegment({ rect, glowPad }: { rect: DOMRect; glowPad: number }
         height={h}
         aria-hidden
       >
-        {sharedPath('rgba(255,255,255,0.3)', 1.15)}
+        {sharedPath("rgba(255,255,255,0.3)", 1.15)}
       </svg>
     </div>
   )
@@ -244,25 +271,25 @@ const AI_IMAGE_TIMEOUT_MS = 30_000
 /** Returns a signal that aborts after `ms` ms, or immediately when `parent` aborts. */
 function makeTimeoutSignal(
   parent: AbortSignal,
-  ms: number,
+  ms: number
 ): [AbortSignal, () => void] {
   const ctrl = new AbortController()
   if (parent.aborted) {
-    ctrl.abort(new DOMException('Aborted', 'AbortError'))
+    ctrl.abort(new DOMException("Aborted", "AbortError"))
     return [ctrl.signal, () => {}]
   }
   const id = setTimeout(
-    () => ctrl.abort(new DOMException('signal timed out', 'TimeoutError')),
-    ms,
+    () => ctrl.abort(new DOMException("signal timed out", "TimeoutError")),
+    ms
   )
   const onParentAbort = () => {
     clearTimeout(id)
-    ctrl.abort(new DOMException('Aborted', 'AbortError'))
+    ctrl.abort(new DOMException("Aborted", "AbortError"))
   }
-  parent.addEventListener('abort', onParentAbort, { once: true })
+  parent.addEventListener("abort", onParentAbort, { once: true })
   const clear = () => {
     clearTimeout(id)
-    parent.removeEventListener('abort', onParentAbort)
+    parent.removeEventListener("abort", onParentAbort)
   }
   return [ctrl.signal, clear]
 }
@@ -277,16 +304,21 @@ export function BlogAiAssistLayer({
   onLoadingChange,
 }: Props) {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
-  const [floatingPos, setFloatingPos] = useState<{ left: number; top: number } | null>(null)
+  const [floatingPos, setFloatingPos] = useState<{
+    left: number
+    top: number
+  } | null>(null)
   const [glowRects, setGlowRects] = useState<DOMRect[] | null>(null)
   const [flashRect, setFlashRect] = useState<DOMRect | null>(null)
   const [loading, setLoading] = useState(false)
   const [aiMenuOpen, setAiMenuOpen] = useState(false)
   const [translateDialogOpen, setTranslateDialogOpen] = useState(false)
-  const [translateLang, setTranslateLang] = useState(BLOG_TRANSLATE_LANGUAGE_OPTIONS[0].value)
+  const [translateLang, setTranslateLang] = useState(
+    BLOG_TRANSLATE_LANGUAGE_OPTIONS[0].value
+  )
   const [imageDialogOpen, setImageDialogOpen] = useState(false)
-  const [imagePromptText, setImagePromptText] = useState('')
-  const [imageModel, setImageModel] = useState<'grok' | 'gemini'>('grok')
+  const [imagePromptText, setImagePromptText] = useState("")
+  const [imageModel, setImageModel] = useState<"grok" | "gemini">("grok")
   const translateSourceRef = useRef<string | null>(null)
   const translateFromRef = useRef<number | null>(null)
   const translateToRef = useRef<number | null>(null)
@@ -297,10 +329,13 @@ export function BlogAiAssistLayer({
   getEditorRef.current = getEditor
   const toolbarRef = useRef<HTMLDivElement>(null)
 
-  const setLoadingState = useCallback((val: boolean) => {
-    setLoading(val)
-    onLoadingChange?.(val)
-  }, [onLoadingChange])
+  const setLoadingState = useCallback(
+    (val: boolean) => {
+      setLoading(val)
+      onLoadingChange?.(val)
+    },
+    [onLoadingChange]
+  )
 
   useLayoutEffect(() => {
     if (!enabled) {
@@ -335,71 +370,91 @@ export function BlogAiAssistLayer({
     const id = requestAnimationFrame(() => {
       const el = toolbarRef.current
       if (!el || !anchorRect) return
-      setFloatingPos(computeToolbarPosition(anchorRect, { w: el.offsetWidth, h: el.offsetHeight }))
+      setFloatingPos(
+        computeToolbarPosition(anchorRect, {
+          w: el.offsetWidth,
+          h: el.offsetHeight,
+        })
+      )
     })
     return () => cancelAnimationFrame(id)
   }, [anchorRect, loading, selectionRevision])
 
-  const runAction = useCallback(async (action: BlogAiAssistAction) => {
-    const ed = getEditorRef.current()
-    if (!ed) return
-    const meta = ed.getSelectionMeta()
-    if (!meta || meta.inCodeBlock || !meta.text.trim()) return
-    if (meta.text.length > BLOG_AI_MAX_INPUT_CHARS[action]) return
+  const runAction = useCallback(
+    async (action: BlogAiAssistAction) => {
+      const ed = getEditorRef.current()
+      if (!ed) return
+      const meta = ed.getSelectionMeta()
+      if (!meta || meta.inCodeBlock || !meta.text.trim()) return
+      if (meta.text.length > BLOG_AI_MAX_INPUT_CHARS[action]) return
 
-    // Capture positions before deselect / async gap
-    const selFrom = meta.from
-    const selTo = meta.to
+      // Capture positions before deselect / async gap
+      const selFrom = meta.from
+      const selTo = meta.to
 
-    abortRef.current?.abort()
-    const ac = new AbortController()
-    abortRef.current = ac
+      abortRef.current?.abort()
+      const ac = new AbortController()
+      abortRef.current = ac
 
-    const bounds = selectionGlowBounds(ed)
-    setGlowRects(bounds ? [bounds] : [])
-    setLoadingState(true)
-    // Deselect text so selection highlight doesn't show through the glow animation
-    window.getSelection()?.removeAllRanges()
+      const bounds = selectionGlowBounds(ed)
+      setGlowRects(bounds ? [bounds] : [])
+      setLoadingState(true)
+      // Deselect text so selection highlight doesn't show through the glow animation
+      window.getSelection()?.removeAllRanges()
 
-    try {
-      const res0 = await blogAiAssistRequest(action, meta.text, { signal: (() => { const [s] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS); return s })() })
-      const text = await consumeBlogAiTextStream(res0, () => {})
-      if (!text.trim()) return
-      ed.replaceSelection(text, selFrom, selTo)
-      const fr = ed.getSelectionRect()
-      if (fr) setFlashRect(fr)
-      setTimeout(() => setFlashRect(null), 700)
-    } catch (firstErr) {
-      if (firstErr instanceof Error && firstErr.name === 'AbortError') return
-      if (firstErr instanceof DOMException && firstErr.name === 'TimeoutError') {
-        if (ac.signal.aborted) return
-        const toastId = toast.loading('Hang on…')
-        try {
-          const [sig, clearSig] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
-          const res1 = await blogAiAssistRequest(action, meta.text, { signal: sig })
-          const text = await consumeBlogAiTextStream(res1, () => {})
-          clearSig()
-          toast.dismiss(toastId)
-          if (!text.trim()) return
-          ed.replaceSelection(text, selFrom, selTo)
-          const fr = ed.getSelectionRect()
-          if (fr) setFlashRect(fr)
-          setTimeout(() => setFlashRect(null), 700)
-        } catch {
-          toast.dismiss(toastId)
-          // second failure → silent, no edit
+      try {
+        const res0 = await blogAiAssistRequest(action, meta.text, {
+          signal: (() => {
+            const [s] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
+            return s
+          })(),
+        })
+        const text = await consumeBlogAiTextStream(res0, () => {})
+        if (!text.trim()) return
+        ed.replaceSelection(text, selFrom, selTo)
+        const fr = ed.getSelectionRect()
+        if (fr) setFlashRect(fr)
+        setTimeout(() => setFlashRect(null), 700)
+      } catch (firstErr) {
+        if (firstErr instanceof Error && firstErr.name === "AbortError") return
+        if (
+          firstErr instanceof DOMException &&
+          firstErr.name === "TimeoutError"
+        ) {
+          if (ac.signal.aborted) return
+          const toastId = toast.loading("Hang on…")
+          try {
+            const [sig, clearSig] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
+            const res1 = await blogAiAssistRequest(action, meta.text, {
+              signal: sig,
+            })
+            const text = await consumeBlogAiTextStream(res1, () => {})
+            clearSig()
+            toast.dismiss(toastId)
+            if (!text.trim()) return
+            ed.replaceSelection(text, selFrom, selTo)
+            const fr = ed.getSelectionRect()
+            if (fr) setFlashRect(fr)
+            setTimeout(() => setFlashRect(null), 700)
+          } catch {
+            toast.dismiss(toastId)
+            // second failure → silent, no edit
+          }
+          return
         }
-        return
+        toast.error(
+          firstErr instanceof Error ? firstErr.message : "AI request failed"
+        )
+      } finally {
+        setLoadingState(false)
+        setGlowRects(null)
+        setAiMenuOpen(false)
+        abortRef.current = null
+        onAiActionComplete?.()
       }
-      toast.error(firstErr instanceof Error ? firstErr.message : 'AI request failed')
-    } finally {
-      setLoadingState(false)
-      setGlowRects(null)
-      setAiMenuOpen(false)
-      abortRef.current = null
-      onAiActionComplete?.()
-    }
-  }, [onAiActionComplete, setLoadingState])
+    },
+    [onAiActionComplete, setLoadingState]
+  )
 
   const openTranslateDialog = useCallback(() => {
     const ed = getEditorRef.current()
@@ -424,7 +479,7 @@ export function BlogAiAssistLayer({
   const runTranslate = useCallback(async () => {
     const text = translateSourceRef.current?.trim()
     if (!text) {
-      toast.error('Nothing to translate')
+      toast.error("Nothing to translate")
       return
     }
     const targetLanguage = translateLang.trim()
@@ -448,7 +503,10 @@ export function BlogAiAssistLayer({
 
     try {
       const [sig0, clear0] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
-      const res0 = await blogAiAssistRequest('translate', text, { targetLanguage, signal: sig0 })
+      const res0 = await blogAiAssistRequest("translate", text, {
+        targetLanguage,
+        signal: sig0,
+      })
       const out = await consumeBlogAiTextStream(res0, () => {})
       clear0()
       if (!out.trim()) return
@@ -457,13 +515,19 @@ export function BlogAiAssistLayer({
       if (fr) setFlashRect(fr)
       setTimeout(() => setFlashRect(null), 700)
     } catch (firstErr) {
-      if (firstErr instanceof Error && firstErr.name === 'AbortError') return
-      if (firstErr instanceof DOMException && firstErr.name === 'TimeoutError') {
+      if (firstErr instanceof Error && firstErr.name === "AbortError") return
+      if (
+        firstErr instanceof DOMException &&
+        firstErr.name === "TimeoutError"
+      ) {
         if (ac.signal.aborted) return
-        const toastId = toast.loading('Hang on…')
+        const toastId = toast.loading("Hang on…")
         try {
           const [sig1, clear1] = makeTimeoutSignal(ac.signal, AI_TIMEOUT_MS)
-          const res1 = await blogAiAssistRequest('translate', text, { targetLanguage, signal: sig1 })
+          const res1 = await blogAiAssistRequest("translate", text, {
+            targetLanguage,
+            signal: sig1,
+          })
           const out = await consumeBlogAiTextStream(res1, () => {})
           clear1()
           toast.dismiss(toastId)
@@ -477,7 +541,9 @@ export function BlogAiAssistLayer({
         }
         return
       }
-      toast.error(firstErr instanceof Error ? firstErr.message : 'AI request failed')
+      toast.error(
+        firstErr instanceof Error ? firstErr.message : "AI request failed"
+      )
     } finally {
       setLoadingState(false)
       setGlowRects(null)
@@ -496,7 +562,7 @@ export function BlogAiAssistLayer({
     imageGlowBoundsRef.current = selectionGlowBounds(ed!)
     imageSelToRef.current = meta.to
     setImagePromptText(meta.text)
-    setImageModel('grok')
+    setImageModel("grok")
     setAiMenuOpen(false)
     setImageDialogOpen(true)
   }, [])
@@ -521,7 +587,7 @@ export function BlogAiAssistLayer({
 
     try {
       const doImageRequest = async (sig: AbortSignal) =>
-        blogAiAssistCreateImage(prompt, imageModel === 'gemini', sig)
+        blogAiAssistCreateImage(prompt, imageModel === "gemini", sig)
 
       let result: { url: string; alt: string }
       const [sig0, clear0] = makeTimeoutSignal(ac.signal, AI_IMAGE_TIMEOUT_MS)
@@ -530,12 +596,18 @@ export function BlogAiAssistLayer({
         clear0()
       } catch (firstErr) {
         clear0()
-        if (firstErr instanceof Error && firstErr.name === 'AbortError') return
-        if (firstErr instanceof DOMException && firstErr.name === 'TimeoutError') {
+        if (firstErr instanceof Error && firstErr.name === "AbortError") return
+        if (
+          firstErr instanceof DOMException &&
+          firstErr.name === "TimeoutError"
+        ) {
           if (ac.signal.aborted) return
-          const toastId = toast.loading('Hang on…')
+          const toastId = toast.loading("Hang on…")
           try {
-            const [sig1, clear1] = makeTimeoutSignal(ac.signal, AI_IMAGE_TIMEOUT_MS)
+            const [sig1, clear1] = makeTimeoutSignal(
+              ac.signal,
+              AI_IMAGE_TIMEOUT_MS
+            )
             result = await doImageRequest(sig1)
             clear1()
             toast.dismiss(toastId)
@@ -549,20 +621,27 @@ export function BlogAiAssistLayer({
       }
 
       if (!result!.url.trim()) return
-      const safeAlt = escapeMdAlt(result!.alt.trim() || 'Illustration')
+      const safeAlt = escapeMdAlt(result!.alt.trim() || "Illustration")
       let parsedUrl: URL
       try {
         parsedUrl = new URL(result!.url)
-      } catch { return }
-      if (parsedUrl.protocol !== 'https:') return
-      if (!parsedUrl.hostname.endsWith('.supabase.co')) return
-      ed.insertAfterSelection(`\n\n![${safeAlt}](${parsedUrl.href})\n`, insertAt)
+      } catch {
+        return
+      }
+      if (parsedUrl.protocol !== "https:") return
+      if (!parsedUrl.hostname.endsWith(".supabase.co")) return
+      ed.insertAfterSelection(
+        `\n\n![${safeAlt}](${parsedUrl.href})\n`,
+        insertAt
+      )
       const fr = ed.getSelectionRect()
       if (fr) setFlashRect(fr)
       setTimeout(() => setFlashRect(null), 700)
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      toast.error(err instanceof Error ? err.message : 'Image generation failed')
+      if (err instanceof Error && err.name === "AbortError") return
+      toast.error(
+        err instanceof Error ? err.message : "Image generation failed"
+      )
     } finally {
       setLoadingState(false)
       setGlowRects(null)
@@ -578,7 +657,7 @@ export function BlogAiAssistLayer({
       fn()
       onFormatApplied?.()
     },
-    [onFormatApplied],
+    [onFormatApplied]
   )
 
   useEffect(() => {
@@ -587,7 +666,7 @@ export function BlogAiAssistLayer({
     }
   }, [])
 
-  if (!enabled || typeof document === 'undefined') return null
+  if (!enabled || typeof document === "undefined") return null
 
   const glowPad = 2
   let glowEl: ReactNode = null
@@ -595,7 +674,7 @@ export function BlogAiAssistLayer({
   if (glowBounds) {
     glowEl = createPortal(
       <BlogAiGlowSegment rect={glowBounds} glowPad={glowPad} />,
-      document.body,
+      document.body
     )
   }
 
@@ -612,21 +691,21 @@ export function BlogAiAssistLayer({
         }}
         aria-hidden
       />,
-      document.body,
+      document.body
     )
 
   const glassToolbar = cn(
-    'pointer-events-auto relative overflow-hidden rounded-xl border border-white/[0.14]',
-    'bg-neutral-950/45 shadow-[0_10px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.14)]',
-    'backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/[0.06]',
-    'ring-1 ring-white/10',
+    "pointer-events-auto relative overflow-hidden rounded-xl border border-white/[0.14]",
+    "bg-neutral-950/45 shadow-[0_10px_40px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.14)]",
+    "backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/[0.06]",
+    "ring-1 ring-white/10"
   )
 
   const glassAiPanel = cn(
-    'flex flex-col gap-0.5 rounded-xl border border-white/[0.14] p-1',
-    'bg-neutral-950/50 shadow-[0_-16px_48px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]',
-    'backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/[0.07]',
-    'ring-1 ring-white/10',
+    "flex flex-col gap-0.5 rounded-xl border border-white/[0.14] p-1",
+    "bg-neutral-950/50 shadow-[0_-16px_48px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]",
+    "backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/[0.07]",
+    "ring-1 ring-white/10"
   )
 
   const toolbarEl =
@@ -638,12 +717,12 @@ export function BlogAiAssistLayer({
         ref={toolbarRef}
         className={cn(
           glassToolbar,
-          'fixed z-[100] flex w-max max-w-[min(100vw-16px,540px)] flex-nowrap items-center gap-1 px-1.5 py-1 text-sm text-popover-foreground outline-hidden',
+          "fixed z-[100] flex w-max max-w-[min(100vw-16px,540px)] flex-nowrap items-center gap-1 px-1.5 py-1 text-sm text-popover-foreground outline-hidden"
         )}
         style={{
           left: floatingPos.left,
           top: floatingPos.top,
-          transform: 'translateX(-50%)',
+          transform: "translateX(-50%)",
         }}
         role="toolbar"
         aria-label="Selection tools"
@@ -651,19 +730,22 @@ export function BlogAiAssistLayer({
         <Popover open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
           <PopoverTrigger
             className={cn(
-              buttonVariants({ variant: 'ghost', size: 'sm' }),
-              'h-8 shrink-0 gap-1.5 rounded-lg px-2.5 text-xs font-medium text-sky-100/95',
-              'hover:bg-white/12',
-              'focus-visible:border-white/35 focus-visible:ring-3 focus-visible:ring-white/40',
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "h-8 shrink-0 gap-1.5 rounded-lg px-2.5 text-xs font-medium text-sky-100/95",
+              "hover:bg-white/12",
+              "focus-visible:border-white/35 focus-visible:ring-3 focus-visible:ring-white/40",
               aiMenuOpen &&
-                'bg-white/[0.1] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)]',
+                "bg-white/[0.1] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)]"
             )}
             onMouseDown={(e) => e.preventDefault()}
           >
             <Sparkles className="size-3.5 shrink-0 opacity-90" aria-hidden />
             <span>AI</span>
             <ChevronUp
-              className={cn('size-3.5 shrink-0 opacity-80 transition-transform', aiMenuOpen && 'rotate-180')}
+              className={cn(
+                "size-3.5 shrink-0 opacity-80 transition-transform",
+                aiMenuOpen && "rotate-180"
+              )}
               aria-hidden
             />
           </PopoverTrigger>
@@ -675,44 +757,65 @@ export function BlogAiAssistLayer({
             positionerClassName="z-[100]"
             className={cn(
               glassAiPanel,
-              'z-[100] w-[min(100vw-24px,17.5rem)] origin-bottom gap-0.5 p-1 text-sm text-zinc-100',
+              "z-[100] w-[min(100vw-24px,17.5rem)] origin-bottom gap-0.5 p-1 text-sm text-zinc-100"
             )}
           >
             <AiMenuTextRow
               label="Expand"
-
-              icon={<UnfoldHorizontal className="size-3.5 shrink-0 opacity-80" aria-hidden />}
-              onClick={() => void runAction('expand')}
+              icon={
+                <UnfoldHorizontal
+                  className="size-3.5 shrink-0 opacity-80"
+                  aria-hidden
+                />
+              }
+              onClick={() => void runAction("expand")}
             />
             <AiMenuTextRow
               label="Rephrase"
-
-              icon={<Wand2 className="size-3.5 shrink-0 opacity-80" aria-hidden />}
-              onClick={() => void runAction('rephrase')}
+              icon={
+                <Wand2 className="size-3.5 shrink-0 opacity-80" aria-hidden />
+              }
+              onClick={() => void runAction("rephrase")}
             />
             <AiMenuTextRow
               label="Proofread"
-
-              icon={<CheckSquare className="size-3.5 shrink-0 opacity-80" aria-hidden />}
-              onClick={() => void runAction('proofread')}
+              icon={
+                <CheckSquare
+                  className="size-3.5 shrink-0 opacity-80"
+                  aria-hidden
+                />
+              }
+              onClick={() => void runAction("proofread")}
             />
             <AiMenuTextRow
               label="Condense"
-
-              icon={<FoldHorizontal className="size-3.5 shrink-0 opacity-80" aria-hidden />}
-              onClick={() => void runAction('condense')}
+              icon={
+                <FoldHorizontal
+                  className="size-3.5 shrink-0 opacity-80"
+                  aria-hidden
+                />
+              }
+              onClick={() => void runAction("condense")}
             />
             <AiMenuTextRow
               label="Translate…"
-
-              icon={<Languages className="size-3.5 shrink-0 opacity-80" aria-hidden />}
+              icon={
+                <Languages
+                  className="size-3.5 shrink-0 opacity-80"
+                  aria-hidden
+                />
+              }
               onClick={openTranslateDialog}
             />
             <Separator className="my-0.5 bg-white/10" />
             <AiMenuTextRow
               label="Create image from text"
-
-              icon={<ImagePlus className="size-3.5 shrink-0 opacity-80" aria-hidden />}
+              icon={
+                <ImagePlus
+                  className="size-3.5 shrink-0 opacity-80"
+                  aria-hidden
+                />
+              }
               onClick={openImageDialog}
             />
           </PopoverContent>
@@ -758,7 +861,7 @@ export function BlogAiAssistLayer({
           />
         </div>
       </div>,
-      document.body,
+      document.body
     )
 
   return (
@@ -766,15 +869,26 @@ export function BlogAiAssistLayer({
       {glowEl}
       {flashEl}
       {toolbarEl}
-      <Dialog open={translateDialogOpen} onOpenChange={onTranslateDialogOpenChange}>
-        <DialogContent overlayClassName="z-[110]" className="z-[110] sm:max-w-md">
+      <Dialog
+        open={translateDialogOpen}
+        onOpenChange={onTranslateDialogOpenChange}
+      >
+        <DialogContent
+          overlayClassName="z-[110]"
+          className="z-[110] sm:max-w-md"
+        >
           <DialogHeader>
             <DialogTitle>Translate selection</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="blog-translate-lang">Target language</Label>
-              <Select value={translateLang} onValueChange={(v) => { if (v) setTranslateLang(v) }}>
+              <Select
+                value={translateLang}
+                onValueChange={(v) => {
+                  if (v) setTranslateLang(v)
+                }}
+              >
                 <SelectTrigger id="blog-translate-lang" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -788,7 +902,11 @@ export function BlogAiAssistLayer({
               </Select>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">
-              <Button type="button" variant="outline" onClick={() => setTranslateDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTranslateDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button type="button" onClick={() => void runTranslate()}>
@@ -801,7 +919,10 @@ export function BlogAiAssistLayer({
 
       {/* Image generation dialog */}
       <Dialog open={imageDialogOpen} onOpenChange={setImageDialogOpen}>
-        <DialogContent overlayClassName="z-[110]" className="z-[110] sm:max-w-md">
+        <DialogContent
+          overlayClassName="z-[110]"
+          className="z-[110] sm:max-w-md"
+        >
           <DialogHeader>
             <DialogTitle>Generate image</DialogTitle>
           </DialogHeader>
@@ -813,29 +934,44 @@ export function BlogAiAssistLayer({
                 value={imagePromptText}
                 onChange={(e) => setImagePromptText(e.target.value)}
                 rows={4}
-                className="flex w-full rounded-md border border-white/10 bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none"
+                className="flex w-full resize-none rounded-md border border-white/10 bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 placeholder="Describe the image you want to generate…"
               />
             </div>
             <div className="space-y-1.5">
               <Label>Model</Label>
-              <Select value={imageModel} onValueChange={(v) => setImageModel(v as 'grok' | 'gemini')}>
+              <Select
+                value={imageModel}
+                onValueChange={(v) => setImageModel(v as "grok" | "gemini")}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue>
-                    {(v: string | null) => v === 'gemini' ? 'Gemini — text rendering' : 'Grok'}
+                    {(v: string | null) =>
+                      v === "gemini" ? "Gemini — text rendering" : "Grok"
+                    }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="grok">Grok</SelectItem>
-                  <SelectItem value="gemini">Gemini — text rendering</SelectItem>
+                  <SelectItem value="gemini">
+                    Gemini — text rendering
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">
-              <Button type="button" variant="outline" onClick={() => setImageDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setImageDialogOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="button" onClick={() => void runImageCreate()} disabled={!imagePromptText.trim()}>
+              <Button
+                type="button"
+                onClick={() => void runImageCreate()}
+                disabled={!imagePromptText.trim()}
+              >
                 Generate
               </Button>
             </DialogFooter>
@@ -884,10 +1020,10 @@ function AiMenuTextRow({
     <button
       type="button"
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-normal',
-        'text-zinc-100/95 transition-colors',
-        'hover:bg-white/[0.12] focus-visible:bg-white/[0.12] focus-visible:outline-none',
-        'active:bg-white/[0.16]',
+        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-normal",
+        "text-zinc-100/95 transition-colors",
+        "hover:bg-white/[0.12] focus-visible:bg-white/[0.12] focus-visible:outline-none",
+        "active:bg-white/[0.16]"
       )}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}

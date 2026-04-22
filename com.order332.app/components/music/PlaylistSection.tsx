@@ -1,8 +1,8 @@
 "use client"
 
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import {
-  ChevronRight,
   GripVertical,
   ImagePlus,
   ListEnd,
@@ -221,10 +221,13 @@ function PlaylistCoverArt({
     <div className="grid h-full w-full grid-cols-2 grid-rows-2">
       {cells.map((url, i) =>
         url ? (
-          <img
+          <Image
             key={i}
             src={url}
             alt=""
+            width={64}
+            height={64}
+            unoptimized
             className="h-full w-full object-cover"
             loading="lazy"
           />
@@ -537,7 +540,6 @@ function PlaylistDetailModal({
       .then(({ playlist: p }) => setTracks(p.tracks))
       .catch(() => setTracks([]))
       .finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlist.id])
 
   const handlePlay = (startId?: string, shuffle = false) => {
@@ -713,9 +715,12 @@ function PlaylistDetailModal({
                   </span>
                   <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-foreground/5">
                     {track.coverUrl ? (
-                      <img
+                      <Image
                         src={track.coverUrl}
                         alt=""
+                        width={36}
+                        height={36}
+                        unoptimized
                         className="h-full w-full object-cover"
                       />
                     ) : (

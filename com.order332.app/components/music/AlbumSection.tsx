@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
+import Image from "next/image"
 import { ListEnd, ListStart, Music2, Pencil, Play, Shuffle } from "lucide-react"
 import {
   type MusicTrackMeta,
@@ -189,9 +190,12 @@ function AlbumCard({
         onClick={onShowDetail}
       >
         {album.cover ? (
-          <img
+          <Image
             src={album.cover}
             alt={album.name}
+            width={640}
+            height={640}
+            unoptimized
             className={cn(
               "h-full w-full object-cover transition-transform duration-500",
               isActive && "scale-105"
@@ -422,9 +426,12 @@ function AlbumDetailModal({
                     {i + 1}
                   </span>
                   {track.coverUrl ? (
-                    <img
+                    <Image
                       src={track.coverUrl}
                       alt=""
+                      width={32}
+                      height={32}
+                      unoptimized
                       className="h-8 w-8 shrink-0 rounded object-cover"
                     />
                   ) : (

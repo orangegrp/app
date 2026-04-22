@@ -122,7 +122,7 @@ function TranscriptViewerContainer({
       src: audioSrc,
       children: <source src={audioSrc} type={audioType} />,
     }),
-    [audioRef, audioSrc]
+    [audioRef, audioSrc, audioType]
   )
 
   const contextValue = useMemo(
@@ -147,8 +147,10 @@ function TranscriptViewerContainer({
 }
 
 type TranscriptViewerWordStatus = "spoken" | "unspoken" | "current"
-interface TranscriptViewerWordProps
-  extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
+interface TranscriptViewerWordProps extends Omit<
+  HTMLAttributes<HTMLSpanElement>,
+  "children"
+> {
   word: TranscriptWordType
   status: TranscriptViewerWordStatus
   children?: ReactNode
@@ -394,7 +396,7 @@ function TranscriptViewerScrubBar({
         {showTimeLabels && (
           <div
             className={cn(
-              "text-muted-foreground flex items-center justify-between text-xs",
+              "flex items-center justify-between text-xs text-muted-foreground",
               labelsClassName
             )}
           >

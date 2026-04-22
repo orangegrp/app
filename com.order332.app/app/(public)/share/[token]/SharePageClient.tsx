@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { AlignLeft, Music2, Pause, Play } from "lucide-react"
 import {
@@ -58,7 +59,13 @@ const glassBg: React.CSSProperties = {
 }
 
 // ── ScrollingTitle — identical to the one in NowPlayingSheet ──────────────────
-function ScrollingTitle({ text, className }: { text: string; className?: string }) {
+function ScrollingTitle({
+  text,
+  className,
+}: {
+  text: string
+  className?: string
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const [shouldScroll, setShouldScroll] = useState(false)
@@ -77,11 +84,16 @@ function ScrollingTitle({ text, className }: { text: string; className?: string 
   }, [text])
 
   return (
-    <div ref={containerRef} className={cn("overflow-hidden whitespace-nowrap", className)}>
+    <div
+      ref={containerRef}
+      className={cn("overflow-hidden whitespace-nowrap", className)}
+    >
       {shouldScroll ? (
-        <span className="inline-block animate-title-marquee">
+        <span className="animate-title-marquee inline-block">
           <span className="pr-14">{text}</span>
-          <span aria-hidden className="pr-14">{text}</span>
+          <span aria-hidden className="pr-14">
+            {text}
+          </span>
         </span>
       ) : (
         <span ref={textRef}>{text}</span>
@@ -105,7 +117,7 @@ function ShareScrubBar() {
         <ScrubBarProgress />
         <ScrubBarThumb className="h-3.5 w-3.5" />
       </ScrubBarTrack>
-      <div className="mt-1 flex justify-between text-xs tabular-nums text-muted-foreground">
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground tabular-nums">
         <AudioPlayerTime />
         <AudioPlayerDuration />
       </div>
@@ -121,12 +133,14 @@ function TransportControls() {
       <ShareScrubBar />
       <div className="my-3 flex items-center justify-center gap-4">
         <button
-          onClick={() => player.isPlaying ? player.pause() : player.play()}
-          className="flex h-14 w-14 items-center justify-center rounded-full glass-button glass-button-glass"
+          onClick={() => (player.isPlaying ? player.pause() : player.play())}
+          className="glass-button glass-button-glass flex h-14 w-14 items-center justify-center rounded-full"
         >
-          {player.isPlaying
-            ? <Pause className="h-6 w-6 fill-current" />
-            : <Play className="ml-0.5 h-6 w-6 fill-current" />}
+          {player.isPlaying ? (
+            <Pause className="h-6 w-6 fill-current" />
+          ) : (
+            <Play className="ml-0.5 h-6 w-6 fill-current" />
+          )}
         </button>
       </div>
     </div>
@@ -150,7 +164,10 @@ function SettingsRow({
       {/* Controls row */}
       <div className="flex items-center justify-center gap-4">
         <AudioPlayerVolume className="w-28 shrink-0" />
-        <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+        <AudioPlayerSpeed
+          speeds={[0.5, 1, 1.25, 1.5, 2]}
+          className="shrink-0"
+        />
         <RemotePlaybackButton />
         {hasLyrics && (
           <button
@@ -159,7 +176,7 @@ function SettingsRow({
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
               showLyrics
                 ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground",
+                : "text-muted-foreground hover:text-foreground"
             )}
             aria-label={showLyrics ? "Show artwork" : "Show lyrics"}
           >
@@ -168,11 +185,13 @@ function SettingsRow({
         )}
       </div>
       {/* Sign-in CTA */}
-      <div className="flex flex-col items-center gap-1 mt-2">
-        <p className="text-xs text-muted-foreground">Sign in for the full experience</p>
+      <div className="mt-2 flex flex-col items-center gap-1">
+        <p className="text-xs text-muted-foreground">
+          Sign in for the full experience
+        </p>
         <button
           onClick={onSignIn}
-          className="glass-button glass-button-glass rounded-lg px-3 py-1 text-xs tracking-widest shrink-0 mb-2"
+          className="glass-button glass-button-glass mb-2 shrink-0 rounded-lg px-3 py-1 text-xs tracking-widest"
         >
           SIGN IN
         </button>
@@ -192,15 +211,18 @@ function DesktopPlayerPanel({
   onSignIn: () => void
 }) {
   return (
-    <div className="flex w-[360px] shrink-0 flex-col items-center justify-center overflow-y-auto scrollbar-hide border-r border-foreground/8 px-10 py-8">
+    <div className="scrollbar-hide flex w-[360px] shrink-0 flex-col items-center justify-center overflow-y-auto border-r border-foreground/8 px-10 py-8">
       <div className="mb-6 h-60 w-60 shrink-0 overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
         {track.coverUrl ? (
-          <img
+          <Image
             src={track.coverUrl}
             alt={`${track.title} cover`}
+            width={240}
+            height={240}
+            unoptimized
             className={cn(
               "h-full w-full object-cover transition-transform duration-1000",
-              isPlaying && "scale-105",
+              isPlaying && "scale-105"
             )}
           />
         ) : (
@@ -221,19 +243,22 @@ function DesktopPlayerPanel({
       </div>
       <div className="w-full">
         <TransportControls />
-        <div className="flex flex-col gap-3 mt-2 px-2">
+        <div className="mt-2 flex flex-col gap-3 px-2">
           <div className="flex items-center justify-center gap-3">
             <AudioPlayerVolume className="w-28 shrink-0" />
-            <AudioPlayerSpeed speeds={[0.5, 1, 1.25, 1.5, 2]} className="shrink-0" />
+            <AudioPlayerSpeed
+              speeds={[0.5, 1, 1.25, 1.5, 2]}
+              className="shrink-0"
+            />
             <RemotePlaybackButton />
           </div>
-          <div className="flex flex-col items-center justify-center gap-2 mt-1">
-            <p className="text-xs text-muted-foreground text-center">
+          <div className="mt-1 flex flex-col items-center justify-center gap-2">
+            <p className="text-center text-xs text-muted-foreground">
               Sign in for the full experience
             </p>
             <button
               onClick={onSignIn}
-              className="glass-button glass-button-glass rounded-lg px-3 py-1 text-xs tracking-widest shrink-0"
+              className="glass-button glass-button-glass shrink-0 rounded-lg px-3 py-1 text-xs tracking-widest"
             >
               SIGN IN
             </button>
@@ -285,21 +310,26 @@ function SharePlayer({
   // ── Mobile layout ────────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <div className="fixed inset-0 flex flex-col overflow-hidden" style={glassBg}>
-
+      <div
+        className="fixed inset-0 flex flex-col overflow-hidden"
+        style={glassBg}
+      >
         {/* ── Art view ── */}
         {!(showLyrics && hasLyrics) && (
-          <div className="flex-1 min-h-0 flex flex-col items-center px-5 pt-6 pb-2">
+          <div className="flex min-h-0 flex-1 flex-col items-center px-5 pt-6 pb-2">
             {/* Cover art — flex-1 so it shrinks when screen is short */}
-            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+            <div className="flex min-h-0 w-full flex-1 items-center justify-center">
               <div className="aspect-square h-full max-h-[280px] max-w-full overflow-hidden rounded-2xl bg-foreground/5 shadow-xl">
                 {track.coverUrl ? (
-                  <img
+                  <Image
                     src={track.coverUrl}
                     alt={`${track.title} cover`}
+                    width={280}
+                    height={280}
+                    unoptimized
                     className={cn(
                       "h-full w-full object-cover transition-transform duration-1000",
-                      player.isPlaying && "scale-105",
+                      player.isPlaying && "scale-105"
                     )}
                   />
                 ) : (
@@ -310,18 +340,20 @@ function SharePlayer({
               </div>
             </div>
             {/* Track info */}
-            <div className="shrink-0 w-full text-center mt-4">
+            <div className="mt-4 w-full shrink-0 text-center">
               <ScrollingTitle
                 text={track.title}
                 className="text-xl font-semibold tracking-wide text-foreground"
               />
-              <p className="mt-0.5 text-sm text-muted-foreground truncate">{track.artist}</p>
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                {track.artist}
+              </p>
               {hasRenderableGenre(track.genre) && (
                 <FormattedGenre genre={track.genre} className="mt-2" />
               )}
             </div>
             {/* Transport controls */}
-            <div className="shrink-0 w-full mt-4 pb-2">
+            <div className="mt-4 w-full shrink-0 pb-2">
               <TransportControls />
             </div>
           </div>
@@ -329,11 +361,18 @@ function SharePlayer({
 
         {/* ── Lyrics view ── */}
         {showLyrics && hasLyrics && (
-          <div className="flex-1 min-h-0 flex flex-col">
-            <div className="shrink-0 flex items-center gap-3 px-5 pt-4 pb-3">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center gap-3 px-5 pt-4 pb-3">
               <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-foreground/5">
                 {track.coverUrl ? (
-                  <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
+                  <Image
+                    src={track.coverUrl}
+                    alt=""
+                    width={40}
+                    height={40}
+                    unoptimized
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center">
                     <Music2 className="h-4 w-4 text-muted-foreground/30" />
@@ -341,15 +380,21 @@ function SharePlayer({
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">{track.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {track.title}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {track.artist}
+                </p>
               </div>
             </div>
             <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain scrollbar-hide px-5 py-2"
+              className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-2"
               style={{
-                maskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
-                WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
+                maskImage:
+                  "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
+                WebkitMaskImage:
+                  "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
               }}
             >
               {lyrics && (
@@ -382,10 +427,7 @@ function SharePlayer({
   // ── Desktop layout ───────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen items-stretch justify-center">
-      <div
-        className="flex h-full w-full overflow-hidden"
-        style={glassBg}
-      >
+      <div className="flex h-full w-full overflow-hidden" style={glassBg}>
         <DesktopPlayerPanel
           track={track}
           isPlaying={player.isPlaying}
@@ -394,10 +436,12 @@ function SharePlayer({
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {hasLyrics ? (
             <div
-              className="flex-1 overflow-y-auto scrollbar-hide px-12 py-8"
+              className="scrollbar-hide flex-1 overflow-y-auto px-12 py-8"
               style={{
-                maskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
-                WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+                maskImage:
+                  "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
+                WebkitMaskImage:
+                  "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
               }}
             >
               <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
@@ -441,26 +485,30 @@ export function SharePageClient({
   // dashboard layout finds it already set and skips its own refresh — preventing
   // the double-rotation bug that would log the user out.
   useEffect(() => {
-    fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isPwa: isPWAContext() }),
-      credentials: 'include',
+      credentials: "include",
     })
       .then(async (res) => {
         if (res.ok) {
           try {
-            const { accessToken } = await res.json() as { accessToken: string }
-            const [, b64] = accessToken.split('.')
+            const { accessToken } = (await res.json()) as {
+              accessToken: string
+            }
+            const [, b64] = accessToken.split(".")
             const payload = JSON.parse(
-              atob(b64.replace(/-/g, '+').replace(/_/g, '/'))
+              atob(b64.replace(/-/g, "+").replace(/_/g, "/"))
             ) as { sub: string; permissions: string; isPwa: boolean }
             useAuthStore.getState().setAuth(accessToken, {
               id: payload.sub,
               permissions: payload.permissions,
               isPwa: payload.isPwa,
             })
-          } catch { /* ignore JWT parse errors — still navigate */ }
+          } catch {
+            /* ignore JWT parse errors — still navigate */
+          }
           router.replace(`/music?track=${encodeURIComponent(trackId)}`)
         } else {
           setChecking(false)
@@ -477,30 +525,34 @@ export function SharePageClient({
     try {
       const res = await fetch(`/api/music/share/${encodeURIComponent(token)}`)
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        setError(body.error ?? 'Share link not found or expired')
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        setError(body.error ?? "Share link not found or expired")
         return
       }
-      const data = await res.json() as { track: ShareTrackData }
+      const data = (await res.json()) as { track: ShareTrackData }
       setTrack(data.track)
 
       // Fetch lyrics directly from the signed URL — no auth needed
       if (data.track.lyricsUrl && data.track.lyricsType) {
         fetch(data.track.lyricsUrl)
-          .then((r) => r.ok ? r.text() : Promise.reject())
+          .then((r) => (r.ok ? r.text() : Promise.reject()))
           .then((content) => {
             setLyrics(content)
             setLyricsType(data.track.lyricsType!)
           })
-          .catch(() => { /* lyrics unavailable — non-fatal */ })
+          .catch(() => {
+            /* lyrics unavailable — non-fatal */
+          })
       }
     } catch {
-      setError('Failed to load track')
+      setError("Failed to load track")
     }
   }
 
   const handleSignIn = () => {
-    router.push(`/login?redirect=${encodeURIComponent(`/music?track=${trackId}`)}`)
+    router.push(
+      `/login?redirect=${encodeURIComponent(`/music?track=${trackId}`)}`
+    )
   }
 
   if (checking) return null
@@ -508,15 +560,17 @@ export function SharePageClient({
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="glass-card rounded-2xl px-8 py-8 text-center max-w-sm w-full">
+        <div className="glass-card w-full max-w-sm rounded-2xl px-8 py-8 text-center">
           <Music2 className="mx-auto mb-4 h-10 w-10 text-muted-foreground/30" />
-          <h1 className="text-lg font-semibold text-foreground">Link expired</h1>
+          <h1 className="text-lg font-semibold text-foreground">
+            Link expired
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             This share link is no longer valid.
           </p>
           <button
             onClick={handleSignIn}
-            className="mt-5 glass-button glass-button-glass rounded-lg px-4 py-1.5 text-xs tracking-widest"
+            className="glass-button glass-button-glass mt-5 rounded-lg px-4 py-1.5 text-xs tracking-widest"
           >
             SIGN IN TO 332
           </button>
@@ -529,13 +583,15 @@ export function SharePageClient({
   if (!track) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 py-12">
-        <div className="glass-card w-full max-w-sm rounded-2xl overflow-hidden">
-          <div className="relative aspect-square w-full bg-foreground/5 animate-pulse">
+        <div className="glass-card w-full max-w-sm overflow-hidden rounded-2xl">
+          <div className="relative aspect-square w-full animate-pulse bg-foreground/5">
             {initialCoverUrl ? (
-              <img
+              <Image
                 src={initialCoverUrl}
                 alt={`${initialTitle} album art`}
-                className="h-full w-full object-cover"
+                fill
+                unoptimized
+                className="object-cover"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
@@ -544,8 +600,12 @@ export function SharePageClient({
             )}
           </div>
           <div className="px-6 py-5 text-center">
-            <p className="text-xl font-semibold tracking-wide text-foreground truncate">{initialTitle}</p>
-            <p className="mt-0.5 text-sm text-muted-foreground truncate">{initialArtist}</p>
+            <p className="truncate text-xl font-semibold tracking-wide text-foreground">
+              {initialTitle}
+            </p>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              {initialArtist}
+            </p>
             {initialGenre && (
               <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
                 {initialGenre}

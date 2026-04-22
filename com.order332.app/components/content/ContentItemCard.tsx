@@ -6,7 +6,6 @@ import {
   ExternalLink,
   File,
   FileText,
-  Loader2,
   Music,
   Shield,
   ShieldAlert,
@@ -15,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Spinner } from "@/components/ui/spinner"
 import {
   formatFileSize,
   normalizeContentItemType,
@@ -488,7 +488,7 @@ function vtBadgeProps(status: VtScanStatus, stats: VtScanStats | null) {
     case "scanning":
     case "pending":
       return {
-        icon: <Loader2 className="h-2.5 w-2.5 animate-spin" />,
+        icon: <Spinner size="xs" className="text-yellow-500" />,
         label: "Scanning…",
         className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
       }
@@ -639,7 +639,7 @@ function vtDialogIcon(status: VtScanStatus) {
     case "error":
       return <ShieldOff className="h-5 w-5 text-muted-foreground" />
     default:
-      return <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
+      return <Spinner size="md" className="text-yellow-500" />
   }
 }
 

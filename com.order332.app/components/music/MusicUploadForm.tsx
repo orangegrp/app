@@ -6,7 +6,6 @@ import {
   CloudUpload,
   FileArchive,
   FileMusic,
-  Loader2,
   Music2,
   Plus,
   X,
@@ -28,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Spinner } from "../ui/spinner"
 
 const AUDIO_MIME_TYPES = new Set([
   "audio/mpeg",
@@ -960,7 +960,11 @@ function TrackCard({
         </div>
         <div className="flex items-center gap-1.5">
           {item.status === "uploading" && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <Spinner
+              size="md"
+              clockwise
+              className="text-muted-foreground"
+            />
           )}
           {item.status === "success" && (
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1078,8 +1082,8 @@ function TrackCard({
           <Field label="Lyrics file">
             {item.lyricsStatus === "searching" ? (
               <div className="input-glass flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                Searching LRCLIB for lyrics...
+                <Spinner size="md" clockwise className="text-muted-foreground" />
+                <span>Searching LRCLIB for lyrics...</span>
               </div>
             ) : item.lyricsStatus === "found" && item.fetchedLyrics ? (
               <div className="overflow-hidden rounded-xl border border-foreground/10 bg-foreground/2">

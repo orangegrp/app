@@ -34,54 +34,11 @@ const OFFICIAL_MACHINES: MachineConfig[] = [
   },
 ]
 
-const MACHINES_332: MachineConfig[] = [
-  {
-    id: 'debianTerminal',
-    name: 'Debian',
-    subtitle: 'Terminal · 332',
-    type: 'CLI',
-    description:
-      'Debian with a customised shell environment tuned for the 332 stack. A familiar terminal with the tools you need, ready to go.',
-    tags: ['Debian', 'Bash', 'x86', '332'],
-  },
-  {
-    id: 'debianGui',
-    name: 'Debian',
-    subtitle: 'Graphical Desktop · 332',
-    type: 'GUI',
-    description:
-      'Debian with Xorg and a graphical session, configured for the 332 stack. Boots a full desktop environment via WebAssembly.',
-    tags: ['Debian', 'Xorg', 'x86', '332'],
-    warning: 'GUI environment is experimental and may not boot correctly.',
-  },
-  {
-    id: 'alpineTerminal',
-    name: 'Alpine Linux',
-    subtitle: 'Terminal · 332',
-    type: 'CLI',
-    description:
-      'Lightweight Alpine with a minimal, fast shell environment. Low overhead for quick CLI work.',
-    tags: ['Alpine', 'Bash', 'x86', '332'],
-  },
-  {
-    id: 'alpineGui',
-    name: 'Alpine Linux',
-    subtitle: 'Graphical Desktop · 332',
-    type: 'GUI',
-    description:
-      'Alpine with Xorg and a customised desktop profile matching the 332 stack.',
-    tags: ['Alpine', 'Xorg', 'x86', '332'],
-    warning: 'GUI environment is experimental and may not boot correctly.',
-  },
-]
+const MACHINES_332: MachineConfig[] = []
 
 const MACHINE_META: Record<MachineId, { name: string; type: 'CLI' | 'GUI' }> = {
   debian: { name: 'Debian GNU/Linux', type: 'CLI' },
   alpine: { name: 'Alpine Linux', type: 'GUI' },
-  debianTerminal: { name: 'Debian (332 · terminal)', type: 'CLI' },
-  debianGui: { name: 'Debian (332 · GUI)', type: 'GUI' },
-  alpineTerminal: { name: 'Alpine (332 · terminal)', type: 'CLI' },
-  alpineGui: { name: 'Alpine (332 · GUI)', type: 'GUI' },
 }
 
 function relativeTime(ts: number): string {
@@ -155,28 +112,37 @@ export default function WebPCPage() {
         </div>
 
         {/* ── Official images ─────────────────────────────────────────── */}
-        <p className="section-label mb-3">Official CheerpX</p>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-12">
-          {OFFICIAL_MACHINES.map((m) => (
-            <MachineCard
-              key={m.id}
-              machine={m}
-              onLaunch={() => handleLaunch(m.id as MachineId)}
-            />
-          ))}
-        </div>
+        {OFFICIAL_MACHINES.length > 0 && (
+          <>
+            <p className="section-label mb-3">Official CheerpX</p>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-12">
+              {OFFICIAL_MACHINES.map((m) => (
+                <MachineCard
+                  key={m.id}
+                  machine={m}
+                  onLaunch={() => handleLaunch(m.id as MachineId)}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* ── 332 images ────────────────────────────────────────────── */}
-        <p className="section-label mb-3">332</p>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {MACHINES_332.map((m) => (
-            <MachineCard
-              key={m.id}
-              machine={m}
-              onLaunch={() => handleLaunch(m.id as MachineId)}
-            />
-          ))}
-        </div>
+        {MACHINES_332.length > 0 && (
+          <>
+            <p className="section-label mb-3">332</p>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {MACHINES_332.map((m) => (
+                <MachineCard
+                  key={m.id}
+                  machine={m}
+                  onLaunch={() => handleLaunch(m.id as MachineId)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
 
         {/* ── Sessions ────────────────────────────────────────────────── */}
         {sessions.length > 0 && (

@@ -145,7 +145,7 @@ export default function AdminAiUsagePage() {
             </h2>
           </div>
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading} className="mt-2">
-            <RefreshCw size={13} className={cn(loading && 'animate-spin')} />
+            {loading ? <Spinner size="xs" className="text-muted-foreground" /> : <RefreshCw size={13} />}
           </Button>
         </div>
 

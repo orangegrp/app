@@ -9,6 +9,7 @@ import { MusicUploadForm } from "@/components/music/MusicUploadForm"
 import { AlbumSection } from "@/components/music/AlbumSection"
 import { PlaylistSection } from "@/components/music/PlaylistSection"
 import { useMusicContext } from "@/components/music/MusicContext"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function MusicPage() {
   const {
@@ -92,7 +93,7 @@ export default function MusicPage() {
 
         {loading ? (
           <div className="flex min-h-48 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+            <Spinner size="md" clockwise />
           </div>
         ) : error ? (
           <div className="glass-card rounded-2xl p-8">

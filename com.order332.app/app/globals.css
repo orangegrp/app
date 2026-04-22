@@ -689,8 +689,8 @@
 }
 
 [data-slot="switch"][data-checked] {
-  background: oklch(0.88 0 0 / 80%);
-  border-color: oklch(1 0 0 / 25%);
+  background: oklch(0.71 0.22 136 / 92%);
+  border-color: oklch(0.65 0.18 136 / 60%);
   backdrop-filter: none;
 }
 

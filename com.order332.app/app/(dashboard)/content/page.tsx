@@ -22,6 +22,7 @@ import {
 import { hasPermission } from "@/lib/permissions"
 import { useAuthStore } from "@/lib/auth-store"
 import { PERMISSIONS } from "@/lib/permissions"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function ContentPage() {
   const user = useAuthStore((s) => s.user)
@@ -253,7 +254,7 @@ export default function ContentPage() {
 
         {loading ? (
           <div className="flex min-h-48 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+            <Spinner size="md" clockwise />
           </div>
         ) : error ? (
           <div className="glass-card rounded-2xl p-8">

@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, Trash2, Loader2, PlusCircle } from 'lucide-react'
+import { X, Trash2, PlusCircle } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/lib/auth-store'
 import { toast } from 'sonner'
+import { Spinner } from '../ui/spinner'
 
 export interface FrontmatterData {
   title: string
@@ -195,7 +196,7 @@ export function FrontmatterPanel({ data, onChange, onInsertImage }: Props) {
       <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
         <div className="flex items-center gap-2">
           <Label className="text-xs tracking-wide text-muted-foreground flex-1">Unused CDN Images</Label>
-          {scanning && <Loader2 size={11} className="animate-spin text-muted-foreground/60" />}
+          {scanning && <Spinner size="xs" className="text-muted-foreground/60" />}
         </div>
 
         {!scanning && strayImages.length === 0 && (
@@ -244,7 +245,7 @@ export function FrontmatterPanel({ data, onChange, onInsertImage }: Props) {
                     className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
                   >
                     {deletingUrl === img.url ? (
-                      <Loader2 size={11} className="animate-spin" />
+                      <Spinner size="md" clockwise />
                     ) : (
                       <Trash2 size={11} />
                     )}

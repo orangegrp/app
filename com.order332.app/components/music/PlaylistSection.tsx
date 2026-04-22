@@ -7,7 +7,6 @@ import {
   ImagePlus,
   ListEnd,
   ListStart,
-  Loader2,
   Music2,
   Pencil,
   Play,
@@ -44,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "../ui/spinner"
 
 const SMALL_TILE_BUTTON_CLASS =
   "glass-button glass-button-glass flex h-7 w-7 items-center justify-center rounded-full border-white/20 bg-white/14 text-white backdrop-blur-xl shadow-[0_8px_22px_rgba(0,0,0,0.35)] hover:bg-white/20"
@@ -314,7 +314,7 @@ function PlaylistCard({
               aria-label="Play playlist"
             >
               {playing ? (
-                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                <Spinner size="sm" className="text-white" />
               ) : (
                 <Play className="ml-0.5 h-4 w-4 fill-white text-white" />
               )}
@@ -678,7 +678,7 @@ function PlaylistDetailModal({
         <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <Spinner size="md" clockwise className="text-muted-foreground" />
             </div>
           ) : !tracks || tracks.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground/60">

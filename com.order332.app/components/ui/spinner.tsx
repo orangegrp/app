@@ -47,7 +47,7 @@ const Spinner: React.FC<SpinnerProps> = ({
   size = "md",
   animate = true,
   clockwise = true,
-  className = "",
+  className = "text-foreground/80",
   ...props
 }) => {
   const dim = sizesMap[size] ?? sizesMap.md
@@ -74,7 +74,7 @@ const Spinner: React.FC<SpinnerProps> = ({
           width={8}
           height={28}
           rx={4}
-          fill="oklch(1 0 0 / 80%)"
+          fill="currentColor"
           transform={`rotate(${i * 45}, 50, 50)`}
           style={
             animate

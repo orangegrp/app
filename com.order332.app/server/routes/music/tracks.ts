@@ -142,10 +142,29 @@ musicTrackRoutes.post(
         return c.json({ error: `Unsupported cover type: ${contentType}` }, 400)
       }
       if (prefix === "lyrics") {
-        const ok =
-          contentType === "text/plain" ||
-          contentType === "application/octet-stream"
-        if (!ok) return c.json({ error: "Lyrics must be text/plain" }, 400)
+        const allowedTypes = new Set([
+          "text/plain",
+          "application/octet-stream",
+          "application/x-subrip", // some LRC/Lyrics editors use this
+          "application/lrc",
+          "text/lrc"
+        ])
+
+        // Check content type
+        let okType = allowedTypes.has(contentType)
+
+        // Check file extension if available
+        let okExt = false
+        if (typeof filename === "string") {
+          const ext = filename.toLowerCase().split(".").pop()
+          okExt = ext === "lrc" || ext === "txt"
+        }
+
+        if (!okType && !okExt) {
+          return c.json({
+            error: "Lyrics must be text/plain or a file with .lrc or .txt extension"
+          }, 400)
+        }
       }
 
       const key = generateMusicStorageKey(

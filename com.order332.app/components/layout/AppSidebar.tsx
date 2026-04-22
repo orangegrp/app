@@ -189,10 +189,12 @@ export function AppSidebar({ collapsed, onToggle, musicWidget }: AppSidebarProps
               bottom: `${popoverBottom}px`,
               left: '8px',
               width: '220px',
-              boxShadow: '0 8px 40px oklch(0 0 0 / 50%)',
+              boxShadow: '0 8px 40px oklch(0 0 0 / 80%)',
               zIndex: 200,
+              background: 'var(--glass-bg-overlay, oklch(0.1 0 0 / 90%))', // fallback in case the glass-card class doesn't handle it as expected
             }}
           >
+   
             <div className="px-4 py-4 border-b border-white/5 flex items-center gap-3">
               {user ? (
                 <UserAvatar user={user} size={36} className="ring-1 ring-white/10" />

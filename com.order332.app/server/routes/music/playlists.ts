@@ -6,8 +6,7 @@ import { requirePermission } from "@/server/middleware/rbac"
 import { PERMISSIONS } from "@/lib/permissions"
 import { db } from "@/server/db"
 import { supabase } from "@/server/db/supabase/client"
-import { signUrls } from "@/server/lib/signed-url"
-import { MUSIC_TRACKS_BUCKET } from "@/server/lib/music-upload"
+import { signMusicGetUrls } from "@/server/lib/music-r2"
 import type { HonoEnv } from "@/server/lib/types"
 
 export const musicPlaylistRoutes = new Hono<HonoEnv>()
@@ -77,7 +76,7 @@ musicPlaylistRoutes.get("/", async (c) => {
   const allCoverKeys = [...new Set([...coverKeysByPlaylist.values()].flat())]
   const signed =
     allCoverKeys.length > 0
-      ? await signUrls(MUSIC_TRACKS_BUCKET, allCoverKeys)
+      ? await signMusicGetUrls(allCoverKeys)
       : new Map<string, string>()
 
   return c.json({
@@ -119,7 +118,7 @@ musicPlaylistRoutes.get("/:id", async (c) => {
   )
   const signed =
     keysToSign.length > 0
-      ? await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+      ? await signMusicGetUrls(keysToSign)
       : new Map<string, string>()
 
   const tracks = playlist.tracks.map((t) => ({

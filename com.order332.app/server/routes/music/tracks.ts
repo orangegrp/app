@@ -6,14 +6,18 @@ import { requirePermission } from "@/server/middleware/rbac"
 import { rateLimitByUser } from "@/server/middleware/rate-limit"
 import { PERMISSIONS } from "@/lib/permissions"
 import {
-  MUSIC_TRACKS_BUCKET,
+  MUSIC_ASSET_URL_PLACEHOLDER,
   MUSIC_AUDIO_ALLOWED_TYPES,
   MUSIC_COVER_ALLOWED_TYPES,
   generateMusicStorageKey,
   createMusicSignedUploadUrl,
 } from "@/server/lib/music-upload"
+import {
+  deleteMusicObjects,
+  getMusicObjectText,
+  signMusicGetUrls,
+} from "@/server/lib/music-r2"
 import { supabase } from "@/server/db/supabase/client"
-import { signUrls } from "@/server/lib/signed-url"
 import type { HonoEnv, MusicTrack } from "@/server/lib/types"
 
 export const musicTrackRoutes = new Hono<HonoEnv>()
@@ -48,7 +52,7 @@ musicTrackRoutes.get("/", async (c) => {
         Boolean
       ) as string[]
   )
-  const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+  const signed = await signMusicGetUrls(keysToSign)
   const result = tracks.map((t) => ({
     ...t,
     audioUrl: signed.get(t.audioKey) ?? t.audioUrl,
@@ -80,7 +84,7 @@ musicTrackRoutes.get("/:id/source", rateLimitByUser(120, 60_000), async (c) => {
     track.coverKey ?? null,
     track.lyricsKey ?? null,
   ].filter(Boolean) as string[]
-  const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+  const signed = await signMusicGetUrls(keysToSign)
 
   return c.json({
     track: {
@@ -96,8 +100,7 @@ musicTrackRoutes.get("/:id/source", rateLimitByUser(120, 60_000), async (c) => {
   })
 })
 
-// POST /music/tracks/upload-urls — get signed upload URLs for direct client-to-Supabase upload
-// (bypasses Vercel's request body size limit)
+// POST /music/tracks/upload-urls — presigned PUT URLs to R2 (bypasses Vercel body limit)
 musicTrackRoutes.post(
   "/upload-urls",
   requirePermission(PERMISSIONS.APP_MUSIC_UPLOAD),
@@ -151,7 +154,7 @@ musicTrackRoutes.post(
         ])
 
         // Check content type
-        let okType = allowedTypes.has(contentType)
+        const okType = allowedTypes.has(contentType)
 
         // Check file extension if available
         let okExt = false
@@ -174,7 +177,7 @@ musicTrackRoutes.post(
         typeof filename === "string" ? filename : "file"
       )
       try {
-        const signedUrl = await createMusicSignedUploadUrl(key)
+        const signedUrl = await createMusicSignedUploadUrl(key, contentType)
         results.push({ prefix, storageKey: key, signedUrl })
       } catch {
         return c.json({ error: "Failed to create upload URL" }, 500)
@@ -236,17 +239,9 @@ musicTrackRoutes.post(
         ? body.lyricsType
         : null
 
-    const audioUrl = supabase.storage
-      .from(MUSIC_TRACKS_BUCKET)
-      .getPublicUrl(audioKey).data.publicUrl
-    const coverUrl = coverKey
-      ? supabase.storage.from(MUSIC_TRACKS_BUCKET).getPublicUrl(coverKey).data
-          .publicUrl
-      : null
-    const lyricsUrl = lyricsKey
-      ? supabase.storage.from(MUSIC_TRACKS_BUCKET).getPublicUrl(lyricsKey).data
-          .publicUrl
-      : null
+    const audioUrl = MUSIC_ASSET_URL_PLACEHOLDER
+    const coverUrl = coverKey ? MUSIC_ASSET_URL_PLACEHOLDER : null
+    const lyricsUrl = lyricsKey ? MUSIC_ASSET_URL_PLACEHOLDER : null
 
     const { data, error } = await supabase
       .from("music_tracks")
@@ -279,7 +274,7 @@ musicTrackRoutes.post(
       track.coverKey ?? null,
       track.lyricsKey ?? null,
     ].filter(Boolean) as string[]
-    const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign)
+    const signed = await signMusicGetUrls(keysToSign)
     return c.json(
       {
         track: {
@@ -366,11 +361,8 @@ musicTrackRoutes.patch(
       if (!coverKey.startsWith(`covers/${user.id}/`)) {
         return c.json({ error: "Invalid coverKey" }, 403)
       }
-      const coverUrl = supabase.storage
-        .from(MUSIC_TRACKS_BUCKET)
-        .getPublicUrl(coverKey).data.publicUrl
       updates.cover_key = coverKey
-      updates.cover_url = coverUrl
+      updates.cover_url = MUSIC_ASSET_URL_PLACEHOLDER
     }
 
     if (lyricsKey) {
@@ -383,11 +375,8 @@ musicTrackRoutes.patch(
           400
         )
       }
-      const lyricsUrl = supabase.storage
-        .from(MUSIC_TRACKS_BUCKET)
-        .getPublicUrl(lyricsKey).data.publicUrl
       updates.lyrics_key = lyricsKey
-      updates.lyrics_url = lyricsUrl
+      updates.lyrics_url = MUSIC_ASSET_URL_PLACEHOLDER
       updates.lyrics_type = lyricsType
     }
 
@@ -403,7 +392,25 @@ musicTrackRoutes.patch(
       return c.json({ error: "Update failed" }, 500)
     }
 
-    return c.json({ track: rowToMusicTrack(data) })
+    const updated = rowToMusicTrack(data)
+    const signKeys = [
+      updated.audioKey,
+      updated.coverKey ?? null,
+      updated.lyricsKey ?? null,
+    ].filter(Boolean) as string[]
+    const signed = await signMusicGetUrls(signKeys)
+    return c.json({
+      track: {
+        ...updated,
+        audioUrl: signed.get(updated.audioKey) ?? updated.audioUrl,
+        coverUrl: updated.coverKey
+          ? (signed.get(updated.coverKey) ?? updated.coverUrl)
+          : updated.coverUrl,
+        lyricsUrl: updated.lyricsKey
+          ? (signed.get(updated.lyricsKey) ?? updated.lyricsUrl)
+          : updated.lyricsUrl,
+      },
+    })
   }
 )
 
@@ -436,12 +443,7 @@ musicTrackRoutes.delete(
       data.lyrics_key,
     ].filter(Boolean) as string[]
     if (keysToDelete.length > 0) {
-      const { error: storageError } = await supabase.storage
-        .from("music-tracks")
-        .remove(keysToDelete)
-      if (storageError) {
-        console.error("[music/tracks] storage delete error:", storageError)
-      }
+      await deleteMusicObjects(keysToDelete)
     }
 
     const { error: deleteError } = await supabase
@@ -526,13 +528,7 @@ musicTrackRoutes.get("/:id/lyrics", async (c) => {
   }
 
   try {
-    const { data: blob, error: dlErr } = await supabase.storage
-      .from(MUSIC_TRACKS_BUCKET)
-      .download(data.lyrics_key as string)
-    if (dlErr || !blob) {
-      return c.json({ error: "Failed to fetch lyrics" }, 502)
-    }
-    const content = await blob.text()
+    const content = await getMusicObjectText(data.lyrics_key as string)
     return c.json({ content, type: data.lyrics_type ?? "txt" })
   } catch (err) {
     console.error("[music/tracks] lyrics fetch error:", err)

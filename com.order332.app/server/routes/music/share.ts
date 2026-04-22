@@ -8,8 +8,7 @@ import { rateLimit } from '@/server/middleware/rate-limit'
 import { PERMISSIONS } from '@/lib/permissions'
 import { db } from '@/server/db'
 import { supabase } from '@/server/db/supabase/client'
-import { signUrls } from '@/server/lib/signed-url'
-import { MUSIC_TRACKS_BUCKET } from '@/server/lib/music-upload'
+import { signMusicGetUrls } from '@/server/lib/music-r2'
 import type { HonoEnv, MusicTrack } from '@/server/lib/types'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -123,7 +122,7 @@ musicSharePublicRoutes.get('/:token', async (c) => {
   const keysToSign = [track.audioKey, track.coverKey ?? null, track.lyricsKey ?? null].filter(
     Boolean
   ) as string[]
-  const signed = await signUrls(MUSIC_TRACKS_BUCKET, keysToSign, 3600)
+  const signed = await signMusicGetUrls(keysToSign, 3600)
 
   return c.json({
     track: {

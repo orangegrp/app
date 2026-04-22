@@ -19,7 +19,9 @@ import {
   ScrubBarTrack,
 } from "@/components/ui/scrub-bar"
 import { LyricsDisplay } from "@/components/music/LyricsDisplay"
+import { FormattedGenre } from "@/components/music/FormattedGenre"
 import { RemotePlaybackButton } from "@/components/music/RemotePlaybackButton"
+import { hasRenderableGenre } from "@/lib/music-genre"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useAuthStore } from "@/lib/auth-store"
 import { cn } from "@/lib/utils"
@@ -213,10 +215,8 @@ function DesktopPlayerPanel({
           className="text-xl font-semibold tracking-wide text-foreground"
         />
         <p className="mt-1 text-sm text-muted-foreground">{track.artist}</p>
-        {track.genre && (
-          <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
-            {track.genre}
-          </span>
+        {hasRenderableGenre(track.genre) && (
+          <FormattedGenre genre={track.genre} className="mt-1.5" />
         )}
       </div>
       <div className="w-full">
@@ -316,10 +316,8 @@ function SharePlayer({
                 className="text-xl font-semibold tracking-wide text-foreground"
               />
               <p className="mt-0.5 text-sm text-muted-foreground truncate">{track.artist}</p>
-              {track.genre && (
-                <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
-                  {track.genre}
-                </span>
+              {hasRenderableGenre(track.genre) && (
+                <FormattedGenre genre={track.genre} className="mt-2" />
               )}
             </div>
             {/* Transport controls */}

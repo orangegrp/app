@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { useAudioPlayer } from "@/components/ui/audio-player"
 import { useMusicContext } from "./MusicContext"
+import { formatGenrePlainList, hasRenderableGenre } from "@/lib/music-genre"
 
 /**
  * Syncs playback state with the browser's Media Session API so the OS
@@ -85,7 +86,11 @@ export function MediaSessionSync() {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title,
         artist: track.artist,
-        album: track.album ?? track.genre ?? undefined,
+        album:
+          track.album ??
+          (hasRenderableGenre(track.genre)
+            ? formatGenrePlainList(track.genre)
+            : undefined),
         artwork,
       })
     }
@@ -119,7 +124,11 @@ export function MediaSessionSync() {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: currentTrack.title,
       artist: currentTrack.artist,
-      album: currentTrack.album ?? currentTrack.genre ?? undefined,
+      album:
+        currentTrack.album ??
+        (hasRenderableGenre(currentTrack.genre)
+          ? formatGenrePlainList(currentTrack.genre)
+          : undefined),
       artwork,
     })
 

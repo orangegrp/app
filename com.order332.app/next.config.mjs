@@ -54,6 +54,7 @@ const withPWAConfig = withPWA({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: [ 'macbook.tail9c51fd.ts.net' ],
   env: {
     DISABLE_BOT_ID: process.env.DISABLE_BOT_ID ?? "",
     NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_DEPLOYMENT_ID
@@ -117,13 +118,13 @@ const nextConfig = {
         key: "Content-Security-Policy",
         value: [
           "default-src 'self'",
-          "img-src 'self' cdn.discordapp.com data: blob: *.supabase.co *.github.com raw.githubusercontent.com github.com",
+          "img-src 'self' cdn.discordapp.com data: blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.github.com raw.githubusercontent.com github.com",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline'",
           "font-src 'self'",
-          "media-src 'self' *.supabase.co blob:",
-          "connect-src 'self' *.r2.cloudflarestorage.com *.supabase.co",
+          "media-src 'self' *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com blob:",
+          "connect-src 'self' *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.supabase.co",
           "frame-ancestors 'none'",
         ].join("; "),
       },

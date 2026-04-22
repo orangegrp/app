@@ -182,7 +182,11 @@ function _uploadViaXhr(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open("PUT", signedUrl)
-    xhr.setRequestHeader("Content-Type", file.type)
+    // R2 / S3 presigned PUTs from @aws-sdk/s3-request-presigner only sign "host" by
+    // default (content-type is treated as unsignable). Sending Content-Type from the
+    // browser then breaks the signature → 403; error responses may omit CORS headers,
+    // which surfaces as a misleading CORS error. Omit the header; object MIME can be
+    // inferred on read from key/extension and playback still works.
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable)

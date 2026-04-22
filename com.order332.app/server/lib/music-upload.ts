@@ -1,11 +1,18 @@
 import 'server-only'
-import { supabase } from '@/server/db/supabase/client'
+import { signMusicPutUrl } from '@/server/lib/music-r2'
 
+/**
+ * @deprecated Storage is Cloudflare R2; kept for docs / migration reference only.
+ * Logical keys in Postgres: audio/…, covers/…, lyrics/… (R2: music-tracks/ + these).
+ */
 export const MUSIC_TRACKS_BUCKET = 'music-tracks'
 
-export const MUSIC_AUDIO_MAX_SIZE  = 100 * 1024 * 1024  // 100 MB
-export const MUSIC_COVER_MAX_SIZE  =   5 * 1024 * 1024  //   5 MB
-export const MUSIC_LYRICS_MAX_SIZE =       1024 * 1024  //   1 MB
+/** Stored in `audio_url` / `cover_url` / `lyrics_url` — not fetchable; APIs return presigned R2 URLs. */
+export const MUSIC_ASSET_URL_PLACEHOLDER = 'https://invalid.order332.app/music-asset'
+
+export const MUSIC_AUDIO_MAX_SIZE = 100 * 1024 * 1024 // 100 MB
+export const MUSIC_COVER_MAX_SIZE = 5 * 1024 * 1024 //   5 MB
+export const MUSIC_LYRICS_MAX_SIZE = 1024 * 1024 //   1 MB
 
 export const MUSIC_AUDIO_ALLOWED_TYPES = new Set([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/flac',
@@ -15,53 +22,6 @@ export const MUSIC_AUDIO_ALLOWED_TYPES = new Set([
 export const MUSIC_COVER_ALLOWED_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp',
 ])
-
-const ALL_MUSIC_ALLOWED_TYPES = new Set([
-  ...MUSIC_AUDIO_ALLOWED_TYPES,
-  ...MUSIC_COVER_ALLOWED_TYPES,
-  'text/plain',
-  'application/octet-stream',  // .lrc files sometimes use this
-])
-
-/** Ensures the music-tracks bucket exists (idempotent). */
-export async function ensureMusicTracksBucket(): Promise<void> {
-  const { data: buckets } = await supabase.storage.listBuckets()
-  if (buckets?.some((b) => b.id === MUSIC_TRACKS_BUCKET)) return
-
-  await supabase.storage.createBucket(MUSIC_TRACKS_BUCKET, {
-    public: false,
-    fileSizeLimit: 100 * 1024 * 1024,
-    allowedMimeTypes: [...ALL_MUSIC_ALLOWED_TYPES],
-  })
-}
-
-export interface MusicUploadParams {
-  userId: string
-  buffer: ArrayBuffer
-  contentType: string
-  filenameHint?: string
-}
-
-/** Uploads audio file to music-tracks/audio/{userId}/... */
-export async function uploadMusicAudio({
-  userId, buffer, contentType, filenameHint = 'track',
-}: MusicUploadParams): Promise<{ storageKey: string; publicUrl: string }> {
-  return uploadToMusicBucket({ userId, buffer, contentType, filenameHint, prefix: 'audio' })
-}
-
-/** Uploads cover art to music-tracks/covers/{userId}/... */
-export async function uploadMusicCover({
-  userId, buffer, contentType, filenameHint = 'cover',
-}: MusicUploadParams): Promise<{ storageKey: string; publicUrl: string }> {
-  return uploadToMusicBucket({ userId, buffer, contentType, filenameHint, prefix: 'covers' })
-}
-
-/** Uploads lyrics (LRC or TXT) to music-tracks/lyrics/{userId}/... */
-export async function uploadMusicLyrics({
-  userId, buffer, contentType, filenameHint = 'lyrics',
-}: MusicUploadParams): Promise<{ storageKey: string; publicUrl: string }> {
-  return uploadToMusicBucket({ userId, buffer, contentType, filenameHint, prefix: 'lyrics' })
-}
 
 /** Generates a storage key without uploading. Used for signed upload URL flow. */
 export function generateMusicStorageKey(
@@ -76,48 +36,15 @@ export function generateMusicStorageKey(
   return `${prefix}/${userId}/${Date.now()}-${rand}-${safeBase}.${ext}`
 }
 
-/** Creates a signed upload URL for the given storage key (client uploads directly). */
-export async function createMusicSignedUploadUrl(key: string): Promise<string> {
-  try { await ensureMusicTracksBucket() } catch (err) {
-    console.error('[music-upload] ensureMusicTracksBucket error:', err)
-  }
-  const { data, error } = await supabase.storage
-    .from(MUSIC_TRACKS_BUCKET)
-    .createSignedUploadUrl(key)
-  if (error || !data) throw new Error('Failed to create signed upload URL')
-  return data.signedUrl
-}
-
-async function uploadToMusicBucket({
-  userId, buffer, contentType, filenameHint, prefix,
-}: MusicUploadParams & { prefix: string }): Promise<{ storageKey: string; publicUrl: string }> {
-  try {
-    await ensureMusicTracksBucket()
-  } catch (err) {
-    console.error('[music-upload] ensureMusicTracksBucket error:', err)
-  }
-
-  const ext = extensionFromMime(contentType, filenameHint ?? '')
-  const safeBase = (filenameHint ?? 'file').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 80) || 'file'
-  const rand = Math.random().toString(36).slice(2, 10)
-  const key = `${prefix}/${userId}/${Date.now()}-${rand}-${safeBase}.${ext}`
-
-  const { error } = await supabase.storage.from(MUSIC_TRACKS_BUCKET).upload(key, buffer, {
-    contentType,
-    upsert: false,
-  })
-
-  if (error) {
-    console.error(`[music-upload] ${prefix} upload error:`, error)
-    throw new Error('Upload failed')
-  }
-
-  const { data: { publicUrl } } = supabase.storage.from(MUSIC_TRACKS_BUCKET).getPublicUrl(key)
-  return { storageKey: key, publicUrl }
+/** Presigned PUT to R2 (same logical key as stored in Postgres). */
+export async function createMusicSignedUploadUrl(
+  key: string,
+  contentType: string,
+): Promise<string> {
+  return signMusicPutUrl(key, contentType)
 }
 
 function extensionFromMime(mimeType: string, filenameHint: string): string {
-  // For LRC files — the MIME may be text/plain but the extension matters
   if (filenameHint.toLowerCase().endsWith('.lrc')) return 'lrc'
   const map: Record<string, string> = {
     'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav',

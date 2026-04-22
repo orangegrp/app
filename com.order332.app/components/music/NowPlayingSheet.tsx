@@ -38,6 +38,8 @@ import { getUpcomingAutoQueue } from "@/lib/music-queue"
 import { LyricsDisplay } from "./LyricsDisplay"
 import { RemotePlaybackButton } from "./RemotePlaybackButton"
 import { ShareTrackDialog } from "./ShareTrackDialog"
+import { FormattedGenre } from "./FormattedGenre"
+import { hasRenderableGenre } from "@/lib/music-genre"
 import {
   fetchTrackLyrics,
   type LoopMode,
@@ -731,10 +733,11 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                           text={currentTrack.artist}
                           className="mt-0.5 text-sm text-muted-foreground"
                         />
-                        {currentTrack.genre && (
-                          <span className="mt-2 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
-                            {currentTrack.genre}
-                          </span>
+                        {hasRenderableGenre(currentTrack.genre) && (
+                          <FormattedGenre
+                            genre={currentTrack.genre}
+                            className="mt-2"
+                          />
                         )}
                       </div>
                       <TransportControls />
@@ -898,10 +901,11 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                       text={currentTrack.artist}
                       className="mt-1 text-sm text-muted-foreground"
                     />
-                    {currentTrack.genre && (
-                      <span className="mt-1.5 inline-block rounded-full bg-foreground/8 px-2.5 py-0.5 text-xs text-muted-foreground">
-                        {currentTrack.genre}
-                      </span>
+                    {hasRenderableGenre(currentTrack.genre) && (
+                      <FormattedGenre
+                        genre={currentTrack.genre}
+                        className="mt-1.5"
+                      />
                     )}
                   </div>
                   <PlayerControls

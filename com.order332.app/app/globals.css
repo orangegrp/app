@@ -126,6 +126,13 @@
   html {
     @apply font-sans;
     }
+}
+
+@layer components {
+  /* Genre tags: ensure the first grapheme is capitalised (backup to JS formatting) */
+  .genre-segment::first-letter {
+    text-transform: uppercase;
+  }
 }/*
  * ══════════════════════════════════════════════════════════════════
  *  glass-system.css  —  332 Liquid Glass Design System

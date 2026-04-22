@@ -2,8 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { db } from '@/server/db'
 import { supabase } from '@/server/db/supabase/client'
-import { signUrl } from '@/server/lib/signed-url'
-import { MUSIC_TRACKS_BUCKET } from '@/server/lib/music-upload'
+import { signMusicGetUrl } from '@/server/lib/music-r2'
 import { SharePageClient } from './SharePageClient'
 
 interface Props {
@@ -35,9 +34,10 @@ async function getShareData(token: string) {
     cover_key: string | null
   }
 
-  const coverUrl = row.cover_key
-    ? await signUrl(MUSIC_TRACKS_BUCKET, row.cover_key, 3600)
-    : null
+  const signedCover = row.cover_key
+    ? await signMusicGetUrl(row.cover_key, 3600)
+    : ''
+  const coverUrl = signedCover || null
 
   return { link, track: row, coverUrl }
 }

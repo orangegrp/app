@@ -30,6 +30,8 @@ import {
   type MusicTrackUpdateMeta,
   uploadMusicTrackAsset,
 } from "@/lib/music-api"
+import { hasRenderableGenre } from "@/lib/music-genre"
+import { FormattedGenre } from "./FormattedGenre"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -475,12 +477,13 @@ export function MusicTrackCard({
           </p>
         )}
         <div className="mt-1 flex items-center gap-2">
-          {track.genre && (
-            <span className="rounded-full bg-foreground/8 px-2 py-0.5 text-xs text-muted-foreground">
-              {track.genre}
-            </span>
+          {hasRenderableGenre(track.genre) && (
+            <FormattedGenre
+              genre={track.genre}
+              className="min-w-0 flex-1 justify-start"
+            />
           )}
-          <span className="ml-auto text-xs text-muted-foreground/60 tabular-nums">
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground/60 tabular-nums">
             {formatDuration(track.durationSec)}
           </span>
         </div>

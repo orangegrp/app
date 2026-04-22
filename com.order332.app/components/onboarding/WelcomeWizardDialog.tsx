@@ -139,8 +139,14 @@ export function WelcomeWizardDialog(): React.ReactNode {
   useEffect(() => {
     if (typeof navigator === "undefined") return
     const ua = navigator.userAgent
-    const isWebKitEngine = /AppleWebKit/i.test(ua)
-    setShouldAnimateHeight(!isWebKitEngine)
+    const isIOS =
+      /iPad|iPhone|iPod/i.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    const isSafariDesktop =
+      /Safari/i.test(ua) &&
+      !/Chrome|Chromium|Edg|OPR|CriOS|FxiOS|Android/i.test(ua)
+
+    setShouldAnimateHeight(!(isIOS || isSafariDesktop))
   }, [])
 
   useLayoutEffect(() => {

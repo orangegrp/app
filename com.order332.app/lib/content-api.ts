@@ -28,6 +28,24 @@ export interface VtScanStats {
   "type-unsupported": number
 }
 
+export interface VtThreatDetection {
+  engineName: string
+  category: string
+  result: string | null
+}
+
+export interface VtThreatInfo {
+  status: VtScanStatus
+  stats: VtScanStats | null
+  vtUrl: string | null
+  source: "cached" | "live"
+  meaningfulName: string | null
+  typeDescription: string | null
+  reputation: number | null
+  lastAnalysisAt: string | null
+  detections: VtThreatDetection[]
+}
+
 export interface ContentFolder {
   id: string
   createdAt: string
@@ -228,6 +246,14 @@ export async function retryVtScan(
   return apiPost<{ item: ContentItemMeta }>(
     `/content/items/${encodeURIComponent(id)}/retry-scan`,
     {}
+  )
+}
+
+export async function fetchContentThreatInfo(
+  id: string
+): Promise<{ threat: VtThreatInfo }> {
+  return apiGet<{ threat: VtThreatInfo }>(
+    `/content/items/${encodeURIComponent(id)}/threat-info`
   )
 }
 

@@ -59,7 +59,7 @@ export function LyricsEditorDialog(props: LyricsEditorDialogProps) {
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <DialogPrimitive.Popup
-          className="fixed top-1/2 left-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl ring-1 ring-white/15 transition-all duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
+          className="fixed inset-0 z-50 m-auto flex overflow-hidden rounded-2xl ring-1 ring-white/15 transition-all duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
           style={{
             width: "min(96vw, 1480px)",
             height: "min(94dvh, 980px)",

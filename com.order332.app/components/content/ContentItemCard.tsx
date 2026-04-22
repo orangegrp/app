@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import {
   Download,
@@ -18,9 +18,11 @@ import { cn } from "@/lib/utils"
 import { Spinner } from "@/components/ui/spinner"
 import {
   formatFileSize,
+  fetchContentThreatInfo,
   normalizeContentItemType,
   retryVtScan,
   type ContentItemMeta,
+  type VtThreatInfo,
   type VtScanStatus,
   type VtScanStats,
 } from "@/lib/content-api"
@@ -174,6 +176,7 @@ export function ContentItemCard({
 
       {/* VT info / download-gate dialog */}
       <VtDialog
+        itemId={item.id}
         open={vtOpen}
         onClose={() => setVtOpen(false)}
         onDownload={vtDownloadFn ?? undefined}
@@ -536,6 +539,7 @@ function vtBadgeProps(status: VtScanStatus, stats: VtScanStats | null) {
 // ── VT dialog (info + optional download gate) ─────────────────────────────────
 
 interface VtDialogProps {
+  itemId: string
   open: boolean
   onClose: () => void
   onDownload?: () => void // if set → shows "Download anyway" confirm CTA
@@ -546,6 +550,7 @@ interface VtDialogProps {
 }
 
 function VtDialog({
+  itemId,
   open,
   onClose,
   onDownload,
@@ -555,6 +560,27 @@ function VtDialog({
   vtUrl,
 }: VtDialogProps) {
   const [retrying, setRetrying] = useState(false)
+  const [threatInfo, setThreatInfo] = useState<VtThreatInfo | null>(null)
+  const [threatError, setThreatError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    setThreatError(null)
+    fetchContentThreatInfo(itemId)
+      .then(({ threat }) => {
+        if (!active) return
+        setThreatInfo(threat)
+      })
+      .catch(() => {
+        if (!active) return
+        setThreatError("Could not refresh threat details.")
+      })
+
+    return () => {
+      active = false
+    }
+  }, [itemId, open])
 
   const handleDownload = () => {
     onDownload?.()
@@ -571,14 +597,28 @@ function VtDialog({
     }
   }
 
-  const total = stats
-    ? Object.values(stats).reduce((a: number, b: number) => a + b, 0)
+  const effectiveStats = threatInfo?.stats ?? stats
+  const effectiveVtUrl = threatInfo?.vtUrl ?? vtUrl
+  const total = effectiveStats
+    ? effectiveStats.malicious +
+      effectiveStats.suspicious +
+      effectiveStats.undetected +
+      effectiveStats.harmless +
+      effectiveStats.timeout +
+      effectiveStats.failure +
+      effectiveStats["type-unsupported"]
     : null
-  const malicious = stats?.malicious ?? 0
-  const suspicious = stats?.suspicious ?? 0
+  const malicious = effectiveStats?.malicious ?? 0
+  const suspicious = effectiveStats?.suspicious ?? 0
 
   const heading = vtDialogHeading(status, onDownload)
-  const body = vtDialogBody(status, stats, total, malicious, suspicious)
+  const body = vtDialogBody(
+    status,
+    effectiveStats,
+    total,
+    malicious,
+    suspicious
+  )
 
   return (
     <AlertDialog
@@ -587,27 +627,107 @@ function VtDialog({
         if (!o) onClose()
       }}
     >
-      <AlertDialogContent size="sm">
-        <AlertDialogHeader>
+      <AlertDialogContent className="!h-auto !max-h-[80vh] w-[min(96vw,980px)] max-w-none !overflow-hidden">
+        <AlertDialogHeader className="!block items-start text-left">
           <AlertDialogTitle className="flex items-center gap-2">
             {vtDialogIcon(status)}
             {heading}
           </AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogDescription className="max-h-[58vh] w-full overflow-y-auto pr-1 text-left">
             {body}
-            {vtUrl && (
-              <>
-                {" "}
+            {(threatError || threatInfo) && (
+              <div className="mt-3 grid gap-3 text-xs text-muted-foreground lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <div className="rounded-lg border border-foreground/10 bg-foreground/5 p-3">
+                  {threatError && <p>{threatError}</p>}
+                  {threatInfo && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <span>Malicious:</span>
+                        <span className="text-foreground">{malicious}</span>
+                        <span>Suspicious:</span>
+                        <span className="text-foreground">{suspicious}</span>
+                        <span>Harmless:</span>
+                        <span className="text-foreground">
+                          {effectiveStats?.harmless ?? 0}
+                        </span>
+                        <span>Undetected:</span>
+                        <span className="text-foreground">
+                          {effectiveStats?.undetected ?? 0}
+                        </span>
+                        {threatInfo.reputation !== null && (
+                          <>
+                            <span>Reputation:</span>
+                            <span className="text-foreground">
+                              {threatInfo.reputation}
+                            </span>
+                          </>
+                        )}
+                        {threatInfo.typeDescription && (
+                          <>
+                            <span>Type:</span>
+                            <span className="text-foreground">
+                              {threatInfo.typeDescription}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      {threatInfo.meaningfulName && (
+                        <p className="truncate">
+                          Name:{" "}
+                          <span className="text-foreground">
+                            {threatInfo.meaningfulName}
+                          </span>
+                        </p>
+                      )}
+                      {threatInfo.lastAnalysisAt && (
+                        <p>
+                          Last analysis:{" "}
+                          <span className="text-foreground">
+                            {new Date(
+                              threatInfo.lastAnalysisAt
+                            ).toLocaleString()}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-lg border border-foreground/10 bg-foreground/5 p-3">
+                  <p className="mb-2 text-foreground">Top detections</p>
+                  {threatInfo?.detections.length ? (
+                    <div className="max-h-[38vh] overflow-y-auto rounded-md border border-foreground/10 bg-background/40 px-2 py-1">
+                      {threatInfo.detections.map((detection) => (
+                        <p
+                          key={`${detection.engineName}-${detection.result}`}
+                          className="truncate"
+                        >
+                          <span className="text-foreground">
+                            {detection.engineName}:
+                          </span>{" "}
+                          {detection.result ?? detection.category}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground/80">
+                      No engine-specific detections were returned.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {effectiveVtUrl && (
+              <div className="mt-3">
                 <a
-                  href={vtUrl}
+                  href={effectiveVtUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 underline underline-offset-2 transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-1 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-white/90"
                 >
                   <ExternalLink className="h-3 w-3" />
                   View full VirusTotal report
                 </a>
-              </>
+              </div>
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>

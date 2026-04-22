@@ -12,7 +12,11 @@ import {
   CONTENT_LIBRARY_BUCKET,
 } from "@/server/lib/content-upload"
 import { signUrl, signUrls } from "@/server/lib/signed-url"
-import { requiresVtScan, submitFileToVt } from "@/server/lib/virustotal"
+import {
+  getVtFileReport,
+  requiresVtScan,
+  submitFileToVt,
+} from "@/server/lib/virustotal"
 import { supabase } from "@/server/db/supabase/client"
 import type { HonoEnv, ContentItem } from "@/server/lib/types"
 
@@ -65,6 +69,70 @@ contentItemRoutes.get("/", async (c) => {
   }))
   return c.json({ items: result })
 })
+
+// GET /content/items/:id/threat-info — fetch richer VT details for dialog
+contentItemRoutes.get(
+  "/:id/threat-info",
+  rateLimitByUser(20, 60_000),
+  async (c) => {
+    const id = c.req.param("id")
+    const { data, error } = await supabase
+      .from("content_items")
+      .select("id, vt_scan_status, vt_scan_stats, vt_scan_url")
+      .eq("id", id)
+      .single()
+
+    if (error || !data) {
+      return c.json({ error: "Item not found" }, 404)
+    }
+
+    const base = {
+      status: data.vt_scan_status as ContentItem["vtScanStatus"],
+      stats: data.vt_scan_stats as ContentItem["vtScanStats"],
+      vtUrl: (data.vt_scan_url as string | null) ?? null,
+      source: "cached" as const,
+      meaningfulName: null as string | null,
+      typeDescription: null as string | null,
+      reputation: null as number | null,
+      lastAnalysisAt: null as string | null,
+      detections: [] as Array<{
+        engineName: string
+        category: string
+        result: string | null
+      }>,
+    }
+
+    if (!base.vtUrl || !process.env.VIRUSTOTAL_API_KEY) {
+      return c.json({ threat: base })
+    }
+
+    const match = base.vtUrl.match(/\/file\/([a-f0-9]{64})/i)
+    const sha256 = match?.[1]
+    if (!sha256) {
+      return c.json({ threat: base })
+    }
+
+    try {
+      const live = await getVtFileReport(sha256, process.env.VIRUSTOTAL_API_KEY)
+      return c.json({
+        threat: {
+          ...base,
+          source: "live" as const,
+          stats: live.stats,
+          vtUrl: live.vtUrl,
+          meaningfulName: live.meaningfulName,
+          typeDescription: live.typeDescription,
+          reputation: live.reputation,
+          lastAnalysisAt: live.lastAnalysisAt,
+          detections: live.detections,
+        },
+      })
+    } catch (err) {
+      console.error("[content/items] threat-info fetch error:", err)
+      return c.json({ threat: base })
+    }
+  }
+)
 
 // POST /content/items — upload a new content item
 contentItemRoutes.post(

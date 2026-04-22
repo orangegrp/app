@@ -1073,8 +1073,7 @@ export function MusicTrackCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete track?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{track.title}" will be permanently deleted and cannot be
-              recovered.
+              {`"${track.title}" will be permanently deleted and cannot be recovered.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

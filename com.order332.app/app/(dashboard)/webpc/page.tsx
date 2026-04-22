@@ -1,50 +1,54 @@
-'use client'
+"use client"
 
-import { useEffect, useState, useCallback } from 'react'
-import { PageBackground } from '@/components/layout/PageBackground'
-import { MachineCard, type MachineConfig } from '@/components/webpc/MachineCard'
+import { useEffect, useState, useCallback } from "react"
+import { PageBackground } from "@/components/layout/PageBackground"
+import { MachineCard, type MachineConfig } from "@/components/webpc/MachineCard"
 import {
   getSessions,
   createSession,
   deleteSession,
   type VMSession,
-} from '@/lib/vm-sessions'
-import type { MachineId } from '@/lib/webpc-disks'
+} from "@/lib/vm-sessions"
+import type { MachineId } from "@/lib/webpc-disks"
 
 const OFFICIAL_MACHINES: MachineConfig[] = [
   {
-    id: 'debian',
-    name: 'Debian GNU/Linux',
-    subtitle: 'Terminal · Official',
-    type: 'CLI',
+    id: "debian",
+    name: "Debian GNU/Linux",
+    subtitle: "Terminal · Official",
+    type: "CLI",
     description:
-      'Full Debian 12 distribution with native development toolchains. Includes gcc, Python, Node.js, vim, git, and much more.',
-    tags: ['Debian 12', 'Bash', 'x86', 'Dev tools', '~2 GB'],
-    note: 'First boot fetches disk blocks on demand — allow 30–60 s.',
+      "Full Debian 12 distribution with native development toolchains. Includes gcc, Python, Node.js, vim, git, and much more.",
+    tags: ["Debian 12", "Bash", "x86", "Dev tools", "~2 GB"],
+    note: "First boot fetches disk blocks on demand — allow 30–60 s.",
   },
   {
-    id: 'alpine',
-    name: 'Alpine Linux',
-    subtitle: 'Graphical Desktop · Official',
-    type: 'GUI',
+    id: "alpine",
+    name: "Alpine Linux",
+    subtitle: "Graphical Desktop · Official",
+    type: "GUI",
     description:
-      'Alpine Linux with Xorg and the i3 window manager. A full graphical desktop running entirely in your browser via WebAssembly — no server required.',
-    tags: ['Alpine 3.x', 'Xorg', 'i3 WM', 'x86', '~1.5 GB'],
-    note: 'Graphical boot takes 60–90 s on first load.',
+      "Alpine Linux with Xorg and the i3 window manager. A full graphical desktop running entirely in your browser via WebAssembly — no server required.",
+    tags: ["Alpine 3.x", "Xorg", "i3 WM", "x86", "~1.5 GB"],
+    note: "Graphical boot takes 60–90 s on first load.",
   },
 ]
 
 const MACHINES_332: MachineConfig[] = []
 
-const MACHINE_META: Record<MachineId, { name: string; type: 'CLI' | 'GUI' }> = {
-  debian: { name: 'Debian GNU/Linux', type: 'CLI' },
-  alpine: { name: 'Alpine Linux', type: 'GUI' },
+const MACHINE_META: Record<MachineId, { name: string; type: "CLI" | "GUI" }> = {
+  debian: { name: "Debian GNU/Linux", type: "CLI" },
+  alpine: { name: "Alpine Linux", type: "GUI" },
+  debianTerminal: { name: "Debian Terminal", type: "CLI" },
+  debianGui: { name: "Debian GUI", type: "GUI" },
+  alpineTerminal: { name: "Alpine Terminal", type: "CLI" },
+  alpineGui: { name: "Alpine GUI", type: "GUI" },
 }
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
   const s = Math.floor(diff / 1000)
-  if (s < 60) return 'just now'
+  if (s < 60) return "just now"
   const m = Math.floor(s / 60)
   if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
@@ -81,32 +85,42 @@ export default function WebPCPage() {
   }
 
   return (
-    <div className="page-root relative min-h-screen px-6 pb-32 pt-8 sm:pt-10">
+    <div className="page-root relative min-h-screen px-6 pt-8 pb-32 sm:pt-10">
       <PageBackground />
       <div className="relative z-10 mx-auto max-w-4xl">
-
         {/* ── Header ──────────────────────────────────────────────────── */}
         <p className="section-label">Web PC</p>
         <h2 className="mb-3 text-4xl tracking-widest text-foreground">
           Web PC<span className="blink-cursor">_</span>
         </h2>
-        <p className="mb-10 max-w-xl text-sm text-muted-foreground tracking-wider leading-relaxed">
-          Pick an environment and press boot — a full Linux machine starts in your
-          browser. No installation, no server. Powered by WebAssembly.
+        <p className="mb-10 max-w-xl text-sm leading-relaxed tracking-wider text-muted-foreground">
+          Pick an environment and press boot — a full Linux machine starts in
+          your browser. No installation, no server. Powered by WebAssembly.
         </p>
 
         {/* ── Mobile performance warning ──────────────────────────────── */}
-        <div className="sm:hidden rounded-2xl px-5 py-4 mb-10 border border-yellow-400/30 bg-yellow-400/10 flex backdrop-blur-md items-start gap-3">
-          <svg className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="mb-10 flex items-start gap-3 rounded-2xl border border-yellow-400/30 bg-yellow-400/10 px-5 py-4 backdrop-blur-md sm:hidden">
+          <svg
+            className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400/80"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           <div>
-            <p className="card-label mb-1 text-yellow-400/80">Mobile device detected</p>
-            <p className="text-xs text-yellow-200/50 tracking-wider leading-relaxed">
-              Web PC runs an x86 virtual machine via WebAssembly. On mobile, performance will be significantly
-              slower and some features may not work as expected. For the best experience, use a desktop browser.
+            <p className="card-label mb-1 text-yellow-400/80">
+              Mobile device detected
+            </p>
+            <p className="text-xs leading-relaxed tracking-wider text-yellow-200/50">
+              Web PC runs an x86 virtual machine via WebAssembly. On mobile,
+              performance will be significantly slower and some features may not
+              work as expected. For the best experience, use a desktop browser.
             </p>
           </div>
         </div>
@@ -115,7 +129,7 @@ export default function WebPCPage() {
         {OFFICIAL_MACHINES.length > 0 && (
           <>
             <p className="section-label mb-3">Official CheerpX</p>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-12">
+            <div className="mb-12 grid grid-cols-1 gap-5 sm:grid-cols-2">
               {OFFICIAL_MACHINES.map((m) => (
                 <MachineCard
                   key={m.id}
@@ -143,7 +157,6 @@ export default function WebPCPage() {
           </>
         )}
 
-
         {/* ── Sessions ────────────────────────────────────────────────── */}
         {sessions.length > 0 && (
           <div className="mt-12">
@@ -158,30 +171,33 @@ export default function WebPCPage() {
                 return (
                   <div
                     key={s.id}
-                    className="glass-card rounded-2xl px-5 py-4 flex items-center gap-4 hover:bg-[oklch(1_0_0_/_4%)] transition-colors"
+                    className="glass-card flex items-center gap-4 rounded-2xl px-5 py-4 transition-colors hover:bg-[oklch(1_0_0_/_4%)]"
                   >
                     {/* Machine type badge */}
                     <span
                       className={[
-                        'glass-button rounded-full px-2.5 py-0.5 text-xs tracking-widest shrink-0',
-                        meta?.type === 'GUI' ? 'text-foreground' : 'text-muted-foreground',
-                      ].join(' ')}
+                        "glass-button shrink-0 rounded-full px-2.5 py-0.5 text-xs tracking-widest",
+                        meta?.type === "GUI"
+                          ? "text-foreground"
+                          : "text-muted-foreground",
+                      ].join(" ")}
                     >
-                      {meta?.type ?? 'CLI'}
+                      {meta?.type ?? "CLI"}
                     </span>
 
                     {/* Label + meta */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm tracking-wider text-foreground truncate">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm tracking-wider text-foreground">
                         {s.label}
                       </p>
-                      <p className="text-xs text-muted-foreground tracking-wider opacity-50 mt-0.5 font-mono">
-                        {s.id.slice(0, 8)} · last used {relativeTime(s.lastUsedAt)}
+                      <p className="mt-0.5 font-mono text-xs tracking-wider text-muted-foreground opacity-50">
+                        {s.id.slice(0, 8)} · last used{" "}
+                        {relativeTime(s.lastUsedAt)}
                       </p>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                       <button
                         onClick={() => handleResume(s)}
                         className="glass-button glass-button-glass rounded-lg px-3 py-1.5 text-xs tracking-widest"
@@ -204,10 +220,10 @@ export default function WebPCPage() {
         )}
 
         {/* ── Footer note ─────────────────────────────────────────────── */}
-        <div className="mt-10 glass-card rounded-2xl px-5 py-4">
+        <div className="glass-card mt-10 rounded-2xl px-5 py-4">
           <p className="card-label mb-2">How it works</p>
-          <p className="text-xs text-muted-foreground tracking-wider leading-relaxed">
-            Powered by{' '}
+          <p className="text-xs leading-relaxed tracking-wider text-muted-foreground">
+            Powered by{" "}
             <a
               href="https://cheerpx.io"
               target="_blank"
@@ -215,11 +231,12 @@ export default function WebPCPage() {
               className="glass-link"
             >
               CheerpX
-            </a>{' '}
-            — an x86-to-WebAssembly JIT compiler by Leaning Technologies.
-            The disk image is read over HTTP (range requests); only the blocks you
-            access are fetched. Each session has its own IndexedDB store so changes
-            persist across reloads. Deleting a session permanently wipes its disk.
+            </a>{" "}
+            — an x86-to-WebAssembly JIT compiler by Leaning Technologies. The
+            disk image is read over HTTP (range requests); only the blocks you
+            access are fetched. Each session has its own IndexedDB store so
+            changes persist across reloads. Deleting a session permanently wipes
+            its disk.
           </p>
         </div>
       </div>

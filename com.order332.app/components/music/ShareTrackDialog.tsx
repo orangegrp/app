@@ -70,26 +70,30 @@ function ShareContent({
   return (
     <>
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground truncate">"{trackTitle}"</p>
+        <p className="truncate text-sm text-muted-foreground">{`"${trackTitle}"`}</p>
 
         {!shareUrl ? (
           <>
             <div className="flex flex-col gap-1.5">
-              <p className="text-xs tracking-wider text-muted-foreground">LINK EXPIRES</p>
+              <p className="text-xs tracking-wider text-muted-foreground">
+                LINK EXPIRES
+              </p>
               <div className="grid grid-cols-3 gap-2">
                 {EXPIRY_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setExpiresIn(opt.value)}
                     className={cn(
-                      "flex flex-col items-center rounded-xl px-3 py-2.5 text-center transition-colors border",
+                      "flex flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors",
                       expiresIn === opt.value
                         ? "border-foreground/30 bg-foreground/10 text-foreground"
-                        : "border-foreground/8 bg-foreground/4 text-muted-foreground hover:bg-foreground/8",
+                        : "border-foreground/8 bg-foreground/4 text-muted-foreground hover:bg-foreground/8"
                     )}
                   >
                     <span className="text-sm font-medium">{opt.label}</span>
-                    <span className="mt-0.5 text-[10px] opacity-60">{opt.description}</span>
+                    <span className="mt-0.5 text-[10px] opacity-60">
+                      {opt.description}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -98,31 +102,39 @@ function ShareContent({
           </>
         ) : (
           <div className="flex flex-col gap-2">
-            <p className="text-xs tracking-wider text-muted-foreground">SHARE LINK</p>
+            <p className="text-xs tracking-wider text-muted-foreground">
+              SHARE LINK
+            </p>
             <div className="flex items-center gap-2 rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
-              <span className="flex-1 min-w-0 break-all text-xs text-foreground/80 font-mono">
+              <span className="min-w-0 flex-1 font-mono text-xs break-all text-foreground/80">
                 {shareUrl}
               </span>
               <button
                 onClick={onCopy}
-                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
                 aria-label="Copy link"
               >
-                {copied
-                  ? <Check className="h-3.5 w-3.5 text-green-400" />
-                  : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-green-400" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
               </button>
             </div>
             {expiresAt ? (
-              <p className="text-xs text-muted-foreground">Expires {formatExpiry(expiresAt)}</p>
+              <p className="text-xs text-muted-foreground">
+                Expires {formatExpiry(expiresAt)}
+              </p>
             ) : (
-              <p className="text-xs text-muted-foreground">This link never expires</p>
+              <p className="text-xs text-muted-foreground">
+                This link never expires
+              </p>
             )}
           </div>
         )}
       </div>
 
-      <div className="flex justify-end gap-2 mt-2">
+      <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose}>
           {shareUrl ? "Done" : "Cancel"}
         </Button>
@@ -136,7 +148,12 @@ function ShareContent({
   )
 }
 
-export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: ShareTrackDialogProps) {
+export function ShareTrackDialog({
+  trackId,
+  trackTitle,
+  open,
+  onOpenChange,
+}: ShareTrackDialogProps) {
   const isMobile = useIsMobile()
   const [expiresIn, setExpiresIn] = useState<ExpiryOption>("7d")
   const [loading, setLoading] = useState(false)
@@ -204,16 +221,24 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
   // ── Mobile: vaul bottom sheet (avoids vaul touch event conflicts) ─────────
   if (isMobile) {
     return (
-      <DrawerPrimitive.Root open={open} onOpenChange={handleClose} direction="bottom">
+      <DrawerPrimitive.Root
+        open={open}
+        onOpenChange={handleClose}
+        direction="bottom"
+      >
         <DrawerPrimitive.Portal>
           <DrawerPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/40" />
-          <DrawerPrimitive.Content className="fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-popover outline-none pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-            <DrawerPrimitive.Title className="sr-only">Share track</DrawerPrimitive.Title>
+          <DrawerPrimitive.Content className="fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-popover pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none">
+            <DrawerPrimitive.Title className="sr-only">
+              Share track
+            </DrawerPrimitive.Title>
             <div className="flex shrink-0 items-center px-4 pt-3 pb-1">
               <div className="mx-auto h-1 w-10 rounded-full bg-foreground/20" />
             </div>
-            <div className="px-5 pb-2 pt-3 flex flex-col gap-1">
-              <p className="text-base font-semibold text-foreground">Share track</p>
+            <div className="flex flex-col gap-1 px-5 pt-3 pb-2">
+              <p className="text-base font-semibold text-foreground">
+                Share track
+              </p>
               <ShareContent {...sharedProps} />
             </div>
           </DrawerPrimitive.Content>
@@ -225,7 +250,10 @@ export function ShareTrackDialog({ trackId, trackTitle, open, onOpenChange }: Sh
   // ── Desktop: centered base-ui dialog ─────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent showCloseButton={false} onClick={(e) => e.stopPropagation()}>
+      <DialogContent
+        showCloseButton={false}
+        onClick={(e) => e.stopPropagation()}
+      >
         <DialogHeader>
           <DialogTitle>Share track</DialogTitle>
         </DialogHeader>
@@ -242,13 +270,20 @@ interface ShareTrackButtonProps {
   className?: string
 }
 
-export function ShareTrackButton({ trackId, trackTitle, className }: ShareTrackButtonProps) {
+export function ShareTrackButton({
+  trackId,
+  trackTitle,
+  className,
+}: ShareTrackButtonProps) {
   const [open, setOpen] = useState(false)
 
   return (
     <>
       <button
-        onClick={(e) => { e.stopPropagation(); setOpen(true) }}
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(true)
+        }}
         className={className}
         aria-label="Share track"
       >

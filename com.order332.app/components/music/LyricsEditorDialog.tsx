@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { FastForward, Pause, Play, Rewind, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -147,6 +147,38 @@ function LyricsEditorDialogInner({
   }, [audioSrc, open, pause, seek, setActiveItem, trackTitle])
 
   useEffect(() => {
+    if (!open || !listRef.current) return
+    const el = listRef.current.querySelector<HTMLElement>(
+      `[data-line-index="${selectedIndex}"]`
+    )
+    el?.scrollIntoView({ block: "nearest" })
+  }, [open, selectedIndex])
+
+  const selectedLine = lines[selectedIndex] ?? null
+  const parsedDelta = useMemo(
+    () => Number.parseInt(deltaMs, 10) || 0,
+    [deltaMs]
+  )
+
+  const saveUndo = () => setUndoSnapshot(lines.map((line) => ({ ...line })))
+
+  const seekTo = useCallback(
+    (sec: number) => {
+      const safe = Math.max(0, sec)
+      seek(safe)
+    },
+    [seek]
+  )
+
+  const onTogglePlay = useCallback(async () => {
+    if (isPlaying) {
+      pause()
+      return
+    }
+    await play().catch(() => undefined)
+  }, [isPlaying, pause, play])
+
+  useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === " " && !(event.target instanceof HTMLInputElement)) {
@@ -167,28 +199,7 @@ function LyricsEditorDialogInner({
 
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [currentTime, open])
-
-  useEffect(() => {
-    if (!open || !listRef.current) return
-    const el = listRef.current.querySelector<HTMLElement>(
-      `[data-line-index="${selectedIndex}"]`
-    )
-    el?.scrollIntoView({ block: "nearest" })
-  }, [open, selectedIndex])
-
-  const selectedLine = lines[selectedIndex] ?? null
-  const parsedDelta = useMemo(
-    () => Number.parseInt(deltaMs, 10) || 0,
-    [deltaMs]
-  )
-
-  const saveUndo = () => setUndoSnapshot(lines.map((line) => ({ ...line })))
-
-  const seekTo = (sec: number) => {
-    const safe = Math.max(0, sec)
-    seek(safe)
-  }
+  }, [currentTime, onTogglePlay, open, seekTo])
 
   const applyDeltaLineOnly = () => {
     if (!selectedLine) return
@@ -220,14 +231,6 @@ function LyricsEditorDialogInner({
           : line
       )
     )
-  }
-
-  const onTogglePlay = async () => {
-    if (isPlaying) {
-      pause()
-      return
-    }
-    await play().catch(() => undefined)
   }
 
   return (

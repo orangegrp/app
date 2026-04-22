@@ -27,10 +27,6 @@ const FONT_SIZE_STEP = 2
 const MACHINE_META: Record<string, { name: string; type: 'CLI' | 'GUI' }> = {
   debian: { name: 'Debian GNU/Linux', type: 'CLI' },
   alpine: { name: 'Alpine Linux', type: 'GUI' },
-  debianTerminal: { name: 'Debian (332 · terminal)', type: 'CLI' },
-  debianGui: { name: 'Debian (332 · GUI)', type: 'GUI' },
-  alpineTerminal: { name: 'Alpine (332 · terminal)', type: 'CLI' },
-  alpineGui: { name: 'Alpine (332 · GUI)', type: 'GUI' },
 }
 
 export default function ConsolePage({

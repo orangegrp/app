@@ -422,7 +422,7 @@ function PlaylistCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete playlist?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{playlist.name}" will be permanently deleted.
+              {`"${playlist.name}" will be permanently deleted.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

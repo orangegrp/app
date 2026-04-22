@@ -1,4 +1,5 @@
 import { apiGet, apiDelete, apiPatch, apiPost } from "./api-client"
+import type { AiLyricsLanguageCode } from "./lyrics-ai-languages"
 
 export type LyricsType = "lrc" | "txt"
 export type LoopMode = "none" | "track" | "all"
@@ -99,6 +100,51 @@ export async function fetchTrackLyrics(
   return apiGet<{ content: string; type: LyricsType }>(
     `/music/tracks/${encodeURIComponent(trackId)}/lyrics`
   )
+}
+
+export async function presignAiLyricsTempAudio(file: File): Promise<{
+  tempAudioKey: string
+  signedUrl: string
+  expiresInSec: number
+}> {
+  return apiPost<{
+    tempAudioKey: string
+    signedUrl: string
+    expiresInSec: number
+  }>("/music/tracks/lyrics/ai/presign", {
+    filename: file.name,
+    contentType: file.type,
+    sizeBytes: file.size,
+  })
+}
+
+export async function uploadAiLyricsTempAudio(
+  file: File
+): Promise<{ tempAudioKey: string }> {
+  const { tempAudioKey, signedUrl } = await presignAiLyricsTempAudio(file)
+  await _uploadViaXhr(signedUrl, file)
+  return { tempAudioKey }
+}
+
+export async function generateAiLyrics(params: {
+  trackId?: string
+  tempAudioKey?: string
+  languageCode: AiLyricsLanguageCode
+  durationSec?: number
+}): Promise<{
+  lyrics: string
+  type: LyricsType
+  source: "ai"
+  languageCode: AiLyricsLanguageCode
+  warnings?: string[]
+}> {
+  return apiPost<{
+    lyrics: string
+    type: LyricsType
+    source: "ai"
+    languageCode: AiLyricsLanguageCode
+    warnings?: string[]
+  }>("/music/tracks/lyrics/ai", params)
 }
 
 /**

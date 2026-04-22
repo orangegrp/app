@@ -24,12 +24,19 @@ import {
 import { cn } from "@/lib/utils"
 import {
   formatDuration,
+  fetchTrackLyrics,
+  generateAiLyrics,
   type LyricsType,
   type MusicTrackMeta,
   type MusicPlaylistMeta,
   type MusicTrackUpdateMeta,
   uploadMusicTrackAsset,
 } from "@/lib/music-api"
+import { useAuthStore } from "@/lib/auth-store"
+import {
+  AI_LYRICS_LANGUAGE_OPTIONS,
+  type AiLyricsLanguageCode,
+} from "@/lib/lyrics-ai-languages"
 import { hasRenderableGenre } from "@/lib/music-genre"
 import { FormattedGenre } from "./FormattedGenre"
 import {
@@ -50,7 +57,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { ShareTrackDialog } from "@/components/music/ShareTrackDialog"
+import { LyricsEditorDialog } from "@/components/music/LyricsEditorDialog"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -68,6 +77,14 @@ type PointerPoint = {
 const COVER_ACCEPT = ["image/jpeg", "image/png", "image/webp"].join(",")
 const LYRICS_ACCEPT = ".lrc,.txt,text/plain"
 const WAVEFORM_HEIGHTS = [78, 62, 88]
+
+type LyricsSearchStatus =
+  | "idle"
+  | "searching"
+  | "found"
+  | "not-found"
+  | "instrumental"
+  | "error"
 
 const GENRES = [
   "Pop",
@@ -181,11 +198,32 @@ export function MusicTrackCard({
     track.coverUrl ?? null
   )
   const [lyricsFile, setLyricsFile] = useState<File | null>(null)
+  const [lyricsStatus, setLyricsStatus] = useState<LyricsSearchStatus>("idle")
+  const [fetchedLyrics, setFetchedLyrics] = useState<string | null>(null)
+  const [fetchedLyricsType, setFetchedLyricsType] = useState<"lrc" | "txt">(
+    "lrc"
+  )
+  const [fetchedLyricsSource, setFetchedLyricsSource] = useState<
+    "lrclib" | "ai"
+  >("lrclib")
+  const [aiLanguageCode, setAiLanguageCode] =
+    useState<AiLyricsLanguageCode>("en")
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorLyrics, setEditorLyrics] = useState("")
+  const [editorLoading, setEditorLoading] = useState(false)
   useEffect(() => {
     if (!editOpen) {
       setCoverPreview(track.coverUrl ?? null)
       setCoverFile(null)
       setLyricsFile(null)
+      setLyricsStatus("idle")
+      setFetchedLyrics(null)
+      setFetchedLyricsType("lrc")
+      setFetchedLyricsSource("lrclib")
+      setAiGenerating(false)
+      setAiError(null)
     }
   }, [editOpen, track.coverUrl])
   const [editTitle, setEditTitle] = useState("")
@@ -208,7 +246,171 @@ export function MusicTrackCard({
     setCoverFile(null)
     setLyricsFile(null)
     setEditOpen(true)
+    void fetchLrclibLyrics(
+      track.title,
+      track.artist,
+      track.durationSec,
+      track.album ?? ""
+    )
   }
+
+  const fetchLrclibLyrics = useCallback(
+    async (
+      trackTitle: string,
+      trackArtist: string,
+      trackDuration: number,
+      trackAlbum: string
+    ) => {
+      if (!trackTitle.trim()) {
+        setLyricsStatus("error")
+        setAiError("Track title is required for lyrics lookup.")
+        return
+      }
+      if (trackDuration <= 0) {
+        setLyricsStatus("error")
+        setAiError(
+          "Duration metadata missing. You can still generate AI lyrics manually."
+        )
+        return
+      }
+      setLyricsStatus("searching")
+      setFetchedLyrics(null)
+      setAiError(null)
+
+      const params = new URLSearchParams({
+        track_name: trackTitle.trim(),
+        duration: String(trackDuration),
+      })
+      if (trackArtist.trim()) params.set("artist_name", trackArtist.trim())
+      if (trackAlbum.trim()) params.set("album_name", trackAlbum.trim())
+
+      try {
+        const accessToken = useAuthStore.getState().accessToken
+        const res = await fetch(`/api/music/tracks/lyrics/search?${params}`, {
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : {},
+        })
+        if (!res.ok || !res.body) {
+          setLyricsStatus("error")
+          return
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let eventType = ""
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() ?? ""
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7).trim()
+            } else if (line.startsWith("data: ")) {
+              const payload = line.slice(6)
+              if (eventType === "not_found") {
+                setLyricsStatus("not-found")
+              } else if (eventType === "error") {
+                setLyricsStatus("error")
+              } else if (eventType === "result") {
+                const data = JSON.parse(payload) as {
+                  syncedLyrics: string | null
+                  plainLyrics: string | null
+                  instrumental: boolean
+                }
+                if (data.instrumental) {
+                  setLyricsStatus("instrumental")
+                } else if (data.syncedLyrics) {
+                  setLyricsStatus("found")
+                  setFetchedLyrics(data.syncedLyrics)
+                  setFetchedLyricsType("lrc")
+                  setFetchedLyricsSource("lrclib")
+                } else if (data.plainLyrics) {
+                  setLyricsStatus("found")
+                  setFetchedLyrics(data.plainLyrics)
+                  setFetchedLyricsType("txt")
+                  setFetchedLyricsSource("lrclib")
+                } else {
+                  setLyricsStatus("not-found")
+                }
+              }
+              eventType = ""
+            }
+          }
+        }
+      } catch {
+        setLyricsStatus("error")
+      }
+    },
+    []
+  )
+
+  const applyFetchedLyrics = useCallback(() => {
+    if (!fetchedLyrics) return
+    const ext = fetchedLyricsType === "lrc" ? ".lrc" : ".txt"
+    const file = new File(
+      [new Blob([fetchedLyrics], { type: "text/plain" })],
+      `lyrics${ext}`,
+      {
+        type: "text/plain",
+      }
+    )
+    setLyricsFile(file)
+    setFetchedLyrics(null)
+    setLyricsStatus("idle")
+    setAiGenerating(false)
+    setAiError(null)
+  }, [fetchedLyrics, fetchedLyricsType])
+
+  const generateAiLyricsForTrack = useCallback(async () => {
+    setAiGenerating(true)
+    setAiError(null)
+    try {
+      const result = await generateAiLyrics({
+        trackId: track.id,
+        languageCode: aiLanguageCode,
+        durationSec: track.durationSec,
+      })
+      setFetchedLyrics(result.lyrics)
+      setFetchedLyricsType("lrc")
+      setFetchedLyricsSource("ai")
+      setLyricsStatus("found")
+    } catch (err) {
+      setAiError(
+        err instanceof Error ? err.message : "AI lyrics generation failed"
+      )
+    } finally {
+      setAiGenerating(false)
+    }
+  }, [aiLanguageCode, track.durationSec, track.id])
+
+  const openLyricsEditor = useCallback(async () => {
+    setEditorLoading(true)
+    try {
+      if (lyricsFile) {
+        setEditorLyrics(await lyricsFile.text())
+      } else if (fetchedLyrics) {
+        setEditorLyrics(fetchedLyrics)
+      } else if (track.lyricsUrl) {
+        const existing = await fetchTrackLyrics(track.id)
+        setEditorLyrics(existing.content)
+      } else {
+        setEditorLyrics("")
+      }
+      setEditorOpen(true)
+    } catch (err) {
+      setAiError(
+        err instanceof Error ? err.message : "Could not load lyrics for editor"
+      )
+    } finally {
+      setEditorLoading(false)
+    }
+  }, [fetchedLyrics, lyricsFile, track.id, track.lyricsUrl])
 
   const handleSave = async () => {
     if (!editTitle.trim() || !editArtist.trim()) return
@@ -269,6 +471,9 @@ export function MusicTrackCard({
     const file = event.target.files?.[0]
     if (!file) return
     setLyricsFile(file)
+    setFetchedLyrics(null)
+    setLyricsStatus("idle")
+    setAiError(null)
     event.target.value = ""
   }
 
@@ -608,6 +813,145 @@ export function MusicTrackCard({
               <p className="text-[11px] text-muted-foreground/60">
                 Optional · LRCLIB-ready (.lrc or .txt)
               </p>
+
+              {lyricsStatus === "searching" ? (
+                <div className="rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Spinner
+                      size="md"
+                      clockwise
+                      className="text-muted-foreground"
+                    />
+                    Searching LRCLIB...
+                  </div>
+                </div>
+              ) : lyricsStatus === "found" && fetchedLyrics ? (
+                <div className="overflow-hidden rounded-lg border border-foreground/10 bg-foreground/4">
+                  <div className="flex items-center justify-between gap-2 border-b border-foreground/8 px-2 py-1.5">
+                    <div className="text-[11px] text-muted-foreground">
+                      {fetchedLyricsSource === "ai"
+                        ? "AI lyrics generated"
+                        : "LRCLIB lyrics found"}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => void openLyricsEditor()}
+                        disabled={editorLoading}
+                      >
+                        Open editor
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => {
+                          setFetchedLyrics(null)
+                          setLyricsStatus("not-found")
+                        }}
+                      >
+                        Dismiss
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={applyFetchedLyrics}
+                      >
+                        Use lyrics
+                      </Button>
+                    </div>
+                  </div>
+                  <pre className="max-h-36 overflow-y-auto px-2 py-2 font-mono text-[11px] whitespace-pre-wrap text-muted-foreground">
+                    {fetchedLyrics}
+                  </pre>
+                </div>
+              ) : (
+                (lyricsStatus === "not-found" ||
+                  lyricsStatus === "error" ||
+                  lyricsStatus === "instrumental") && (
+                  <div className="rounded-lg border border-foreground/10 bg-foreground/4 p-2">
+                    <p className="mb-2 text-[11px] text-muted-foreground/70">
+                      {lyricsStatus === "instrumental"
+                        ? "Instrumental track detected."
+                        : lyricsStatus === "error"
+                          ? "Lyrics lookup failed."
+                          : "No lyrics found on LRCLIB."}{" "}
+                      <button
+                        type="button"
+                        className="underline underline-offset-2 hover:text-muted-foreground"
+                        onClick={() =>
+                          void fetchLrclibLyrics(
+                            editTitle,
+                            editArtist,
+                            track.durationSec,
+                            editAlbum
+                          )
+                        }
+                      >
+                        Try again
+                      </button>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="input-glass h-8 min-w-44 py-1 text-xs"
+                        value={aiLanguageCode}
+                        onChange={(e) =>
+                          setAiLanguageCode(
+                            e.target.value as AiLyricsLanguageCode
+                          )
+                        }
+                        disabled={aiGenerating}
+                      >
+                        {AI_LYRICS_LANGUAGE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => void generateAiLyricsForTrack()}
+                        disabled={aiGenerating}
+                      >
+                        {aiGenerating ? (
+                          <>
+                            <Spinner
+                              size="sm"
+                              clockwise
+                              className="text-current"
+                            />
+                            Generating...
+                          </>
+                        ) : (
+                          "Generate AI lyrics"
+                        )}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground/60">
+                      AI lyrics send audio to ElevenLabs for transcription. This
+                      never runs automatically.
+                    </p>
+                    {aiError && (
+                      <p className="mt-1 text-xs text-destructive">{aiError}</p>
+                    )}
+                  </div>
+                )
+              )}
+
+              {(lyricsFile || fetchedLyrics || track.lyricsUrl) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => void openLyricsEditor()}
+                  disabled={editorLoading}
+                >
+                  Open full-screen lyrics editor
+                </Button>
+              )}
             </div>
           </div>
           <input
@@ -643,6 +987,27 @@ export function MusicTrackCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LyricsEditorDialog
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        trackTitle={track.title}
+        audioSrc={track.audioUrl}
+        initialLyrics={editorLyrics}
+        onApply={(nextLyrics) => {
+          const file = new File(
+            [new Blob([nextLyrics], { type: "text/plain" })],
+            "lyrics.lrc",
+            {
+              type: "text/plain",
+            }
+          )
+          setLyricsFile(file)
+          setFetchedLyrics(null)
+          setLyricsStatus("idle")
+          setAiError(null)
+        }}
+      />
 
       {/* Add to playlist dialog */}
       {playlists && onAddToPlaylist && (

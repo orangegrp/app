@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   CloudUpload,
+  Expand,
   FileArchive,
   FileMusic,
   Music2,
@@ -13,9 +14,15 @@ import {
 import {
   addTrackToPlaylist,
   createMusicPlaylist,
+  generateAiLyrics,
+  uploadAiLyricsTempAudio,
   uploadMusicTrack,
   type MusicTrackMeta,
 } from "@/lib/music-api"
+import {
+  AI_LYRICS_LANGUAGE_OPTIONS,
+  type AiLyricsLanguageCode,
+} from "@/lib/lyrics-ai-languages"
 import { useAuthStore } from "@/lib/auth-store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -28,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Spinner } from "../ui/spinner"
+import { LyricsEditorDialog } from "./LyricsEditorDialog"
 
 const AUDIO_MIME_TYPES = new Set([
   "audio/mpeg",
@@ -82,6 +90,8 @@ type LyricsSearchStatus =
   | "instrumental"
   | "error"
 
+type AiLyricsStatus = "idle" | "generating" | "error"
+
 interface UploadItem {
   id: string
   audioFile: File
@@ -96,6 +106,10 @@ interface UploadItem {
   lyricsStatus: LyricsSearchStatus
   fetchedLyrics: string | null
   fetchedLyricsType: "lrc" | "txt"
+  fetchedLyricsSource: "lrclib" | "ai"
+  aiLyricsStatus: AiLyricsStatus
+  aiLyricsError: string | null
+  aiLanguageCode: AiLyricsLanguageCode
   progress: number
   status: UploadStatus
   error: string | null
@@ -319,11 +333,26 @@ export function MusicUploadForm({
       trackDuration: number,
       trackAlbum: string
     ) => {
-      if (!trackTitle.trim() || trackDuration === 0) return
+      if (!trackTitle.trim()) {
+        updateItem(itemId, {
+          lyricsStatus: "error",
+          aiLyricsError: "Track title is required for lyrics lookup.",
+        })
+        return
+      }
+      if (trackDuration === 0) {
+        updateItem(itemId, {
+          lyricsStatus: "error",
+          aiLyricsError:
+            "Duration metadata missing. You can still generate AI lyrics manually.",
+        })
+        return
+      }
 
       updateItem(itemId, {
         lyricsStatus: "searching",
         fetchedLyrics: null,
+        aiLyricsError: null,
       })
 
       const params = new URLSearchParams({
@@ -381,12 +410,14 @@ export function MusicUploadForm({
                       lyricsStatus: "found",
                       fetchedLyrics: data.syncedLyrics,
                       fetchedLyricsType: "lrc",
+                      fetchedLyricsSource: "lrclib",
                     })
                   } else if (data.plainLyrics) {
                     updateItem(itemId, {
                       lyricsStatus: "found",
                       fetchedLyrics: data.plainLyrics,
                       fetchedLyricsType: "txt",
+                      fetchedLyricsSource: "lrclib",
                     })
                   } else {
                     updateItem(itemId, { lyricsStatus: "not-found" })
@@ -419,7 +450,46 @@ export function MusicUploadForm({
         lyricsFile: file,
         lyricsStatus: "idle",
         fetchedLyrics: null,
+        aiLyricsStatus: "idle",
+        aiLyricsError: null,
       })
+    },
+    [items, updateItem]
+  )
+
+  const generateAiLyricsForItem = useCallback(
+    async (itemId: string) => {
+      const item = items.find((it) => it.id === itemId)
+      if (!item) return
+
+      updateItem(itemId, {
+        aiLyricsStatus: "generating",
+        aiLyricsError: null,
+      })
+
+      try {
+        const { tempAudioKey } = await uploadAiLyricsTempAudio(item.audioFile)
+        const result = await generateAiLyrics({
+          tempAudioKey,
+          languageCode: item.aiLanguageCode,
+          durationSec: item.durationSec,
+        })
+
+        updateItem(itemId, {
+          lyricsStatus: "found",
+          fetchedLyrics: result.lyrics,
+          fetchedLyricsType: "lrc",
+          fetchedLyricsSource: "ai",
+          aiLyricsStatus: "idle",
+          aiLyricsError: null,
+        })
+      } catch (err) {
+        updateItem(itemId, {
+          aiLyricsStatus: "error",
+          aiLyricsError:
+            err instanceof Error ? err.message : "AI lyrics generation failed",
+        })
+      }
     },
     [items, updateItem]
   )
@@ -453,6 +523,10 @@ export function MusicUploadForm({
             lyricsStatus: "idle",
             fetchedLyrics: null,
             fetchedLyricsType: "lrc",
+            fetchedLyricsSource: "lrclib",
+            aiLyricsStatus: "idle",
+            aiLyricsError: null,
+            aiLanguageCode: "en",
             progress: 0,
             status: "ready",
             error: null,
@@ -493,6 +567,8 @@ export function MusicUploadForm({
         lyricsFile: file,
         lyricsStatus: "idle",
         fetchedLyrics: null,
+        aiLyricsStatus: "idle",
+        aiLyricsError: null,
         error: null,
       })
     },
@@ -859,6 +935,13 @@ export function MusicUploadForm({
                 fetchedLyrics: null,
               })
             }
+            onGenerateAiLyrics={() => void generateAiLyricsForItem(item.id)}
+            onSetAiLanguage={(code) =>
+              updateItem(item.id, {
+                aiLanguageCode: code,
+                aiLyricsError: null,
+              })
+            }
           />
         ))}
       </div>
@@ -928,6 +1011,8 @@ function TrackCard({
   onFetchLyrics,
   onUseFetchedLyrics,
   onDismissFetchedLyrics,
+  onGenerateAiLyrics,
+  onSetAiLanguage,
 }: {
   item: UploadItem
   index: number
@@ -939,10 +1024,38 @@ function TrackCard({
   onFetchLyrics: () => void
   onUseFetchedLyrics: () => void
   onDismissFetchedLyrics: () => void
+  onGenerateAiLyrics: () => void
+  onSetAiLanguage: (code: AiLyricsLanguageCode) => void
 }) {
   const coverInputRef = useRef<HTMLInputElement>(null)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorLyrics, setEditorLyrics] = useState<string>("")
+  const [editorLoading, setEditorLoading] = useState(false)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string>("")
   const genreListId = `genre-list-${item.id}`
+
+  useEffect(() => {
+    const nextUrl = URL.createObjectURL(item.audioFile)
+    setAudioPreviewUrl(nextUrl)
+    return () => URL.revokeObjectURL(nextUrl)
+  }, [item.audioFile])
+
+  const openLyricsEditor = async () => {
+    setEditorLoading(true)
+    try {
+      if (item.lyricsFile) {
+        setEditorLyrics(await item.lyricsFile.text())
+      } else if (item.fetchedLyrics) {
+        setEditorLyrics(item.fetchedLyrics)
+      } else {
+        setEditorLyrics("")
+      }
+      setEditorOpen(true)
+    } finally {
+      setEditorLoading(false)
+    }
+  }
 
   return (
     <div className="rounded-xl border border-foreground/10 bg-foreground/2 p-4">
@@ -960,11 +1073,7 @@ function TrackCard({
         </div>
         <div className="flex items-center gap-1.5">
           {item.status === "uploading" && (
-            <Spinner
-              size="md"
-              clockwise
-              className="text-muted-foreground"
-            />
+            <Spinner size="md" clockwise className="text-muted-foreground" />
           )}
           {item.status === "success" && (
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1082,19 +1191,37 @@ function TrackCard({
           <Field label="Lyrics file">
             {item.lyricsStatus === "searching" ? (
               <div className="input-glass flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner size="md" clockwise className="text-muted-foreground" />
+                <Spinner
+                  size="md"
+                  clockwise
+                  className="text-muted-foreground"
+                />
                 <span>Searching LRCLIB for lyrics...</span>
               </div>
             ) : item.lyricsStatus === "found" && item.fetchedLyrics ? (
               <div className="overflow-hidden rounded-xl border border-foreground/10 bg-foreground/2">
                 <div className="flex items-center justify-between gap-2 border-b border-foreground/8 px-3 py-2">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>Lyrics found on LRCLIB</span>
+                    <span>
+                      {item.fetchedLyricsSource === "ai"
+                        ? "AI lyrics generated"
+                        : "Lyrics found on LRCLIB"}
+                    </span>
                     <span className="rounded bg-foreground/8 px-1.5 py-0.5 text-[10px] tracking-wider uppercase">
                       {item.fetchedLyricsType === "lrc" ? "synced" : "plain"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => void openLyricsEditor()}
+                      disabled={disabled || editorLoading}
+                    >
+                      <Expand className="h-3 w-3" />
+                      Editor
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1123,21 +1250,76 @@ function TrackCard({
                 {(item.lyricsStatus === "not-found" ||
                   item.lyricsStatus === "error" ||
                   item.lyricsStatus === "instrumental") && (
-                  <p className="mb-1.5 text-xs text-muted-foreground/60">
-                    {item.lyricsStatus === "instrumental"
-                      ? "Instrumental track detected."
-                      : item.lyricsStatus === "error"
-                        ? "Lyrics lookup failed."
-                        : "No lyrics found on LRCLIB."}{" "}
-                    <button
-                      type="button"
-                      className="underline underline-offset-2 hover:text-muted-foreground"
-                      onClick={onFetchLyrics}
-                      disabled={disabled}
-                    >
-                      Try again
-                    </button>
-                  </p>
+                  <div className="mb-2 rounded-lg border border-foreground/10 bg-foreground/3 p-2.5">
+                    <p className="mb-1.5 text-xs text-muted-foreground/70">
+                      {item.lyricsStatus === "instrumental"
+                        ? "Instrumental track detected."
+                        : item.lyricsStatus === "error"
+                          ? "Lyrics lookup failed."
+                          : "No lyrics found on LRCLIB."}{" "}
+                      <button
+                        type="button"
+                        className="underline underline-offset-2 hover:text-muted-foreground"
+                        onClick={onFetchLyrics}
+                        disabled={disabled}
+                      >
+                        Try again
+                      </button>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-[11px] tracking-wider text-muted-foreground/70">
+                        AI scribe language
+                      </label>
+                      <select
+                        className="input-glass h-8 min-w-44 py-1 text-xs"
+                        value={item.aiLanguageCode}
+                        onChange={(e) =>
+                          onSetAiLanguage(
+                            e.target.value as AiLyricsLanguageCode
+                          )
+                        }
+                        disabled={
+                          disabled || item.aiLyricsStatus === "generating"
+                        }
+                      >
+                        {AI_LYRICS_LANGUAGE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={onGenerateAiLyrics}
+                        disabled={
+                          disabled || item.aiLyricsStatus === "generating"
+                        }
+                      >
+                        {item.aiLyricsStatus === "generating" ? (
+                          <>
+                            <Spinner
+                              size="sm"
+                              clockwise
+                              className="text-current"
+                            />
+                            Generating...
+                          </>
+                        ) : (
+                          "Generate AI lyrics"
+                        )}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground/60">
+                      AI lyrics send audio to ElevenLabs for transcription. AI
+                      generation never runs automatically.
+                    </p>
+                    {item.aiLyricsError && (
+                      <p className="mt-1 text-xs text-destructive">
+                        {item.aiLyricsError}
+                      </p>
+                    )}
+                  </div>
                 )}
                 <div
                   onClick={() => !disabled && lyricsInputRef.current?.click()}
@@ -1161,6 +1343,8 @@ function TrackCard({
                               lyricsFile: null,
                               lyricsStatus: "idle",
                               fetchedLyrics: null,
+                              aiLyricsStatus: "idle",
+                              aiLyricsError: null,
                               error: null,
                             })
                         }}
@@ -1187,11 +1371,48 @@ function TrackCard({
                   }}
                   className="hidden"
                 />
+                {(item.lyricsFile || item.fetchedLyrics) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-7 px-2 text-xs"
+                    onClick={() => void openLyricsEditor()}
+                    disabled={disabled || editorLoading}
+                  >
+                    <Expand className="h-3 w-3" />
+                    Open full-screen lyrics editor
+                  </Button>
+                )}
               </div>
             )}
           </Field>
         </div>
       </div>
+
+      <LyricsEditorDialog
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        trackTitle={item.title || item.audioFile.name}
+        audioSrc={audioPreviewUrl}
+        initialLyrics={editorLyrics}
+        onApply={(nextLyrics) => {
+          const file = new File(
+            [new Blob([nextLyrics], { type: "text/plain" })],
+            "lyrics.lrc",
+            {
+              type: "text/plain",
+            }
+          )
+          onPatch({
+            lyricsFile: file,
+            lyricsStatus: "idle",
+            fetchedLyrics: null,
+            aiLyricsStatus: "idle",
+            aiLyricsError: null,
+            error: null,
+          })
+        }}
+      />
 
       {item.status === "uploading" && (
         <div className="mt-3">

@@ -1,8 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import NextImage from "next/image"
 import {
+  CircleHelp,
   CheckCircle2,
   CloudUpload,
   Expand,
@@ -317,6 +319,7 @@ export function MusicUploadForm({
   const [zipImportRunning, setZipImportRunning] = useState(false)
   const [zipProgress, setZipProgress] = useState(0)
   const [zipProgressLabel, setZipProgressLabel] = useState("")
+  const [zipHelpOpen, setZipHelpOpen] = useState(false)
   const [zipResultDialogOpen, setZipResultDialogOpen] = useState(false)
   const [zipResult, setZipResult] = useState<ZipImportResult | null>(null)
 
@@ -827,15 +830,28 @@ export function MusicUploadForm({
           <Plus />
           Add audio files
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => zipInputRef.current?.click()}
-          disabled={uploadingAll || zipImportRunning}
-        >
-          <FileArchive />
-          M3U ZIP upload
-        </Button>
+        <div className="inline-flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => zipInputRef.current?.click()}
+            disabled={uploadingAll || zipImportRunning}
+          >
+            <FileArchive />
+            M3U ZIP upload
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => setZipHelpOpen(true)}
+            disabled={uploadingAll || zipImportRunning}
+            aria-label="Show M3U ZIP upload help"
+            title="How to structure ZIP uploads"
+          >
+            <CircleHelp />
+          </Button>
+        </div>
         <input
           ref={audioInputRef}
           type="file"
@@ -997,6 +1013,169 @@ export function MusicUploadForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DialogPrimitive.Root open={zipHelpOpen} onOpenChange={setZipHelpOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/45 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
+          <DialogPrimitive.Popup
+            className="fixed inset-0 z-50 m-auto flex overflow-hidden rounded-2xl bg-popover text-popover-foreground ring-1 ring-foreground/12 transition-all duration-150 outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
+            style={{ width: "min(94vw, 1320px)", height: "min(86dvh, 860px)" }}
+          >
+            <div className="flex h-full w-full min-w-0 flex-col">
+              <button
+                type="button"
+                onClick={() => setZipHelpOpen(false)}
+                className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-foreground/8 text-muted-foreground transition-colors hover:bg-foreground/15 hover:text-foreground"
+                aria-label="Close ZIP upload help"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="border-b border-foreground/10 px-6 py-4">
+                <DialogPrimitive.Title className="font-heading text-base font-medium text-foreground">
+                  M3U ZIP upload guide
+                </DialogPrimitive.Title>
+                <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
+                  Build one ZIP package with a playlist, audio files, and
+                  optional lyrics files.
+                </DialogPrimitive.Description>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="grid gap-3 lg:grid-cols-12">
+                  <div className="grid gap-3 lg:col-span-8">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3">
+                        <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          Required
+                        </p>
+                        <p className="text-sm font-medium text-foreground">
+                          Playlist file
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          .m3u or .m3u8
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3">
+                        <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          Required
+                        </p>
+                        <p className="text-sm font-medium text-foreground">
+                          Audio files
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          .mp3 .ogg .wav .flac .aac .m4a .opus
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3 sm:col-span-2 xl:col-span-1">
+                        <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          Optional
+                        </p>
+                        <p className="text-sm font-medium text-foreground">
+                          Lyrics files
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          .lrc or .txt
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 xl:grid-cols-2">
+                      <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3">
+                        <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          Example ZIP layout
+                        </p>
+                        <div className="rounded-lg border border-foreground/10 bg-background p-3 font-mono text-xs leading-6 text-foreground">
+                          <p>my-pack.zip</p>
+                          <p className="pl-4">playlist.m3u</p>
+                          <p className="pl-4">music/</p>
+                          <p className="pl-8">Artist - Song A.mp3</p>
+                          <p className="pl-8">Artist - Song B.flac</p>
+                          <p className="pl-4">lyrics/</p>
+                          <p className="pl-8">Artist - Song A.lrc</p>
+                          <p className="pl-8">Artist - Song B.txt</p>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Flat or nested folders are both accepted.
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3">
+                        <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          Playlist content
+                        </p>
+                        <pre className="overflow-x-auto rounded-lg border border-foreground/10 bg-background p-3 font-mono text-xs leading-6 text-foreground">
+                          {`#EXTM3U
+music/Artist - Song A.mp3
+music/Artist - Song B.flac`}
+                        </pre>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Standard M3U lines are supported, including #EXTM3U
+                          and #EXTINF.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:col-span-4">
+                    <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3">
+                      <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        How matching works
+                      </p>
+                      <div className="grid gap-2">
+                        <div className="rounded-lg border border-foreground/10 bg-background p-2.5">
+                          <p className="text-xs font-medium text-foreground">
+                            1) Path match
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Paths are matched first, case-insensitive; slash and
+                            backslash both work.
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-foreground/10 bg-background p-2.5">
+                          <p className="text-xs font-medium text-foreground">
+                            2) Stem fallback
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            If path match fails, matching falls back to filename
+                            stem (Song A from Song A.mp3).
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-foreground/10 bg-background p-2.5">
+                          <p className="text-xs font-medium text-foreground">
+                            3) Lyrics auto-link
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Lyrics link automatically by stem (Song A.mp3 to
+                            Song A.lrc).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-foreground/10 bg-muted/30 p-3">
+                      <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        Practical rules
+                      </p>
+                      <div className="flex flex-col gap-2 text-xs">
+                        <span className="rounded-lg border border-foreground/15 bg-background px-2.5 py-2 text-foreground/85">
+                          Keep filenames unique to avoid ambiguous stem matches.
+                        </span>
+                        <span className="rounded-lg border border-foreground/15 bg-background px-2.5 py-2 text-foreground/85">
+                          Include exactly one intended .m3u or .m3u8 playlist.
+                        </span>
+                        <span className="rounded-lg border border-foreground/15 bg-background px-2.5 py-2 text-foreground/85">
+                          Flat or nested folder structures both work.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </DialogPrimitive.Popup>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </div>
   )
 }

@@ -8,16 +8,20 @@ import {
   File,
   FileText,
   Music,
+  Play,
   Shield,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
   Trash2,
+  Video,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Spinner } from "@/components/ui/spinner"
 import {
   formatFileSize,
+  fetchVideoDownloadUrl,
+  fetchVideoSource,
   fetchContentThreatInfo,
   normalizeContentItemType,
   retryVtScan,
@@ -43,6 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { VideoPlayer } from "@/components/ui/VideoPlayer"
 
 interface ContentItemCardProps {
   item: ContentItemMeta
@@ -62,6 +67,10 @@ export function ContentItemCard({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [vtOpen, setVtOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [videoOpen, setVideoOpen] = useState(false)
+  const [videoSrc, setVideoSrc] = useState<string | null>(null)
+  const [videoLoading, setVideoLoading] = useState(false)
+  const [videoActionError, setVideoActionError] = useState<string | null>(null)
   // When set, the VT dialog shows a "Download anyway" CTA for flagged files
   const [vtDownloadFn, setVtDownloadFn] = useState<(() => void) | null>(null)
 
@@ -89,6 +98,39 @@ export function ContentItemCard({
     setDeleting(true)
     setConfirmOpen(false)
     onDelete(item.id)
+  }
+
+  const openVideo = async () => {
+    if (item.videoStatus && item.videoStatus !== "ready") return
+    setVideoLoading(true)
+    setVideoActionError(null)
+    try {
+      const { url } = await fetchVideoSource(item.id)
+      setVideoSrc(url)
+      setVideoOpen(true)
+    } catch (err) {
+      setVideoActionError(
+        err instanceof Error ? err.message : "Failed to open video"
+      )
+    } finally {
+      setVideoLoading(false)
+    }
+  }
+
+  const downloadVideo = async () => {
+    if (item.videoStatus && item.videoStatus !== "ready") return
+    setVideoLoading(true)
+    setVideoActionError(null)
+    try {
+      const { url } = await fetchVideoDownloadUrl(item.id)
+      window.location.assign(url)
+    } catch (err) {
+      setVideoActionError(
+        err instanceof Error ? err.message : "Failed to prepare download"
+      )
+    } finally {
+      setVideoLoading(false)
+    }
   }
 
   return (
@@ -146,6 +188,15 @@ export function ContentItemCard({
         <ImageCard item={item} onExpand={() => setImageExpanded(true)} />
       )}
       {itemType === "audio" && <AudioCard item={item} />}
+      {itemType === "video" && (
+        <VideoCard
+          item={item}
+          loading={videoLoading}
+          error={videoActionError}
+          onPlay={openVideo}
+          onDownload={downloadVideo}
+        />
+      )}
       {itemType === "pdf" && (
         <PdfCard item={item} onVtBadge={openVtInfo} onVtGate={openVtGate} />
       )}
@@ -170,6 +221,28 @@ export function ContentItemCard({
               unoptimized
               className="max-h-[80vh] w-full rounded-lg object-contain"
             />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Video dialog */}
+      {itemType === "video" && (
+        <Dialog
+          open={videoOpen}
+          onOpenChange={(open) => {
+            setVideoOpen(open)
+            if (!open) setVideoSrc(null)
+          }}
+        >
+          <DialogContent className="max-w-5xl p-2">
+            <DialogTitle className="sr-only">{item.title}</DialogTitle>
+            {videoSrc ? (
+              <VideoPlayer src={videoSrc} className="w-full" autoPlay />
+            ) : (
+              <div className="flex h-40 items-center justify-center">
+                <Spinner size="md" clockwise />
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       )}
@@ -278,6 +351,104 @@ function AudioCard({ item }: { item: ContentItemMeta }) {
         <Download className="h-3.5 w-3.5" />
         Download
       </a>
+    </div>
+  )
+}
+
+// ── Video ────────────────────────────────────────────────────────────────────
+
+function VideoCard({
+  item,
+  loading,
+  error,
+  onPlay,
+  onDownload,
+}: {
+  item: ContentItemMeta
+  loading: boolean
+  error: string | null
+  onPlay: () => void
+  onDownload: () => void
+}) {
+  const status = item.videoStatus ?? "processing"
+  const isReady = status === "ready"
+  const isErrored = status === "errored"
+
+  return (
+    <div className="flex h-full flex-col">
+      <button
+        onClick={onPlay}
+        disabled={!isReady || loading}
+        className={cn(
+          "relative flex h-36 w-full items-center justify-center overflow-hidden border-b border-foreground/10 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900",
+          isReady ? "cursor-pointer" : "cursor-not-allowed opacity-70"
+        )}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
+        <Video className="h-8 w-8 text-white/70" />
+        {isReady && (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm">
+              <Play className="ml-0.5 h-5 w-5 fill-current" />
+            </span>
+          </span>
+        )}
+      </button>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="flex-1">
+          <p className="truncate text-sm font-medium text-foreground">
+            {item.title}
+          </p>
+          {item.description && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {item.description}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatFileSize(item.fileSize)}
+          </p>
+          {status === "processing" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Processing video…
+            </p>
+          )}
+          {isErrored && (
+            <p className="mt-1 text-xs text-destructive">
+              {item.videoError ?? "Video processing failed"}
+            </p>
+          )}
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onPlay}
+            disabled={!isReady || loading}
+            className={cn(
+              "inline-flex items-center gap-1.5 text-xs transition-colors",
+              isReady
+                ? "text-muted-foreground hover:text-foreground"
+                : "cursor-not-allowed text-muted-foreground/40"
+            )}
+          >
+            <Play className="h-3.5 w-3.5" />
+            {loading ? "Loading…" : "Play"}
+          </button>
+          <button
+            onClick={onDownload}
+            disabled={!isReady || loading}
+            className={cn(
+              "inline-flex items-center gap-1.5 text-xs transition-colors",
+              isReady
+                ? "text-muted-foreground hover:text-foreground"
+                : "cursor-not-allowed text-muted-foreground/40"
+            )}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -54,7 +54,7 @@ const withPWAConfig = withPWA({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  allowedDevOrigins: [ 'macbook.tail9c51fd.ts.net' ],
+  allowedDevOrigins: ["macbook.tail9c51fd.ts.net"],
   env: {
     DISABLE_BOT_ID: process.env.DISABLE_BOT_ID ?? "",
     NEXT_PUBLIC_APP_VERSION: process.env.VERCEL_DEPLOYMENT_ID
@@ -123,8 +123,8 @@ const nextConfig = {
           "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline'",
           "font-src 'self'",
-          "media-src 'self' *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com blob:",
-          "connect-src 'self' *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.supabase.co",
+          "media-src 'self' *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.mux.com blob:",
+          "connect-src 'self' *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.supabase.co *.mux.com",
           "frame-ancestors 'none'",
         ].join("; "),
       },

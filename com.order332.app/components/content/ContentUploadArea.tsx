@@ -13,6 +13,11 @@ import { Button } from "@/components/ui/button"
 const PROXY_UPLOAD_MAX_BYTES = 3 * 1024 * 1024
 const SIZE_LIMITS_TEXT = "Maximum upload size: 3 MB"
 const ACCEPTED_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/ogg",
+  "video/x-matroska",
   "image/jpeg",
   "image/png",
   "image/gif",
@@ -54,11 +59,7 @@ export function ContentUploadArea({
   const handleFile = useCallback(
     (file: File) => {
       setError(null)
-      if (isVideoMimeType(file.type)) {
-        setError("Video uploads are not available yet.")
-        return
-      }
-      if (file.size > PROXY_UPLOAD_MAX_BYTES) {
+      if (!isVideoMimeType(file.type) && file.size > PROXY_UPLOAD_MAX_BYTES) {
         setError("File exceeds 3 MB limit for proxy uploads.")
         return
       }
@@ -179,7 +180,8 @@ export function ContentUploadArea({
               </span>
             </p>
             <p className="text-xs text-muted-foreground/60">
-              {SIZE_LIMITS_TEXT}
+              Video uploads go directly to Mux. {SIZE_LIMITS_TEXT} for non-video
+              files.
             </p>
           </div>
         )}
@@ -222,7 +224,11 @@ export function ContentUploadArea({
       {uploading && (
         <div className="mt-4">
           <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-            <span>Uploading…</span>
+            <span>
+              {selectedFile && isVideoMimeType(selectedFile.type)
+                ? "Uploading to Mux…"
+                : "Uploading…"}
+            </span>
             <span>{progress}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">

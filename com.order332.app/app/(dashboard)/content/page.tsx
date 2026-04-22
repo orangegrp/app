@@ -14,6 +14,7 @@ import {
   deleteContentItem,
   moveContentItem,
   pollVtScans,
+  pollVideoProcessing,
   normalizeContentItemType,
   type ContentItemMeta,
   type ContentItemType,
@@ -95,23 +96,39 @@ export default function ContentPage() {
     void loadItems(currentFolderId)
   }, [currentFolderId, loadItems])
 
-  // VT scan polling: start/stop based on whether any items are pending
+  // Poll background processing (VT scans + video transcodes)
   useEffect(() => {
-    const hasPending = items.some(
+    const hasPendingScans = items.some(
       (i) => i.vtScanStatus === "scanning" || i.vtScanStatus === "pending"
     )
+    const hasProcessingVideos = items.some(
+      (i) => i.itemType === "video" && i.videoStatus === "processing"
+    )
+    const hasPending = hasPendingScans || hasProcessingVideos
 
     if (hasPending && !pollIntervalRef.current) {
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const { stillPending } = await pollVtScans()
+          const results = await Promise.allSettled([
+            pollVtScans(),
+            pollVideoProcessing(),
+          ])
+          const vtPending =
+            results[0].status === "fulfilled"
+              ? results[0].value.stillPending
+              : 0
+          const videoPending =
+            results[1].status === "fulfilled"
+              ? results[1].value.stillPending
+              : 0
+
           // Re-fetch to get updated statuses
           const { items: refreshed } = await fetchContentItems(
             undefined,
             currentFolderId
           )
           setItems(refreshed)
-          if (stillPending === 0) {
+          if (vtPending + videoPending === 0) {
             clearInterval(pollIntervalRef.current!)
             pollIntervalRef.current = null
           }

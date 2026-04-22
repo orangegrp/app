@@ -13,12 +13,27 @@ import {
 } from "@/server/lib/content-upload"
 import { signUrl, signUrls } from "@/server/lib/signed-url"
 import {
+  createMuxDirectUpload,
+  deleteMuxAsset,
+  enableMuxMasterAccess,
+  getMuxAsset,
+  getMuxDirectUpload,
+  getMuxWhoAmI,
+  type MuxAsset,
+} from "@/server/lib/mux"
+import { buildSignedMuxHlsUrl } from "@/server/lib/mux-playback"
+import {
   getVtFileReport,
   requiresVtScan,
   submitFileToVt,
 } from "@/server/lib/virustotal"
 import { supabase } from "@/server/db/supabase/client"
-import type { HonoEnv, ContentItem } from "@/server/lib/types"
+import type {
+  HonoEnv,
+  ContentItem,
+  ContentItemType,
+  VideoStatus,
+} from "@/server/lib/types"
 
 export const contentItemRoutes = new Hono<HonoEnv>()
 contentItemRoutes.use(
@@ -27,11 +42,124 @@ contentItemRoutes.use(
   requirePermission(PERMISSIONS.APP_CONTENT)
 )
 
+const VALID_CONTENT_TYPES: ContentItemType[] = [
+  "image",
+  "audio",
+  "pdf",
+  "download",
+  "video",
+]
+
+const VIDEO_PROCESSING_STATUSES: VideoStatus[] = ["uploading", "processing"]
+
+function parseAspectRatio(aspectRatio: string | null): {
+  width: number | null
+  height: number | null
+} {
+  if (!aspectRatio) return { width: null, height: null }
+  const [w, h] = aspectRatio.split(":")
+  const width = Number.parseInt(w ?? "", 10)
+  const height = Number.parseInt(h ?? "", 10)
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return { width: null, height: null }
+  }
+  return { width, height }
+}
+
+function pickSignedPlaybackId(asset: MuxAsset): string | null {
+  return asset.playbackIds.find((id) => id.policy === "signed")?.id ?? null
+}
+
+interface ResolvedVideoState {
+  muxAssetId: string | null
+  muxPlaybackId: string | null
+  durationSec: number | null
+  width: number | null
+  height: number | null
+  videoStatus: VideoStatus
+  videoError: string | null
+}
+
+async function resolveVideoState(
+  row: Record<string, unknown>
+): Promise<ResolvedVideoState> {
+  const currentUploadId = row.mux_upload_id as string | null
+  const currentAssetId = row.mux_asset_id as string | null
+  const existingPlaybackId = row.mux_playback_id as string | null
+  let assetId = currentAssetId
+
+  if (!assetId && currentUploadId) {
+    const upload = await getMuxDirectUpload(currentUploadId)
+    assetId = upload.assetId
+  }
+
+  if (!assetId) {
+    return {
+      muxAssetId: null,
+      muxPlaybackId: existingPlaybackId,
+      durationSec: (row.duration_sec as number | null) ?? null,
+      width: (row.width as number | null) ?? null,
+      height: (row.height as number | null) ?? null,
+      videoStatus: "processing",
+      videoError: null,
+    }
+  }
+
+  const asset = await getMuxAsset(assetId)
+  const playbackId = pickSignedPlaybackId(asset)
+  const { width, height } = parseAspectRatio(asset.aspectRatio)
+
+  if (asset.status === "ready" && playbackId) {
+    return {
+      muxAssetId: assetId,
+      muxPlaybackId: playbackId,
+      durationSec:
+        typeof asset.duration === "number"
+          ? Math.round(asset.duration)
+          : ((row.duration_sec as number | null) ?? null),
+      width: width ?? (row.width as number | null) ?? null,
+      height: height ?? (row.height as number | null) ?? null,
+      videoStatus: "ready",
+      videoError: null,
+    }
+  }
+
+  if (asset.status === "errored") {
+    const errorMessage =
+      asset.errors?.messages?.join("; ") ??
+      asset.errors?.type ??
+      "Mux processing failed"
+    return {
+      muxAssetId: assetId,
+      muxPlaybackId: playbackId,
+      durationSec: (row.duration_sec as number | null) ?? null,
+      width: (row.width as number | null) ?? null,
+      height: (row.height as number | null) ?? null,
+      videoStatus: "errored",
+      videoError: errorMessage,
+    }
+  }
+
+  return {
+    muxAssetId: assetId,
+    muxPlaybackId: playbackId,
+    durationSec: (row.duration_sec as number | null) ?? null,
+    width: (row.width as number | null) ?? null,
+    height: (row.height as number | null) ?? null,
+    videoStatus: "processing",
+    videoError: null,
+  }
+}
+
 // GET /content/items — list content items, optional ?type= and ?folderId= filters
 contentItemRoutes.get("/", async (c) => {
   const type = c.req.query("type")
   const folderId = c.req.query("folderId") ?? null
-  const validTypes = ["image", "audio", "pdf", "download"]
 
   let query = supabase
     .from("content_items")
@@ -39,7 +167,7 @@ contentItemRoutes.get("/", async (c) => {
     .order("created_at", { ascending: false })
     .limit(200)
 
-  if (type && validTypes.includes(type)) {
+  if (type && VALID_CONTENT_TYPES.includes(type as ContentItemType)) {
     query = query.eq("item_type", type)
   }
 
@@ -59,10 +187,10 @@ contentItemRoutes.get("/", async (c) => {
 
   const items: ContentItem[] = (data ?? []).map(rowToContentItem)
 
-  const signed = await signUrls(
-    CONTENT_LIBRARY_BUCKET,
-    items.map((i) => i.storageKey)
-  )
+  const storageKeys = items
+    .filter((i) => i.itemType !== "video")
+    .map((i) => i.storageKey)
+  const signed = await signUrls(CONTENT_LIBRARY_BUCKET, storageKeys)
   const result = items.map((i) => ({
     ...i,
     publicUrl: signed.get(i.storageKey) ?? i.publicUrl,
@@ -134,6 +262,454 @@ contentItemRoutes.get(
   }
 )
 
+// GET /content/items/video/mux-auth-check — debug helper for Mux token wiring
+contentItemRoutes.get(
+  "/video/mux-auth-check",
+  requirePermission(PERMISSIONS.APP_CONTENT_UPLOAD),
+  rateLimitByUser(10, 60_000),
+  async (c) => {
+    try {
+      const tokenId = process.env.MUX_TOKEN_ID ?? null
+      const whoami = await getMuxWhoAmI()
+      return c.json({
+        ok: true,
+        tokenHint: tokenId ? `${tokenId.slice(0, 8)}...` : null,
+        whoami,
+      })
+    } catch (err) {
+      return c.json(
+        {
+          ok: false,
+          error: err instanceof Error ? err.message : "Mux auth check failed",
+        },
+        500
+      )
+    }
+  }
+)
+
+// POST /content/items/video/upload-url — create direct browser upload URL at Mux
+contentItemRoutes.post(
+  "/video/upload-url",
+  requirePermission(PERMISSIONS.APP_CONTENT_UPLOAD),
+  rateLimitByUser(20, 60_000),
+  async (c) => {
+    let body: {
+      filename?: string
+      mimeType?: string
+      fileSize?: number
+      title?: string
+      description?: string
+      folderId?: string | null
+    }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: "Expected JSON body" }, 400)
+    }
+
+    const mimeType = body.mimeType?.trim() ?? ""
+    if (!mimeType.startsWith("video/")) {
+      return c.json({ error: "Unsupported video type" }, 400)
+    }
+
+    if (typeof body.fileSize !== "number" || body.fileSize <= 0) {
+      return c.json({ error: "Missing file size" }, 400)
+    }
+
+    const title = body.title?.trim().slice(0, 200)
+    if (!title) {
+      return c.json({ error: "Missing title" }, 400)
+    }
+
+    const folderId = body.folderId ?? null
+
+    if (folderId !== null) {
+      const { data: folder, error: folderErr } = await supabase
+        .from("content_folders")
+        .select("id")
+        .eq("id", folderId)
+        .single()
+      if (folderErr || !folder) {
+        return c.json({ error: "Folder not found" }, 404)
+      }
+    }
+
+    try {
+      const upload = await createMuxDirectUpload({
+        corsOrigin: c.req.header("origin") ?? undefined,
+      })
+
+      return c.json({
+        uploadId: upload.id,
+        uploadUrl: upload.url,
+      })
+    } catch (err) {
+      console.error("[content/items] mux upload-url error:", err)
+      return c.json({ error: "Failed to create video upload URL" }, 500)
+    }
+  }
+)
+
+// POST /content/items/video/complete — register uploaded video in library
+contentItemRoutes.post(
+  "/video/complete",
+  requirePermission(PERMISSIONS.APP_CONTENT_UPLOAD),
+  rateLimitByUser(20, 60_000),
+  async (c) => {
+    let body: {
+      uploadId?: string
+      title?: string
+      description?: string
+      folderId?: string | null
+      mimeType?: string
+      fileSize?: number
+    }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: "Expected JSON body" }, 400)
+    }
+
+    const uploadId = body.uploadId?.trim()
+    if (!uploadId) {
+      return c.json({ error: "Missing uploadId" }, 400)
+    }
+
+    const mimeType = body.mimeType?.trim() ?? ""
+    if (!mimeType.startsWith("video/")) {
+      return c.json({ error: "Invalid video mime type" }, 400)
+    }
+
+    const fileSize = body.fileSize
+    if (typeof fileSize !== "number" || fileSize <= 0) {
+      return c.json({ error: "Missing file size" }, 400)
+    }
+
+    const title = body.title?.trim().slice(0, 200)
+    if (!title) {
+      return c.json({ error: "Missing title" }, 400)
+    }
+
+    const description = body.description?.trim().slice(0, 1000) || null
+    const folderId = body.folderId ?? null
+    if (folderId !== null) {
+      const { data: folder, error: folderErr } = await supabase
+        .from("content_folders")
+        .select("id")
+        .eq("id", folderId)
+        .single()
+      if (folderErr || !folder) {
+        return c.json({ error: "Folder not found" }, 404)
+      }
+    }
+
+    const user = c.get("user")
+
+    const { data: existing } = await supabase
+      .from("content_items")
+      .select("*")
+      .eq("mux_upload_id", uploadId)
+      .single()
+
+    if (existing) {
+      const resolved = await resolveVideoState(existing)
+      const { data: persisted, error: updateErr } = await supabase
+        .from("content_items")
+        .update({
+          title,
+          description,
+          folder_id: folderId,
+          mux_asset_id: resolved.muxAssetId,
+          mux_playback_id: resolved.muxPlaybackId,
+          duration_sec: resolved.durationSec,
+          width: resolved.width,
+          height: resolved.height,
+          video_status: resolved.videoStatus,
+          video_error: resolved.videoError,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id as string)
+        .select()
+        .single()
+
+      if (updateErr || !persisted) {
+        return c.json({ error: "Failed to register uploaded video" }, 500)
+      }
+
+      return c.json({ item: rowToContentItem(persisted) }, 200)
+    }
+
+    try {
+      const upload = await getMuxDirectUpload(uploadId)
+      const assetId = upload.assetId
+      let playbackId: string | null = null
+      let videoStatus: VideoStatus = "processing"
+      let videoError: string | null = null
+      let durationSec: number | null = null
+      let width: number | null = null
+      let height: number | null = null
+
+      if (assetId) {
+        const asset = await getMuxAsset(assetId)
+        playbackId = pickSignedPlaybackId(asset)
+        const parsedRatio = parseAspectRatio(asset.aspectRatio)
+        width = parsedRatio.width
+        height = parsedRatio.height
+        durationSec =
+          typeof asset.duration === "number" ? Math.round(asset.duration) : null
+
+        if (asset.status === "ready" && playbackId) {
+          videoStatus = "ready"
+        } else if (asset.status === "errored") {
+          videoStatus = "errored"
+          videoError =
+            asset.errors?.messages?.join("; ") ??
+            asset.errors?.type ??
+            "Mux processing failed"
+        }
+      }
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from("content_items")
+        .insert({
+          uploaded_by: user.id,
+          item_type: "video",
+          title,
+          description,
+          storage_key: `mux/${assetId ?? uploadId}`,
+          public_url: "",
+          mime_type: mimeType,
+          file_size: fileSize,
+          duration_sec: durationSec,
+          width,
+          height,
+          folder_id: folderId,
+          vt_scan_status: "not_required",
+          mux_upload_id: uploadId,
+          mux_asset_id: assetId,
+          mux_playback_id: playbackId,
+          video_status: videoStatus,
+          video_error: videoError,
+        })
+        .select()
+        .single()
+
+      if (insertErr || !inserted) {
+        console.error("[content/items] video insert error:", insertErr)
+        return c.json({ error: "Failed to register uploaded video" }, 500)
+      }
+
+      return c.json({ item: rowToContentItem(inserted) }, 201)
+    } catch (err) {
+      console.error("[content/items] video complete error:", err)
+      return c.json({ error: "Failed to complete video upload" }, 500)
+    }
+  }
+)
+
+// POST /content/items/video/refresh — refresh processing video statuses from Mux
+contentItemRoutes.post(
+  "/video/refresh",
+  rateLimitByUser(1, 10_000),
+  async (c) => {
+    const { data, error } = await supabase
+      .from("content_items")
+      .select("*")
+      .eq("item_type", "video")
+      .in("video_status", VIDEO_PROCESSING_STATUSES)
+      .limit(20)
+
+    if (error) {
+      console.error("[content/items] video refresh fetch error:", error)
+      return c.json({ error: "Failed to fetch processing videos" }, 500)
+    }
+
+    const rows = data ?? []
+    let updated = 0
+    let stillPending = 0
+
+    await Promise.allSettled(
+      rows.map(async (row) => {
+        try {
+          const resolved = await resolveVideoState(row)
+          const prevStatus = row.video_status as VideoStatus | null
+          const nextStatus = resolved.videoStatus
+          if (prevStatus !== nextStatus) {
+            updated += 1
+          }
+          if (nextStatus === "processing" || nextStatus === "uploading") {
+            stillPending += 1
+          }
+          await supabase
+            .from("content_items")
+            .update({
+              mux_asset_id: resolved.muxAssetId,
+              mux_playback_id: resolved.muxPlaybackId,
+              duration_sec: resolved.durationSec,
+              width: resolved.width,
+              height: resolved.height,
+              video_status: resolved.videoStatus,
+              video_error: resolved.videoError,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", row.id as string)
+        } catch (err) {
+          stillPending += 1
+          console.error("[content/items] video refresh error:", err)
+        }
+      })
+    )
+
+    return c.json({ updated, stillPending })
+  }
+)
+
+// POST /content/items/video/source — return signed HLS source URL for playback
+contentItemRoutes.post(
+  "/video/source",
+  rateLimitByUser(60, 60_000),
+  async (c) => {
+    let body: { id?: string }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: "Expected JSON body" }, 400)
+    }
+
+    const id = body.id?.trim()
+    if (!id) return c.json({ error: "Missing item id" }, 400)
+
+    const { data, error } = await supabase
+      .from("content_items")
+      .select("*")
+      .eq("id", id)
+      .single()
+
+    if (error || !data) {
+      return c.json({ error: "Item not found" }, 404)
+    }
+
+    if (data.item_type !== "video") {
+      return c.json({ error: "Item is not a video" }, 400)
+    }
+
+    const resolved = await resolveVideoState(data).catch(() => ({
+      muxAssetId: (data.mux_asset_id as string | null) ?? null,
+      muxPlaybackId: (data.mux_playback_id as string | null) ?? null,
+      durationSec: (data.duration_sec as number | null) ?? null,
+      width: (data.width as number | null) ?? null,
+      height: (data.height as number | null) ?? null,
+      videoStatus: ((data.video_status as VideoStatus | null) ??
+        "processing") as VideoStatus,
+      videoError: (data.video_error as string | null) ?? null,
+    }))
+
+    await supabase
+      .from("content_items")
+      .update({
+        mux_asset_id: resolved.muxAssetId,
+        mux_playback_id: resolved.muxPlaybackId,
+        duration_sec: resolved.durationSec,
+        width: resolved.width,
+        height: resolved.height,
+        video_status: resolved.videoStatus,
+        video_error: resolved.videoError,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .then(
+        () => {},
+        () => {}
+      )
+
+    const playbackId = resolved.muxPlaybackId
+    const status = resolved.videoStatus
+
+    if (!playbackId || status !== "ready") {
+      return c.json(
+        {
+          error:
+            status === "errored"
+              ? (resolved.videoError ?? "Video processing failed")
+              : "Video is still processing",
+        },
+        409
+      )
+    }
+
+    try {
+      const signed = await buildSignedMuxHlsUrl(playbackId)
+      return c.json(signed)
+    } catch (err) {
+      console.error("[content/items] video source sign error:", err)
+      return c.json({ error: "Failed to sign playback URL" }, 500)
+    }
+  }
+)
+
+// POST /content/items/video/download-url — return temporary Mux master URL
+contentItemRoutes.post(
+  "/video/download-url",
+  rateLimitByUser(20, 60_000),
+  async (c) => {
+    let body: { id?: string }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: "Expected JSON body" }, 400)
+    }
+
+    const id = body.id?.trim()
+    if (!id) return c.json({ error: "Missing item id" }, 400)
+
+    const { data, error } = await supabase
+      .from("content_items")
+      .select("id, item_type, mux_asset_id")
+      .eq("id", id)
+      .single()
+
+    if (error || !data) {
+      return c.json({ error: "Item not found" }, 404)
+    }
+
+    if (data.item_type !== "video") {
+      return c.json({ error: "Item is not a video" }, 400)
+    }
+
+    const assetId = data.mux_asset_id as string | null
+    if (!assetId) {
+      return c.json({ error: "Video is still processing" }, 409)
+    }
+
+    try {
+      let asset = await getMuxAsset(assetId)
+      if (asset.masterStatus !== "ready" || !asset.masterUrl) {
+        if (asset.masterAccess !== "temporary") {
+          await enableMuxMasterAccess(assetId)
+        }
+        for (let i = 0; i < 5; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          asset = await getMuxAsset(assetId)
+          if (asset.masterStatus === "ready" && asset.masterUrl) break
+        }
+      }
+
+      if (!asset.masterUrl) {
+        return c.json(
+          { error: "Master download is preparing. Try again shortly." },
+          409
+        )
+      }
+
+      return c.json({ url: asset.masterUrl })
+    } catch (err) {
+      console.error("[content/items] video download url error:", err)
+      return c.json({ error: "Failed to prepare video download" }, 500)
+    }
+  }
+)
+
 // POST /content/items — upload a new content item
 contentItemRoutes.post(
   "/",
@@ -179,9 +755,12 @@ contentItemRoutes.post(
       }
     }
 
-    // Block video uploads explicitly
+    // Keep legacy multipart endpoint for non-video items.
     if (VIDEO_MIME_TYPES.has(file.type)) {
-      return c.json({ error: "Video uploads are not available yet." }, 400)
+      return c.json(
+        { error: "Use the direct video upload endpoint for video files." },
+        400
+      )
     }
 
     const itemType = inferItemType(file.type)
@@ -275,7 +854,7 @@ contentItemRoutes.delete(
 
     const { data, error } = await supabase
       .from("content_items")
-      .select("id, storage_key, uploaded_by")
+      .select("id, storage_key, uploaded_by, item_type, mux_asset_id")
       .eq("id", id)
       .single()
 
@@ -288,13 +867,22 @@ contentItemRoutes.delete(
       return c.json({ error: "Forbidden" }, 403)
     }
 
-    const { error: storageError } = await supabase.storage
-      .from("content-library")
-      .remove([data.storage_key])
+    if (data.item_type === "video") {
+      const muxAssetId = data.mux_asset_id as string | null
+      if (muxAssetId) {
+        await deleteMuxAsset(muxAssetId).catch((err) => {
+          console.error("[content/items] mux delete error:", err)
+        })
+      }
+    } else {
+      const { error: storageError } = await supabase.storage
+        .from("content-library")
+        .remove([data.storage_key as string])
 
-    if (storageError) {
-      console.error("[content/items] storage delete error:", storageError)
-      // Continue with DB delete even if storage delete fails
+      if (storageError) {
+        console.error("[content/items] storage delete error:", storageError)
+        // Continue with DB delete even if storage delete fails
+      }
     }
 
     const { error: deleteError } = await supabase
@@ -521,5 +1109,10 @@ function rowToContentItem(row: Record<string, unknown>): ContentItem {
     vtScanUrl: row.vt_scan_url as string | null,
     vtScanStats: row.vt_scan_stats as ContentItem["vtScanStats"],
     vtScannedAt: row.vt_scanned_at as string | null,
+    muxUploadId: row.mux_upload_id as string | null,
+    muxAssetId: row.mux_asset_id as string | null,
+    muxPlaybackId: row.mux_playback_id as string | null,
+    videoStatus: (row.video_status as VideoStatus | null) ?? null,
+    videoError: row.video_error as string | null,
   }
 }

@@ -1,4 +1,4 @@
-import 'server-only'
+import "server-only"
 
 export interface MusicShareLink {
   id: string
@@ -18,7 +18,7 @@ export interface User {
   discordAvatar?: string
   /** Optional display name (non-Discord); shown in UI over Discord username when set. */
   displayName?: string | null
-  permissions: string  // CSV mini-app + admin perms, or "*"
+  permissions: string // CSV mini-app + admin perms, or "*"
   isActive: boolean
   /** When false, passkey login (POST /auth/verify) is rejected. */
   loginPasskeyEnabled: boolean
@@ -49,20 +49,20 @@ export interface PasskeyCredential {
   id: string
   userId: string
   credentialId: string
-  publicKey: string   // base64url encoded COSE key
+  publicKey: string // base64url encoded COSE key
   counter: number
   deviceType: string
   backedUp: boolean
   transports?: string // JSON array string
   createdAt: Date
   lastUsedAt?: Date
-  name?: string       // user-defined e.g. "MacBook Touch ID"
+  name?: string // user-defined e.g. "MacBook Touch ID"
 }
 
 export interface Session {
   id: string
   userId: string
-  refreshTokenHash: string  // SHA-256 of the raw refresh token
+  refreshTokenHash: string // SHA-256 of the raw refresh token
   isPwa: boolean
   expiresAt: Date
   createdAt: Date
@@ -73,7 +73,7 @@ export interface Session {
 
 export interface MagicToken {
   id: string
-  tokenHash: string   // SHA-256 of the raw HMAC token
+  tokenHash: string // SHA-256 of the raw HMAC token
   discordId: string
   userId?: string
   expiresAt: Date
@@ -82,7 +82,12 @@ export interface MagicToken {
   createdAt: Date
 }
 
-export type QRSessionStatus = 'pending' | 'scanned' | 'approved' | 'rejected' | 'expired'
+export type QRSessionStatus =
+  | "pending"
+  | "scanned"
+  | "approved"
+  | "rejected"
+  | "expired"
 
 export interface QRLoginSession {
   id: string
@@ -105,7 +110,7 @@ export interface WebAuthnChallenge {
   userId?: string
   /** Set for invite sign-up registration challenges (ties row to pending_registrations). */
   pendingRegistrationId?: string
-  type: 'registration' | 'authentication'
+  type: "registration" | "authentication"
   expiresAt: Date
   createdAt: Date
 }
@@ -113,15 +118,15 @@ export interface WebAuthnChallenge {
 export interface PendingRegistration {
   id: string
   inviteCodeId: string
-  registrationToken: string  // short-lived token for completing registration
+  registrationToken: string // short-lived token for completing registration
   expiresAt: Date
   createdAt: Date
 }
 
 export interface JWTPayload {
-  sub: string          // user id
-  sessionId: string    // bound session id — validated server-side on every request
-  permissions: string  // CSV permissions string
+  sub: string // user id
+  sessionId: string // bound session id — validated server-side on every request
+  permissions: string // CSV permissions string
   isPwa: boolean
   iat: number
   exp: number
@@ -129,9 +134,17 @@ export interface JWTPayload {
 
 // ── Content Library ───────────────────────────────────────────────────────────
 
-export type ContentItemType = 'image' | 'audio' | 'pdf' | 'download'
+export type ContentItemType = "image" | "audio" | "pdf" | "download" | "video"
 
-export type VtScanStatus = 'not_required' | 'pending' | 'scanning' | 'clean' | 'flagged' | 'error'
+export type VideoStatus = "uploading" | "processing" | "ready" | "errored"
+
+export type VtScanStatus =
+  | "not_required"
+  | "pending"
+  | "scanning"
+  | "clean"
+  | "flagged"
+  | "error"
 
 export interface VtScanStats {
   malicious: number
@@ -140,7 +153,7 @@ export interface VtScanStats {
   harmless: number
   timeout: number
   failure: number
-  'type-unsupported': number
+  "type-unsupported": number
 }
 
 export interface ContentFolder {
@@ -173,11 +186,16 @@ export interface ContentItem {
   vtScanUrl: string | null
   vtScanStats: VtScanStats | null
   vtScannedAt: string | null
+  muxUploadId: string | null
+  muxAssetId: string | null
+  muxPlaybackId: string | null
+  videoStatus: VideoStatus | null
+  videoError: string | null
 }
 
 // ── Music ─────────────────────────────────────────────────────────────────────
 
-export type LyricsType = 'lrc' | 'txt'
+export type LyricsType = "lrc" | "txt"
 
 export interface MusicTrack {
   id: string
@@ -208,7 +226,10 @@ export interface MusicPlaylist {
   trackCount: number
 }
 
-export interface MusicPlaylistWithTracks extends Omit<MusicPlaylist, 'trackCount'> {
+export interface MusicPlaylistWithTracks extends Omit<
+  MusicPlaylist,
+  "trackCount"
+> {
   tracks: MusicTrack[]
 }
 

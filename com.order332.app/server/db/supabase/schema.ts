@@ -1,26 +1,26 @@
-import 'server-only'
-import type postgres from 'postgres'
-import { getSqlClient } from './client'
+import "server-only"
+import type postgres from "postgres"
+import { getSqlClient } from "./client"
 
 // Schema definitions: table name → creation SQL
 // Column validation: table name → required columns
 const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
   users: {
     columns: [
-      'id',
-      'created_at',
-      'updated_at',
-      'discord_id',
-      'discord_username',
-      'discord_avatar',
-      'display_name',
-      'permissions',
-      'is_active',
-      'login_passkey_enabled',
-      'login_discord_enabled',
-      'login_magic_enabled',
-      'login_qr_enabled',
-      'welcome_wizard_completed_at',
+      "id",
+      "created_at",
+      "updated_at",
+      "discord_id",
+      "discord_username",
+      "discord_avatar",
+      "display_name",
+      "permissions",
+      "is_active",
+      "login_passkey_enabled",
+      "login_discord_enabled",
+      "login_magic_enabled",
+      "login_qr_enabled",
+      "welcome_wizard_completed_at",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS users (
@@ -44,15 +44,15 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
   },
   invite_codes: {
     columns: [
-      'id',
-      'code',
-      'created_by',
-      'created_at',
-      'expires_at',
-      'used_at',
-      'used_by',
-      'is_used',
-      'permissions',
+      "id",
+      "code",
+      "created_by",
+      "created_at",
+      "expires_at",
+      "used_at",
+      "used_by",
+      "is_used",
+      "permissions",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS invite_codes (
@@ -69,7 +69,19 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   passkey_credentials: {
-    columns: ['id', 'user_id', 'credential_id', 'public_key', 'counter', 'device_type', 'backed_up', 'transports', 'created_at', 'last_used_at', 'name'],
+    columns: [
+      "id",
+      "user_id",
+      "credential_id",
+      "public_key",
+      "counter",
+      "device_type",
+      "backed_up",
+      "transports",
+      "created_at",
+      "last_used_at",
+      "name",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS passkey_credentials (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -88,7 +100,17 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   sessions: {
-    columns: ['id', 'user_id', 'refresh_token_hash', 'is_pwa', 'expires_at', 'created_at', 'last_used_at', 'ip_address', 'user_agent'],
+    columns: [
+      "id",
+      "user_id",
+      "refresh_token_hash",
+      "is_pwa",
+      "expires_at",
+      "created_at",
+      "last_used_at",
+      "ip_address",
+      "user_agent",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -106,7 +128,16 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   magic_tokens: {
-    columns: ['id', 'token_hash', 'discord_id', 'user_id', 'expires_at', 'used_at', 'is_used', 'created_at'],
+    columns: [
+      "id",
+      "token_hash",
+      "discord_id",
+      "user_id",
+      "expires_at",
+      "used_at",
+      "is_used",
+      "created_at",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS magic_tokens (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -122,7 +153,19 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   qr_login_sessions: {
-    columns: ['id', 'totp_secret_encrypted', 'status', 'desktop_ip', 'desktop_user_agent', 'desktop_location', 'mobile_user_id', 'expires_at', 'created_at', 'scanned_at', 'resolved_at'],
+    columns: [
+      "id",
+      "totp_secret_encrypted",
+      "status",
+      "desktop_ip",
+      "desktop_user_agent",
+      "desktop_location",
+      "mobile_user_id",
+      "expires_at",
+      "created_at",
+      "scanned_at",
+      "resolved_at",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS qr_login_sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -141,7 +184,13 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   pending_registrations: {
-    columns: ['id', 'invite_code_id', 'registration_token', 'expires_at', 'created_at'],
+    columns: [
+      "id",
+      "invite_code_id",
+      "registration_token",
+      "expires_at",
+      "created_at",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS pending_registrations (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -154,13 +203,13 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
   },
   webauthn_challenges: {
     columns: [
-      'id',
-      'challenge',
-      'user_id',
-      'pending_registration_id',
-      'type',
-      'expires_at',
-      'created_at',
+      "id",
+      "challenge",
+      "user_id",
+      "pending_registration_id",
+      "type",
+      "expires_at",
+      "created_at",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS webauthn_challenges (
@@ -175,7 +224,7 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   blog_ai_usage: {
-    columns: ['id', 'created_at', 'user_id', 'action', 'input_chars'],
+    columns: ["id", "created_at", "user_id", "action", "input_chars"],
     sql: `
       CREATE TABLE IF NOT EXISTS blog_ai_usage (
         id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -190,7 +239,14 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   content_folders: {
-    columns: ['id', 'created_at', 'updated_at', 'created_by', 'name', 'parent_id'],
+    columns: [
+      "id",
+      "created_at",
+      "updated_at",
+      "created_by",
+      "name",
+      "parent_id",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS content_folders (
         id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -206,10 +262,31 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
   },
   content_items: {
     columns: [
-      'id', 'created_at', 'updated_at', 'uploaded_by', 'item_type',
-      'title', 'description', 'storage_key', 'public_url', 'mime_type',
-      'file_size', 'duration_sec', 'width', 'height',
-      'folder_id', 'vt_scan_id', 'vt_scan_status', 'vt_scan_url', 'vt_scan_stats', 'vt_scanned_at',
+      "id",
+      "created_at",
+      "updated_at",
+      "uploaded_by",
+      "item_type",
+      "title",
+      "description",
+      "storage_key",
+      "public_url",
+      "mime_type",
+      "file_size",
+      "duration_sec",
+      "width",
+      "height",
+      "folder_id",
+      "vt_scan_id",
+      "vt_scan_status",
+      "vt_scan_url",
+      "vt_scan_stats",
+      "vt_scanned_at",
+      "mux_upload_id",
+      "mux_asset_id",
+      "mux_playback_id",
+      "video_status",
+      "video_error",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS content_items (
@@ -233,7 +310,12 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
           CHECK (vt_scan_status IN ('not_required', 'pending', 'scanning', 'clean', 'flagged', 'error')),
         vt_scan_url    TEXT,
         vt_scan_stats  JSONB,
-        vt_scanned_at  TIMESTAMPTZ
+        vt_scanned_at  TIMESTAMPTZ,
+        mux_upload_id   TEXT,
+        mux_asset_id    TEXT,
+        mux_playback_id TEXT,
+        video_status    TEXT CHECK (video_status IN ('uploading', 'processing', 'ready', 'errored')),
+        video_error     TEXT
       );
       CREATE INDEX IF NOT EXISTS content_items_item_type_idx   ON content_items (item_type);
       CREATE INDEX IF NOT EXISTS content_items_uploaded_by_idx ON content_items (uploaded_by);
@@ -241,13 +323,29 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       CREATE INDEX IF NOT EXISTS content_items_folder_id_idx   ON content_items (folder_id);
       CREATE INDEX IF NOT EXISTS content_items_vt_pending_idx  ON content_items (vt_scan_status)
         WHERE vt_scan_status IN ('pending', 'scanning');
+      CREATE INDEX IF NOT EXISTS content_items_mux_upload_id_idx ON content_items (mux_upload_id);
+      CREATE INDEX IF NOT EXISTS content_items_mux_asset_id_idx  ON content_items (mux_asset_id);
+      CREATE INDEX IF NOT EXISTS content_items_video_status_idx  ON content_items (video_status)
+        WHERE item_type = 'video' AND video_status IN ('uploading', 'processing');
     `,
   },
   music_tracks: {
     columns: [
-      'id', 'created_at', 'updated_at', 'uploaded_by', 'title', 'artist',
-      'genre', 'duration_sec', 'audio_key', 'audio_url', 'cover_key',
-      'cover_url', 'lyrics_key', 'lyrics_url', 'lyrics_type',
+      "id",
+      "created_at",
+      "updated_at",
+      "uploaded_by",
+      "title",
+      "artist",
+      "genre",
+      "duration_sec",
+      "audio_key",
+      "audio_url",
+      "cover_key",
+      "cover_url",
+      "lyrics_key",
+      "lyrics_url",
+      "lyrics_type",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS music_tracks (
@@ -273,7 +371,14 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
     `,
   },
   music_share_links: {
-    columns: ['id', 'token', 'track_id', 'created_by', 'created_at', 'expires_at'],
+    columns: [
+      "id",
+      "token",
+      "track_id",
+      "created_by",
+      "created_at",
+      "expires_at",
+    ],
     sql: `
       CREATE TABLE IF NOT EXISTS music_share_links (
         id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -303,7 +408,9 @@ export async function validateAndMigrateSchema(): Promise<void> {
     const existingTableNames = new Set(existingTables.map((r) => r.table_name))
 
     // For each required table: create if missing, validate columns if exists
-    for (const [tableName, { sql: createSql, columns }] of Object.entries(REQUIRED_TABLES)) {
+    for (const [tableName, { sql: createSql, columns }] of Object.entries(
+      REQUIRED_TABLES
+    )) {
       if (!existingTableNames.has(tableName)) {
         console.log(`[DB] Creating missing table: ${tableName}`)
         await sql.unsafe(createSql)
@@ -316,12 +423,16 @@ export async function validateAndMigrateSchema(): Promise<void> {
           WHERE table_schema = 'public'
             AND table_name = ${tableName}
         `
-        const existingColumnNames = new Set(existingColumns.map((r) => r.column_name))
-        const missingColumns = columns.filter((col) => !existingColumnNames.has(col))
+        const existingColumnNames = new Set(
+          existingColumns.map((r) => r.column_name)
+        )
+        const missingColumns = columns.filter(
+          (col) => !existingColumnNames.has(col)
+        )
 
         if (missingColumns.length > 0) {
           console.warn(
-            `[DB] Table "${tableName}" is missing columns: ${missingColumns.join(', ')}. ` +
+            `[DB] Table "${tableName}" is missing columns: ${missingColumns.join(", ")}. ` +
               `Please run the schema migration manually or drop and recreate the table.`
           )
           // We do NOT auto-add columns to existing tables (could corrupt data)
@@ -336,20 +447,52 @@ export async function validateAndMigrateSchema(): Promise<void> {
     await ensureWebAuthnPendingRegistrationColumn(sql)
     await ensureAlbumColumn(sql)
     await ensureMusicPlaylistTables(sql)
+    await ensureContentVideoColumns(sql)
 
-    console.log('[DB] Schema validation complete')
+    console.log("[DB] Schema validation complete")
   } finally {
     await sql.end()
   }
 }
 
+/** Adds Mux video metadata columns to existing content_items tables. */
+async function ensureContentVideoColumns(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS mux_upload_id TEXT"
+  )
+  await sql.unsafe(
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS mux_asset_id TEXT"
+  )
+  await sql.unsafe(
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS mux_playback_id TEXT"
+  )
+  await sql.unsafe(`
+    ALTER TABLE content_items
+    ADD COLUMN IF NOT EXISTS video_status TEXT
+      CHECK (video_status IN ('uploading', 'processing', 'ready', 'errored'))
+  `)
+  await sql.unsafe(
+    "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS video_error TEXT"
+  )
+  await sql.unsafe(
+    "CREATE INDEX IF NOT EXISTS content_items_mux_upload_id_idx ON content_items (mux_upload_id)"
+  )
+  await sql.unsafe(
+    "CREATE INDEX IF NOT EXISTS content_items_mux_asset_id_idx ON content_items (mux_asset_id)"
+  )
+  await sql.unsafe(`
+    CREATE INDEX IF NOT EXISTS content_items_video_status_idx ON content_items (video_status)
+    WHERE item_type = 'video' AND video_status IN ('uploading', 'processing')
+  `)
+}
+
 /** Adds per-user login method toggles to existing databases. */
 async function ensureUserLoginMethodColumns(sql: postgres.Sql): Promise<void> {
   const alters = [
-    'ALTER TABLE users ADD COLUMN IF NOT EXISTS login_passkey_enabled BOOLEAN NOT NULL DEFAULT true',
-    'ALTER TABLE users ADD COLUMN IF NOT EXISTS login_discord_enabled BOOLEAN NOT NULL DEFAULT true',
-    'ALTER TABLE users ADD COLUMN IF NOT EXISTS login_magic_enabled BOOLEAN NOT NULL DEFAULT true',
-    'ALTER TABLE users ADD COLUMN IF NOT EXISTS login_qr_enabled BOOLEAN NOT NULL DEFAULT true',
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_passkey_enabled BOOLEAN NOT NULL DEFAULT true",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_discord_enabled BOOLEAN NOT NULL DEFAULT true",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_magic_enabled BOOLEAN NOT NULL DEFAULT true",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS login_qr_enabled BOOLEAN NOT NULL DEFAULT true",
   ]
   for (const stmt of alters) {
     await sql.unsafe(stmt)
@@ -357,15 +500,21 @@ async function ensureUserLoginMethodColumns(sql: postgres.Sql): Promise<void> {
 }
 
 async function ensureDisplayNameColumn(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe('ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT')
+  await sql.unsafe(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT"
+  )
 }
 
 async function ensureWelcomeWizardColumn(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe('ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_wizard_completed_at TIMESTAMPTZ')
+  await sql.unsafe(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_wizard_completed_at TIMESTAMPTZ"
+  )
 }
 
 /** Links invite-registration WebAuthn challenges to pending_registrations (user_id is null for that path). */
-async function ensureWebAuthnPendingRegistrationColumn(sql: postgres.Sql): Promise<void> {
+async function ensureWebAuthnPendingRegistrationColumn(
+  sql: postgres.Sql
+): Promise<void> {
   await sql.unsafe(`
     ALTER TABLE webauthn_challenges
     ADD COLUMN IF NOT EXISTS pending_registration_id UUID REFERENCES pending_registrations(id) ON DELETE CASCADE
@@ -374,7 +523,9 @@ async function ensureWebAuthnPendingRegistrationColumn(sql: postgres.Sql): Promi
 
 /** Adds album field to music tracks. */
 async function ensureAlbumColumn(sql: postgres.Sql): Promise<void> {
-  await sql.unsafe('ALTER TABLE music_tracks ADD COLUMN IF NOT EXISTS album TEXT')
+  await sql.unsafe(
+    "ALTER TABLE music_tracks ADD COLUMN IF NOT EXISTS album TEXT"
+  )
 }
 
 /** Creates music playlist tables if they don't exist. */
@@ -389,8 +540,12 @@ async function ensureMusicPlaylistTables(sql: postgres.Sql): Promise<void> {
       description TEXT
     )
   `)
-  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlists_created_by_idx ON music_playlists (created_by)`)
-  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlists_created_at_idx ON music_playlists (created_at DESC)`)
+  await sql.unsafe(
+    `CREATE INDEX IF NOT EXISTS music_playlists_created_by_idx ON music_playlists (created_by)`
+  )
+  await sql.unsafe(
+    `CREATE INDEX IF NOT EXISTS music_playlists_created_at_idx ON music_playlists (created_at DESC)`
+  )
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS music_playlist_tracks (
       id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -401,6 +556,10 @@ async function ensureMusicPlaylistTables(sql: postgres.Sql): Promise<void> {
       UNIQUE(playlist_id, track_id)
     )
   `)
-  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlist_tracks_playlist_id_idx ON music_playlist_tracks (playlist_id)`)
-  await sql.unsafe(`CREATE INDEX IF NOT EXISTS music_playlist_tracks_track_id_idx   ON music_playlist_tracks (track_id)`)
+  await sql.unsafe(
+    `CREATE INDEX IF NOT EXISTS music_playlist_tracks_playlist_id_idx ON music_playlist_tracks (playlist_id)`
+  )
+  await sql.unsafe(
+    `CREATE INDEX IF NOT EXISTS music_playlist_tracks_track_id_idx   ON music_playlist_tracks (track_id)`
+  )
 }

@@ -1,14 +1,17 @@
 import { apiGet, apiDelete, apiPost } from "./api-client"
 import { useAuthStore } from "./auth-store"
 
-export type ContentItemType = "image" | "audio" | "pdf" | "download"
+export type ContentItemType = "image" | "audio" | "pdf" | "download" | "video"
 
 const CONTENT_ITEM_TYPES = new Set<ContentItemType>([
   "image",
   "audio",
   "pdf",
   "download",
+  "video",
 ])
+
+export type VideoStatus = "uploading" | "processing" | "ready" | "errored"
 
 export type VtScanStatus =
   | "not_required"
@@ -74,6 +77,11 @@ export interface ContentItemMeta {
   vtScanUrl: string | null
   vtScanStats: VtScanStats | null
   vtScannedAt: string | null
+  muxUploadId: string | null
+  muxAssetId: string | null
+  muxPlaybackId: string | null
+  videoStatus: VideoStatus | null
+  videoError: string | null
 }
 
 export function normalizeContentItemType(
@@ -87,6 +95,7 @@ export function normalizeContentItemType(
   if (mimeType === "application/pdf") return "pdf"
   if (mimeType?.startsWith("image/")) return "image"
   if (mimeType?.startsWith("audio/")) return "audio"
+  if (mimeType?.startsWith("video/")) return "video"
   return "download"
 }
 
@@ -117,6 +126,10 @@ export async function uploadContentItem(
   meta: { title: string; description?: string; folderId?: string | null },
   onProgress?: (pct: number) => void
 ): Promise<{ item: ContentItemMeta }> {
+  if (isVideoMimeType(file.type)) {
+    return uploadVideoItem(file, meta, onProgress)
+  }
+
   return new Promise((resolve, reject) => {
     const formData = new FormData()
     formData.append("file", file)
@@ -160,6 +173,84 @@ export async function uploadContentItem(
     xhr.onerror = () => reject(new Error("Network error"))
     xhr.send(formData)
   })
+}
+
+async function uploadVideoItem(
+  file: File,
+  meta: { title: string; description?: string; folderId?: string | null },
+  onProgress?: (pct: number) => void
+): Promise<{ item: ContentItemMeta }> {
+  const { uploadId, uploadUrl } = await apiPost<{
+    uploadId: string
+    uploadUrl: string
+  }>("/content/items/video/upload-url", {
+    filename: file.name,
+    mimeType: file.type,
+    fileSize: file.size,
+    title: meta.title,
+    description: meta.description,
+    folderId: meta.folderId ?? null,
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("PUT", uploadUrl)
+    xhr.setRequestHeader("Content-Type", file.type)
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100))
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error("Video upload failed"))
+      }
+    }
+    xhr.onerror = () => reject(new Error("Video upload failed"))
+    xhr.send(file)
+  })
+
+  return apiPost<{ item: ContentItemMeta }>("/content/items/video/complete", {
+    uploadId,
+    title: meta.title,
+    description: meta.description,
+    folderId: meta.folderId ?? null,
+    mimeType: file.type,
+    fileSize: file.size,
+  })
+}
+
+export async function pollVideoProcessing(): Promise<{
+  updated: number
+  stillPending: number
+}> {
+  return apiPost<{ updated: number; stillPending: number }>(
+    "/content/items/video/refresh",
+    {}
+  )
+}
+
+export async function fetchVideoSource(
+  id: string
+): Promise<{ url: string; expiresAt: string }> {
+  return apiPost<{ url: string; expiresAt: string }>(
+    "/content/items/video/source",
+    {
+      id,
+    }
+  )
+}
+
+export async function fetchVideoDownloadUrl(
+  id: string
+): Promise<{ url: string }> {
+  return apiPost<{ url: string }>("/content/items/video/download-url", { id })
 }
 
 // ── Folder CRUD ───────────────────────────────────────────────────────────────
@@ -259,7 +350,7 @@ export async function fetchContentThreatInfo(
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
-/** Whether a MIME type is a video (blocked from upload). */
+/** Whether a MIME type is a video. */
 export function isVideoMimeType(mime: string): boolean {
   return mime.startsWith("video/")
 }

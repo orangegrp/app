@@ -25,6 +25,7 @@ import {
   signMusicGetUrls,
   signMusicPutUrl,
 } from "@/server/lib/music-r2"
+import { trackAiUsage } from "@/server/lib/blog-ai-usage-tracker"
 import { supabase } from "@/server/db/supabase/client"
 import type { HonoEnv, MusicTrack } from "@/server/lib/types"
 
@@ -919,6 +920,8 @@ musicTrackRoutes.post(
       const repaired = await repairLrcWithGateway(lrc)
       if (repaired !== lrc)
         warnings.push("LRC formatting was normalized by AI gateway")
+
+      trackAiUsage(user.id, "lyricsTranscription", text.trim().length)
 
       return c.json({
         lyrics: repaired,

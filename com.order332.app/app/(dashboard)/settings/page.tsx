@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { applyProductImprovementConsent, capture, reset } from "@/lib/analytics"
 import { isProductImprovementConsentAllowedSync } from "@/lib/product-improvement-consent"
-import { Key, Trash2, ArrowLeft } from "lucide-react"
+import { Key, Trash2, ArrowLeft, ExternalLink } from "lucide-react"
 import { PageBackground } from "@/components/layout/PageBackground"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -466,7 +466,11 @@ export default function SettingsPage() {
               className="glass-button glass-button-secondary flex min-h-[44px] items-center justify-between rounded-xl px-4 py-2.5 text-sm tracking-wider text-foreground"
             >
               <span>Terms of Service</span>
-              <span aria-hidden="true">Open</span>
+              <ExternalLink
+                size={14}
+                aria-hidden="true"
+                className="opacity-80"
+              />
             </a>
             <a
               href={PRIVACY_URL}
@@ -475,7 +479,11 @@ export default function SettingsPage() {
               className="glass-button glass-button-secondary flex min-h-[44px] items-center justify-between rounded-xl px-4 py-2.5 text-sm tracking-wider text-foreground"
             >
               <span>Privacy Policy</span>
-              <span aria-hidden="true">Open</span>
+              <ExternalLink
+                size={14}
+                aria-hidden="true"
+                className="opacity-80"
+              />
             </a>
           </div>
         </div>

@@ -323,13 +323,14 @@ export function WelcomeWizardDialog(): React.ReactNode {
               <div className="flex flex-col">
                 <DialogHeader>
                   <DialogTitle className="text-xl tracking-widest text-foreground">
-                    Welcome to the 332 app<span className="blink-cursor">_</span>
+                    Welcome to the 332 app
+                    <span className="blink-cursor">_</span>
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      The 332 app is your invite-only hub for community tools:
-                      a free content library, music, publishing on the 332 blog, latest AI features, and
-                      more.
+                      The 332 app is your invite-only hub for community tools: a
+                      free content library, music, publishing on the 332 blog,
+                      latest AI features, and more.
                     </span>
                     <span className="block">
                       {signedInWithDiscord
@@ -582,7 +583,8 @@ export function WelcomeWizardDialog(): React.ReactNode {
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      When you use UGC ("User Generated Content") features, remember:
+                      When you use UGC (&quot;User Generated Content&quot;)
+                      features, remember:
                     </span>
                   </DialogDescription>
                 </DialogHeader>
@@ -591,19 +593,20 @@ export function WelcomeWizardDialog(): React.ReactNode {
                     You still keep copyright for what you upload and create.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    You grant 332 app a licence to host and serve your content while
-                    it is on the platform.
+                    You grant 332 app a licence to host and serve your content
+                    while it is on the platform.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
                     Storage is best-effort only, so keep backups of anything
                     important.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    AI output can be wrong, incomplete, or misleading, so review it before publishing or
-                    acting on it.
+                    AI output can be wrong, incomplete, or misleading, so review
+                    it before publishing or acting on it.
                   </p>
                   <p className="rounded-xl border border-white/10 px-3 py-2.5">
-                    All uploads are scanned for malicious software by an external service.
+                    All uploads are scanned for malicious software by an
+                    external service.
                   </p>
                 </div>
                 <DialogFooter className="mt-3 gap-2 pt-3 sm:justify-between">
@@ -634,7 +637,8 @@ export function WelcomeWizardDialog(): React.ReactNode {
                   </DialogTitle>
                   <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                     <span className="block">
-                      We collect only what is needed to run and improve the 332 app.
+                      We collect only what is needed to run and improve the 332
+                      app.
                     </span>
                   </DialogDescription>
                 </DialogHeader>

@@ -15,6 +15,7 @@ import {
   ShieldOff,
   Trash2,
   Video,
+  X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Spinner } from "@/components/ui/spinner"
@@ -36,7 +37,12 @@ import {
   AudioPlayerTime,
   AudioPlayerDuration,
 } from "@/components/ui/audio-player"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,6 +89,14 @@ export function ContentItemCard({
     setVtOpen(true)
   }
   const itemType = normalizeContentItemType(item.itemType, item.mimeType)
+  const videoAspectRatio =
+    item.width && item.height && item.width > 0 && item.height > 0
+      ? `${item.width} / ${item.height}`
+      : "16 / 9"
+  const videoDialogWidth =
+    item.width && item.height && item.width > 0 && item.height > 0
+      ? `min(92vw, ${(72 * (item.width / item.height)).toFixed(2)}vh)`
+      : "min(92vw, 1100px)"
 
   const handleRetry = async () => {
     try {
@@ -234,10 +248,29 @@ export function ContentItemCard({
             if (!open) setVideoSrc(null)
           }}
         >
-          <DialogContent className="max-w-5xl p-2">
+          <DialogContent
+            showCloseButton={false}
+            style={{ width: videoDialogWidth, maxWidth: "92vw" }}
+            className="p-2 sm:max-h-[86vh] sm:[min-height:280px] sm:[min-width:420px] sm:resize sm:overflow-auto"
+          >
             <DialogTitle className="sr-only">{item.title}</DialogTitle>
+            <DialogClose
+              className="glass-button glass-button-ghost absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
+              aria-label="Close video"
+            >
+              <X className="h-4 w-4" />
+            </DialogClose>
             {videoSrc ? (
-              <VideoPlayer src={videoSrc} className="w-full" autoPlay />
+              <div
+                className="max-h-[82vh] w-full"
+                style={{ aspectRatio: videoAspectRatio }}
+              >
+                <VideoPlayer
+                  src={videoSrc}
+                  className="h-full w-full"
+                  autoPlay
+                />
+              </div>
             ) : (
               <div className="flex h-40 items-center justify-center">
                 <Spinner size="md" clockwise />

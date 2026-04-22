@@ -2431,3 +2431,65 @@ input[type="number"]::-webkit-outer-spin-button:hover {
     rgba(56, 189, 248, 0.18)
   );
 }
+
+/* Video player volume slider matches scrub bar visuals. */
+.video-volume-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  accent-color: transparent;
+  cursor: pointer;
+}
+
+.video-volume-slider:focus {
+  outline: none;
+}
+
+.video-volume-slider::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid oklch(1 0 0 / 0.2);
+  background: linear-gradient(
+    to right,
+    oklch(1 0 0 / 0.6) 0,
+    oklch(1 0 0 / 0.6) var(--video-volume-progress, 0%),
+    oklch(1 0 0 / 0.08) var(--video-volume-progress, 0%),
+    oklch(1 0 0 / 0.08) 100%
+  );
+}
+
+.video-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -0.22rem;
+  height: 0.56rem;
+  width: 0.96rem;
+  border-radius: 9999px;
+  border: 1px solid oklch(1 0 0 / 0.45);
+  background: oklch(0.94 0 0);
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.35);
+}
+
+.video-volume-slider::-moz-range-track {
+  height: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid oklch(1 0 0 / 0.2);
+  background: oklch(1 0 0 / 0.08);
+}
+
+.video-volume-slider::-moz-range-progress {
+  height: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid oklch(1 0 0 / 0.2);
+  background: oklch(1 0 0 / 0.6);
+}
+
+.video-volume-slider::-moz-range-thumb {
+  height: 0.56rem;
+  width: 0.96rem;
+  border-radius: 9999px;
+  border: 1px solid oklch(1 0 0 / 0.45);
+  background: oklch(0.94 0 0);
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.35);
+}

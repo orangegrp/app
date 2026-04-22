@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import {
-  applyProductImprovementConsent,
-  capture,
-  reset,
-} from "@/lib/analytics"
+import { applyProductImprovementConsent, capture, reset } from "@/lib/analytics"
 import { isProductImprovementConsentAllowedSync } from "@/lib/product-improvement-consent"
 import { Key, Trash2, ArrowLeft } from "lucide-react"
 import { PageBackground } from "@/components/layout/PageBackground"
@@ -63,6 +59,9 @@ interface MeProfile {
   loginQrEnabled: boolean
   passkeyCount: number
 }
+
+const TERMS_URL = "https://www.order332.com/app-legal/terms"
+const PRIVACY_URL = "https://www.order332.com/app-legal/privacy"
 
 function DiscordGlyph() {
   return (
@@ -434,7 +433,8 @@ export default function SettingsPage() {
               </p>
               <p className="mt-1 text-xs tracking-wider text-muted-foreground">
                 When this is on, we receive basic usage info and automatic crash
-                reports so we can fix bugs and spot problems. Turn it off anytime.
+                reports so we can fix bugs and spot problems. Turn it off
+                anytime.
               </p>
             </div>
             <Switch
@@ -451,6 +451,33 @@ export default function SettingsPage() {
             No personal data is collected. All information is anonymised and
             stored securely in the EU.
           </p>
+        </div>
+
+        <div className="glass-card mb-6 rounded-2xl p-6">
+          <p className="card-label mb-4">Legal</p>
+          <p className="mb-4 text-xs tracking-wider text-muted-foreground">
+            Terms of Service and Privacy Policy for 332 app.
+          </p>
+          <div className="space-y-2">
+            <a
+              href={TERMS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass-button glass-button-secondary flex min-h-[44px] items-center justify-between rounded-xl px-4 py-2.5 text-sm tracking-wider text-foreground"
+            >
+              <span>Terms of Service</span>
+              <span aria-hidden="true">Open</span>
+            </a>
+            <a
+              href={PRIVACY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass-button glass-button-secondary flex min-h-[44px] items-center justify-between rounded-xl px-4 py-2.5 text-sm tracking-wider text-foreground"
+            >
+              <span>Privacy Policy</span>
+              <span aria-hidden="true">Open</span>
+            </a>
+          </div>
         </div>
 
         {/* Discord */}

@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Spinner } from "@/components/ui/spinner"
 import {
   DISPLAY_NAME_MAX_LENGTH,
@@ -25,8 +26,14 @@ import { isPWAContext } from "@/lib/pwa"
 import { cn } from "@/lib/utils"
 
 const STEP_STORAGE_KEY = "332-welcome-wizard-step"
+const TERMS_URL = "https://www.order332.com/app-legal/terms"
+const PRIVACY_URL = "https://www.order332.com/app-legal/privacy"
+const BACK_BUTTON_CLASS =
+  "glass-button glass-button-secondary min-h-[44px] min-w-[120px] rounded-xl tracking-widest"
+const PRIMARY_BUTTON_CLASS =
+  "glass-button glass-button-default min-h-[44px] min-w-[120px] rounded-xl tracking-widest"
 
-const SLIDE_COUNT = 4
+const SLIDE_COUNT = 6
 
 const DISCORD_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   taken: "That Discord account is already linked to another user.",
@@ -64,6 +71,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
   const [finishError, setFinishError] = useState<string | null>(null)
   const [discordBusy, setDiscordBusy] = useState(false)
   const [passkeyBusy, setPasskeyBusy] = useState(false)
+  const [legalAccepted, setLegalAccepted] = useState(false)
 
   const signedInWithDiscord = Boolean(user?.discordId)
   const passkeyCount = user?.passkeyCount ?? 0
@@ -196,6 +204,12 @@ export function WelcomeWizardDialog(): React.ReactNode {
 
   const handleFinish = async (): Promise<void> => {
     if (!accessToken) return
+    if (!legalAccepted) {
+      setFinishError(
+        "Please agree to the Terms and Privacy Policy to continue."
+      )
+      return
+    }
     setFinishLoading(true)
     setFinishError(null)
     try {
@@ -225,11 +239,11 @@ export function WelcomeWizardDialog(): React.ReactNode {
       <DialogContent
         showCloseButton={false}
         className={cn(
-          "glass-card max-h-[90vh] overflow-y-auto border-white/10 sm:max-w-lg",
-          "p-6 sm:p-8"
+          "glass-card flex h-[72vh] max-h-[72vh] flex-col overflow-hidden border-white/10 sm:h-[620px] sm:max-h-[620px] sm:max-w-lg",
+          "gap-4 p-5 sm:p-6"
         )}
       >
-        <div className="mb-2 flex justify-center gap-2" aria-hidden="true">
+        <div className="mb-0.5 flex justify-center gap-2" aria-hidden="true">
           {Array.from({ length: SLIDE_COUNT }, (_, i) => (
             <span
               key={i}
@@ -242,42 +256,45 @@ export function WelcomeWizardDialog(): React.ReactNode {
             />
           ))}
         </div>
-        <p className="mb-4 text-center text-[11px] tracking-widest text-muted-foreground uppercase">
+        <p className="mb-2 text-center text-[10px] tracking-widest text-muted-foreground uppercase">
           {step + 1} / {SLIDE_COUNT}
         </p>
 
         {step === 0 && (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col">
             <DialogHeader>
               <DialogTitle className="text-xl tracking-widest text-foreground">
-                Welcome to the 332 app<span className="blink-cursor">_</span>
+                Welcome to 332 app<span className="blink-cursor">_</span>
               </DialogTitle>
-              <DialogDescription className="space-y-3 pt-2 text-sm tracking-wider text-muted-foreground">
+              <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                 <span className="block">
-                  This is your hub for the latest dev work from the 332
-                  community — apps, labs, and tools in one installable home.
+                  332 app is your invite-only hub for community tools: content
+                  uploads, music, blog workflows, AI features, and browser-based
+                  WebPC.
                 </span>
                 <span className="block">
                   {signedInWithDiscord
-                    ? "Take a minute to set up how you appear. You can optionally add a passkey on this device."
-                    : "Take a minute to set up how you appear and optionally link Discord."}
+                    ? "Take a minute to set up how you appear, lock in account security, and review the key rules."
+                    : "Take a minute to set up how you appear, optionally link Discord, and review how the app works."}
                 </span>
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="mt-4 gap-2 sm:justify-end">
+            <div className="flex-1" />
+            <DialogFooter className="mt-auto gap-2 pt-3 sm:justify-between">
+              <div className="hidden sm:block" aria-hidden="true" />
               <Button
                 type="button"
-                className="glass-button glass-button-default min-h-[44px] rounded-xl tracking-widest"
+                className={PRIMARY_BUTTON_CLASS}
                 onClick={handleNextFromWelcome}
               >
                 Next
               </Button>
             </DialogFooter>
-          </>
+          </div>
         )}
 
         {step === 1 && (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col">
             <DialogHeader>
               <DialogTitle className="text-xl tracking-widest text-foreground">
                 Display name
@@ -287,7 +304,7 @@ export function WelcomeWizardDialog(): React.ReactNode {
                 in Settings).
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-2 py-2">
+            <div className="mt-2 grid gap-2">
               <label
                 className="text-xs tracking-wider text-muted-foreground"
                 htmlFor="wizard-display-name"
@@ -316,29 +333,29 @@ export function WelcomeWizardDialog(): React.ReactNode {
                 </p>
               )}
             </div>
-            <DialogFooter className="mt-2 gap-2 sm:justify-between">
+            <DialogFooter className="mt-auto gap-2 pt-3 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
-                className="glass-button glass-button-secondary min-h-[44px] rounded-xl tracking-widest"
+                className={BACK_BUTTON_CLASS}
                 onClick={() => setStep(0)}
               >
                 Back
               </Button>
               <Button
                 type="button"
-                className="glass-button glass-button-default min-h-[44px] min-w-[120px] rounded-xl tracking-widest"
+                className={PRIMARY_BUTTON_CLASS}
                 disabled={profileSaving}
                 onClick={() => void handleNextFromDisplayName()}
               >
                 {profileSaving ? <Spinner size="xs" /> : "Next"}
               </Button>
             </DialogFooter>
-          </>
+          </div>
         )}
 
         {step === 2 && (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col">
             <DialogHeader>
               <DialogTitle className="text-xl tracking-widest text-foreground">
                 {signedInWithDiscord ? "Add a passkey" : "Connect Discord"}
@@ -349,11 +366,15 @@ export function WelcomeWizardDialog(): React.ReactNode {
                   : "Link Discord for quick sign-in and to use your avatar in the app."}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-3">
+            <div className="mt-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+              <p className="rounded-xl border border-white/10 px-3 py-2 text-xs tracking-wider text-muted-foreground">
+                Keep your account secure and do not share your sign-in methods
+                (Discord session, passkeys, or magic links).
+              </p>
               {signedInWithDiscord ? (
                 <>
                   {passkeyCount > 0 ? (
-                    <div className="rounded-xl border border-white/10 px-4 py-3">
+                    <div className="rounded-xl border border-white/10 px-3 py-2">
                       <p className="text-sm tracking-wider text-foreground">
                         Passkey added on this account
                       </p>
@@ -408,70 +429,245 @@ export function WelcomeWizardDialog(): React.ReactNode {
                 </p>
               )}
             </div>
-            <DialogFooter className="mt-2 gap-2 sm:justify-between">
+            <DialogFooter className="mt-auto gap-2 pt-3 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
-                className="glass-button glass-button-secondary min-h-[44px] rounded-xl tracking-widest"
+                className={BACK_BUTTON_CLASS}
                 onClick={() => setStep(1)}
               >
                 Back
               </Button>
               <Button
                 type="button"
-                className="glass-button glass-button-default min-h-[44px] rounded-xl tracking-widest"
+                className={PRIMARY_BUTTON_CLASS}
                 onClick={() => setStep(3)}
               >
                 Next
               </Button>
             </DialogFooter>
-          </>
+          </div>
         )}
 
         {step === 3 && (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col">
             <DialogHeader>
               <DialogTitle className="text-xl tracking-widest text-foreground">
-                Explore 332
+                Use 332 app responsibly
               </DialogTitle>
-              <DialogDescription className="space-y-3 pt-2 text-sm tracking-wider text-muted-foreground">
+              <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
                 <span className="block">
-                  Browse the sidebar for apps and content. Some areas are gated:
-                  you may need to request access from an app admin before you
-                  can use them.
-                </span>
-                <span className="block">
-                  When you are ready, continue to the home screen.
+                  Quick Terms highlights that matter for everyday use.
                 </span>
               </DialogDescription>
             </DialogHeader>
-            {finishError && (
-              <p
-                className="text-xs tracking-wider"
-                style={{ color: "oklch(0.7 0.19 22)" }}
-              >
-                {finishError}
-              </p>
-            )}
-            <DialogFooter className="mt-4 gap-2 sm:justify-between">
+            <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-xs leading-snug tracking-normal text-muted-foreground sm:text-sm">
+              {[
+                {
+                  title: "Age and access",
+                  body: "13+ only, with some areas marked 16+.",
+                },
+                {
+                  title: "Safety and legality",
+                  body: "No illegal content, harassment, abuse, or explicit sexual content.",
+                },
+                {
+                  title: "Security and abuse",
+                  body: "No hacking, account bypasses, or abusive automation.",
+                },
+                {
+                  title: "WebPC responsibility",
+                  body: "WebPC is client-side and your responsibility; do not use it for attacks, scanning, or mining.",
+                },
+                {
+                  title: "Admin enforcement",
+                  body: "Admins can suspend or remove access for misuse or security concerns.",
+                },
+              ].map((rule, idx) => (
+                <div
+                  key={rule.title}
+                  className="rounded-xl border border-white/10 px-3 py-2.5"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-white/20 text-[11px] font-medium text-foreground/90">
+                      {idx + 1}
+                    </span>
+                    <p>
+                      <span className="text-foreground">{rule.title}:</span>{" "}
+                      {rule.body}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="mt-auto gap-2 pt-3 sm:justify-between">
               <Button
                 type="button"
                 variant="outline"
-                className="glass-button glass-button-secondary min-h-[44px] rounded-xl tracking-widest"
+                className={BACK_BUTTON_CLASS}
                 onClick={() => setStep(2)}
               >
                 Back
               </Button>
               <Button
                 type="button"
-                className="glass-button glass-button-default min-h-[44px] min-w-[140px] rounded-xl tracking-widest"
-                disabled={finishLoading}
+                className={PRIMARY_BUTTON_CLASS}
+                onClick={() => setStep(4)}
+              >
+                Next
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <DialogHeader>
+              <DialogTitle className="text-xl tracking-widest text-foreground">
+                Your content and AI tools
+              </DialogTitle>
+              <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
+                <span className="block">
+                  You keep ownership of your content; these are the practical
+                  tradeoffs to know.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-xs leading-snug tracking-normal text-muted-foreground sm:text-sm">
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                You keep copyright for what you upload and create.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                You grant 332 app a licence to host and serve content while it
+                is on the platform.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                Storage is best-effort only, so keep backups of anything
+                important.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                AI output can be wrong; review it before publishing or acting on
+                it.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                Uploads may be scanned by VirusTotal, and AI audio features use
+                ElevenLabs processing.
+              </p>
+            </div>
+            <DialogFooter className="mt-auto gap-2 pt-3 sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                className={BACK_BUTTON_CLASS}
+                onClick={() => setStep(3)}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                className={PRIMARY_BUTTON_CLASS}
+                onClick={() => setStep(5)}
+              >
+                Next
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <DialogHeader>
+              <DialogTitle className="text-xl tracking-widest text-foreground">
+                Privacy and agreement
+              </DialogTitle>
+              <DialogDescription className="space-y-2 pt-1 text-sm tracking-wider text-muted-foreground">
+                <span className="block">
+                  We collect only what is needed to run and secure 332 app.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-xs leading-snug tracking-normal text-muted-foreground sm:text-sm">
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                Account and security data includes login methods, sessions, and
+                abuse-prevention logs.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                We do not sell your data or share it for advertising.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                Product analytics can be turned off anytime in Settings.
+              </p>
+              <p className="rounded-xl border border-white/10 px-3 py-2.5">
+                You can request access, correction, deletion, export, or object
+                to processing.
+              </p>
+              <p className="px-1 pt-1">
+                Read the full documents:{" "}
+                <a
+                  href={TERMS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  Terms of Service
+                </a>{" "}
+                and{" "}
+                <a
+                  href={PRIVACY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  Privacy Policy
+                </a>
+                .
+              </p>
+              <label
+                htmlFor="welcome-legal-agree"
+                className="mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 px-3 py-2.5 text-xs leading-snug tracking-normal text-foreground sm:text-sm"
+              >
+                <Checkbox
+                  id="welcome-legal-agree"
+                  checked={legalAccepted}
+                  onCheckedChange={(checked) => {
+                    setLegalAccepted(checked === true)
+                    if (checked === true) setFinishError(null)
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  I have read and agree to the Terms of Service and Privacy
+                  Policy, and I confirm I meet the age requirement.
+                </span>
+              </label>
+            </div>
+            {finishError && (
+              <p
+                className="mt-2 text-xs tracking-normal"
+                style={{ color: "oklch(0.7 0.19 22)" }}
+              >
+                {finishError}
+              </p>
+            )}
+            <DialogFooter className="mt-auto gap-2 pt-3 sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                className={BACK_BUTTON_CLASS}
+                onClick={() => setStep(4)}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                className={PRIMARY_BUTTON_CLASS}
+                disabled={finishLoading || !legalAccepted}
                 onClick={() => void handleFinish()}
               >
                 {finishLoading ? <Spinner size="xs" /> : "Get started"}
               </Button>
             </DialogFooter>
-          </>
+          </div>
         )}
       </DialogContent>
     </Dialog>

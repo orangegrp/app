@@ -114,7 +114,7 @@ export function VideoPlayerAdaptive(props: VideoPlayerAdaptiveProps) {
 
   return (
     <div
-      className="w-full"
+      className="h-full w-full"
       onMouseEnter={() => {
         contextActiveRef.current = true
       }}

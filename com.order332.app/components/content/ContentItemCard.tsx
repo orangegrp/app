@@ -402,8 +402,7 @@ export function ContentItemCard({
                 ? {
                     width: "100dvw",
                     maxWidth: "100dvw",
-                    aspectRatio: videoAspectRatio,
-                    maxHeight: "100svh",
+                    height: "clamp(180px, 56.25dvw, 85svh)",
                   }
                 : {
                     width: videoDialogWidth,

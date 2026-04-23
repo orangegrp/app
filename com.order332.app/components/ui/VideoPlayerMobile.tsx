@@ -940,9 +940,9 @@ export function VideoPlayerMobile({
               </div>
 
               <div
-                className="pointer-events-auto absolute inset-0 flex items-center justify-center"
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
               >
-                <div className="flex items-center justify-center gap-5 sm:gap-8">
+                <div className="pointer-events-auto flex items-center justify-center gap-5 sm:gap-8">
                   <button
                     onClick={() => seekRelative(-10)}
                     className="mobile-glass-circle-btn h-12 w-12"

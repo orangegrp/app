@@ -3,10 +3,6 @@ import { notFound } from "next/navigation"
 import { db } from "@/server/db"
 import { supabase } from "@/server/db/supabase/client"
 import { signMusicGetUrl } from "@/server/lib/music-r2"
-import {
-  buildSignedMuxThumbnailUrl,
-  signMuxPlaybackToken,
-} from "@/server/lib/mux-playback"
 import { ContentSharePageClient } from "./ContentSharePageClient"
 import { SharePageClient as MusicSharePageClient } from "./SharePageClient"
 
@@ -173,13 +169,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     data.link.expiresAt === null &&
     data.item.muxPlaybackId
   ) {
-    const playbackId = data.item.muxPlaybackId
-    const { token: playbackToken } = await signMuxPlaybackToken(playbackId, "v")
-    const signedMp4Url = `https://stream.mux.com/${playbackId}.mp4?token=${encodeURIComponent(playbackToken)}`
-    const signedThumb = await buildSignedMuxThumbnailUrl(
-      playbackId,
-      data.item.width ?? 1280
-    )
+    const ogVideoUrl = `${appUrl}/share/${token}/og/video`
+    const ogImageUrl = `${appUrl}/share/${token}/og/image`
     const width = data.item.width ?? 1280
     const height = data.item.height ?? 720
 
@@ -194,7 +185,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         type: "video.other",
         images: [
           {
-            url: signedThumb.url,
+            url: ogImageUrl,
             width,
             height,
             alt: `${title} preview`,
@@ -202,8 +193,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         ],
         videos: [
           {
-            url: signedMp4Url,
-            secureUrl: signedMp4Url,
+            url: ogVideoUrl,
+            secureUrl: ogVideoUrl,
             type: "video/mp4",
             width,
             height,

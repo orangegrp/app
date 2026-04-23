@@ -1,11 +1,16 @@
 import type { CSSProperties } from "react"
 import Link from "next/link"
+import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
-import { Download, File, Shield, ShieldAlert, ShieldCheck } from "lucide-react"
+import { Download, File, Lock, Shield, ShieldAlert, ShieldCheck } from "lucide-react"
 import { VideoPlayerAdaptive } from "@/components/ui/VideoPlayerAdaptive"
 import { db } from "@/server/db"
 import { supabase } from "@/server/db/supabase/client"
+import { sha256 } from "@/server/lib/crypto"
+import { CONTENT_LIBRARY_BUCKET } from "@/server/lib/content-upload"
 import { buildSignedMuxHlsUrl } from "@/server/lib/mux-playback"
+import { verifyRefreshToken } from "@/server/lib/jwt"
+import { signUrl } from "@/server/lib/signed-url"
 
 interface Props {
   params: Promise<{ token: string }>
@@ -59,10 +64,25 @@ function widgetFrameStyle(height = 176): CSSProperties {
   return {
     width: "100%",
     minHeight: `${height}px`,
-    borderRadius: "14px",
+    borderRadius: "12px",
     border: "1px solid rgba(255,255,255,0.15)",
     background:
       "radial-gradient(120% 120% at 12% 0%, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 55%), rgba(3,7,18,0.84)",
+  }
+}
+
+async function isInternalViewerAuthenticated(): Promise<boolean> {
+  const cookieStore = await cookies()
+  const refreshToken = cookieStore.get("refresh_token")?.value
+  if (!refreshToken) return false
+
+  try {
+    const payload = await verifyRefreshToken(refreshToken)
+    const session = await db.getSessionByTokenHash(sha256(refreshToken))
+    if (!session || session.expiresAt < new Date()) return false
+    return session.userId === payload.sub
+  } catch {
+    return false
   }
 }
 
@@ -76,7 +96,7 @@ export default async function ContentEmbedPage({ params }: Props) {
   const { data: row, error } = await supabase
     .from("content_items")
     .select(
-      "id, item_type, title, file_size, width, height, vt_scan_status, vt_scan_url, mux_playback_id, video_status"
+      "id, item_type, title, file_size, width, height, vt_scan_status, vt_scan_url, mux_playback_id, video_status, storage_key"
     )
     .eq("id", link.contentItemId)
     .single()
@@ -89,26 +109,74 @@ export default async function ContentEmbedPage({ params }: Props) {
   const vtScanUrl = (row.vt_scan_url as string | null) ?? null
   const isInternal = link.mode === "internal"
   const shareHref = `/share/${token}`
+  const loginHref = `/login?redirect=${encodeURIComponent(shareHref)}`
+  const isAuthenticated = isInternal
+    ? await isInternalViewerAuthenticated()
+    : false
   const chip = vtChip(vtStatus)
 
-  if (isInternal) {
+  if (isInternal && !isAuthenticated) {
     return (
-      <div className="w-full p-2 text-white">
-        <div style={widgetFrameStyle()} className="flex items-center gap-3 p-4">
-          <File className="h-8 w-8 shrink-0 text-white/75" />
+      <div className="w-full p-1.5 text-white">
+        <div style={widgetFrameStyle(140)} className="flex items-center gap-3 p-3">
+          <div className="rounded-lg border border-white/15 bg-white/8 p-2.5">
+            <Lock className="h-5 w-5 text-white/80" />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
-              {row.title as string}
+              Protected content
             </p>
             <p className="mt-0.5 text-xs text-white/60">
-              Internal share widget
+              Sign in to view this internal share
             </p>
           </div>
-          <div
-            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${chip.className}`}
+          <Link
+            href={loginHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white/90 hover:bg-white/16"
           >
-            {chip.icon}
-            {statusLabel(vtStatus)}
+            Sign in
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (isInternal && itemType !== "video") {
+    const storageKey = (row.storage_key as string | null) ?? null
+    const downloadUrl = storageKey
+      ? await signUrl(CONTENT_LIBRARY_BUCKET, storageKey, 3600)
+      : ""
+
+    return (
+      <div className="w-full p-1.5 text-white">
+        <div style={widgetFrameStyle(152)} className="flex items-center gap-3 p-3">
+          <File className="h-7 w-7 shrink-0 text-white/75" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{row.title as string}</p>
+            <p className="mt-0.5 text-xs text-white/60">Internal file share</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {vtStatus !== "not_required" && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${chip.className}`}
+              >
+                {chip.icon}
+                {statusLabel(vtStatus)}
+              </span>
+            )}
+
+            <a
+              href={downloadUrl || shareHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white/90 hover:bg-white/16"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
           </div>
         </div>
       </div>
@@ -128,8 +196,8 @@ export default async function ContentEmbedPage({ params }: Props) {
         <div
           style={{
             width: "100%",
-            minHeight: "220px",
-            borderRadius: "8px",
+            minHeight: "188px",
+            borderRadius: "10px",
             border: "1px solid rgba(255,255,255,0.08)",
             background: "transparent",
             aspectRatio:
@@ -157,11 +225,11 @@ export default async function ContentEmbedPage({ params }: Props) {
 
   if (itemType === "image") {
     return (
-      <div className="w-full p-2 text-white">
+      <div className="w-full p-1.5 text-white">
         <Link href={shareHref} target="_blank" rel="noopener noreferrer">
           <div
             style={{
-              ...widgetFrameStyle(220),
+              ...widgetFrameStyle(186),
               aspectRatio:
                 row.width && row.height && row.width > 0 && row.height > 0
                   ? `${row.width} / ${row.height}`
@@ -182,8 +250,8 @@ export default async function ContentEmbedPage({ params }: Props) {
   }
 
   return (
-    <div className="w-full p-2 text-white">
-      <div style={widgetFrameStyle()} className="flex items-center gap-3 p-4">
+    <div className="w-full p-1.5 text-white">
+      <div style={widgetFrameStyle(152)} className="flex items-center gap-3 p-3">
         <File className="h-8 w-8 shrink-0 text-white/75" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">

@@ -86,14 +86,14 @@ function buildContentEmbedCode({
   }
 
   if (mode === "external" && itemType === "video") {
-    return `<iframe src="${embedUrl}" title="${safeTitle}" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer" style="width:100%;max-width:960px;aspect-ratio:16/9;border:0;border-radius:16px;overflow:hidden;"></iframe>`
+    return `<iframe src="${embedUrl}" title="${safeTitle}" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer" style="width:100%;max-width:720px;aspect-ratio:16/9;border:0;border-radius:12px;overflow:hidden;"></iframe>`
   }
 
   if (mode === "external" && itemType === "image") {
     return `<a href="${shareUrl}" target="_blank" rel="noopener noreferrer"><img src="${imageUrl}" alt="${safeTitle}" style="display:block;max-width:100%;height:auto;border:0;border-radius:12px;"></a>`
   }
 
-  return `<iframe src="${embedUrl}" title="${safeTitle}" loading="lazy" referrerpolicy="no-referrer" style="width:100%;max-width:760px;height:180px;border:0;border-radius:14px;overflow:hidden;"></iframe>`
+  return `<iframe src="${embedUrl}" title="${safeTitle}" loading="lazy" referrerpolicy="no-referrer" style="width:100%;max-width:620px;height:150px;border:0;border-radius:12px;overflow:hidden;"></iframe>`
 }
 
 function ShareBody({

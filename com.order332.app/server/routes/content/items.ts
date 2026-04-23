@@ -699,7 +699,7 @@ contentItemRoutes.post(
 
     const { data, error } = await supabase
       .from("content_items")
-      .select("id, item_type, mux_asset_id")
+      .select("id, item_type, mux_asset_id, title")
       .eq("id", id)
       .single()
 
@@ -736,7 +736,11 @@ contentItemRoutes.post(
         )
       }
 
-      return c.json({ url: asset.masterUrl })
+      const rawTitle = (data.title as string | null)?.trim() || "video"
+      const safeTitle = rawTitle.replace(/[^\w\s.\-()]/g, "").trim() || "video"
+      const filename = encodeURIComponent(`${safeTitle}.mp4`)
+      const url = `${asset.masterUrl}${asset.masterUrl.includes("?") ? "&" : "?"}download=${filename}`
+      return c.json({ url })
     } catch (err) {
       console.error("[content/items] video download url error:", err)
       return c.json({ error: "Failed to prepare video download" }, 500)

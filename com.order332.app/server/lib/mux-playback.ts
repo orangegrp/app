@@ -167,3 +167,50 @@ export async function buildSignedMuxThumbnailUrl(
     expiresAt,
   }
 }
+
+async function isPlayableVideoUrl(url: string): Promise<boolean> {
+  try {
+    const head = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      cache: "no-store",
+    })
+    if (head.ok) return true
+    if (head.status !== 405) return false
+  } catch {
+    return false
+  }
+
+  try {
+    const get = await fetch(url, {
+      method: "GET",
+      headers: { Range: "bytes=0-1" },
+      redirect: "follow",
+      cache: "no-store",
+    })
+    return get.ok || get.status === 206
+  } catch {
+    return false
+  }
+}
+
+export async function buildSignedMuxMp4Url(
+  playbackId: string
+): Promise<{ url: string; expiresAt: string } | null> {
+  const { token, expiresAt } = await signMuxPlaybackToken(playbackId, "v")
+  const tokenParam = `token=${encodeURIComponent(token)}`
+  const candidates = [
+    `https://stream.mux.com/${playbackId}/high.mp4?${tokenParam}`,
+    `https://stream.mux.com/${playbackId}/medium.mp4?${tokenParam}`,
+    `https://stream.mux.com/${playbackId}/low.mp4?${tokenParam}`,
+    `https://stream.mux.com/${playbackId}.mp4?${tokenParam}`,
+  ]
+
+  for (const candidate of candidates) {
+    if (await isPlayableVideoUrl(candidate)) {
+      return { url: candidate, expiresAt }
+    }
+  }
+
+  return null
+}

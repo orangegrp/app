@@ -3,6 +3,10 @@ import { notFound } from "next/navigation"
 import { db } from "@/server/db"
 import { supabase } from "@/server/db/supabase/client"
 import { signMusicGetUrl } from "@/server/lib/music-r2"
+import {
+  buildSignedMuxMp4Url,
+  buildSignedMuxThumbnailUrl,
+} from "@/server/lib/mux-playback"
 import { ContentSharePageClient } from "./ContentSharePageClient"
 import { SharePageClient as MusicSharePageClient } from "./SharePageClient"
 
@@ -105,6 +109,23 @@ function sanitizeMetaText(value: string): string {
     .trim()
 }
 
+function normalizeVideoDimensions(
+  width: number | null,
+  height: number | null
+): { width: number; height: number } {
+  const w = width ?? 0
+  const h = height ?? 0
+  if (w > 160 && h > 120) {
+    return { width: Math.round(w), height: Math.round(h) }
+  }
+  if (w > 0 && h > 0) {
+    const ratio = w / h
+    const baseWidth = 1200
+    return { width: baseWidth, height: Math.round(baseWidth / ratio) }
+  }
+  return { width: 1280, height: 720 }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params
   const data = await getUnifiedShareData(token)
@@ -169,10 +190,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     data.link.expiresAt === null &&
     data.item.muxPlaybackId
   ) {
-    const ogVideoUrl = `${appUrl}/share/${token}/og/video`
-    const ogImageUrl = `${appUrl}/share/${token}/og/image`
-    const width = data.item.width ?? 1280
-    const height = data.item.height ?? 720
+    const mp4 = await buildSignedMuxMp4Url(data.item.muxPlaybackId)
+    const { width, height } = normalizeVideoDimensions(
+      data.item.width,
+      data.item.height
+    )
+    const thumb = await buildSignedMuxThumbnailUrl(
+      data.item.muxPlaybackId,
+      width
+    )
 
     return {
       title: `${title} — 332`,
@@ -182,35 +208,44 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         description,
         url: pageUrl,
         siteName: "332",
-        type: "video.other",
+        type: mp4 ? "video.other" : "website",
         images: [
           {
-            url: ogImageUrl,
+            url: thumb.url,
             width,
             height,
             alt: `${title} preview`,
           },
         ],
-        videos: [
-          {
-            url: ogVideoUrl,
-            secureUrl: ogVideoUrl,
-            type: "video/mp4",
-            width,
-            height,
-          },
-        ],
+        ...(mp4
+          ? {
+              videos: [
+                {
+                  url: mp4.url,
+                  secureUrl: mp4.url,
+                  type: "video/mp4",
+                  width,
+                  height,
+                },
+              ],
+            }
+          : {}),
       },
       twitter: {
-        card: "player",
+        card: mp4 ? "player" : "summary_large_image",
         title,
         description,
+        images: [thumb.url],
       },
-      other: {
-        "twitter:player": pageUrl,
-        "twitter:player:width": String(width),
-        "twitter:player:height": String(height),
-      },
+      ...(mp4
+        ? {
+            other: {
+              "twitter:player": pageUrl,
+              "twitter:player:width": String(width),
+              "twitter:player:height": String(height),
+            },
+          }
+        : {}),
     }
   }
 

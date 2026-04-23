@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { VideoPlayerAdaptive } from "@/components/ui/VideoPlayerAdaptive"
 import { ShareContentButton } from "@/components/content/ShareContentDialog"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface ContentItemCardProps {
   item: ContentItemMeta
@@ -86,6 +87,10 @@ export function ContentItemCard({
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoActionError, setVideoActionError] = useState<string | null>(null)
+  const [videoPlayerVariant, setVideoPlayerVariant] = useState<
+    "default" | "mobile"
+  >("default")
+  const isMobile = useIsMobile()
   // When set, the VT dialog shows a "Download anyway" CTA for flagged files
   const [vtDownloadFn, setVtDownloadFn] = useState<(() => void) | null>(null)
 
@@ -384,35 +389,66 @@ export function ContentItemCard({
           open={videoOpen}
           onOpenChange={(open) => {
             setVideoOpen(open)
-            if (!open) setVideoSrc(null)
+            if (!open) {
+              setVideoSrc(null)
+              setVideoPlayerVariant("default")
+            }
           }}
         >
           <DialogContent
             showCloseButton={false}
-            style={{
-              width: videoDialogWidth,
-              maxWidth: "92vw",
-              minWidth: `min(92vw, ${videoDialogMinWidthPx}px)`,
-            }}
-            className="p-2 sm:max-h-[86vh] sm:[min-height:280px] sm:resize-x sm:overflow-hidden"
+            style={
+              isMobile
+                ? {
+                    width: "100dvw",
+                    maxWidth: "100dvw",
+                    aspectRatio: videoAspectRatio,
+                    maxHeight: "100svh",
+                  }
+                : {
+                    width: videoDialogWidth,
+                    maxWidth: "92vw",
+                    minWidth: `min(92vw, ${videoDialogMinWidthPx}px)`,
+                  }
+            }
+            className={cn(
+              isMobile
+                ? "gap-0 overflow-hidden rounded-none p-0"
+                : "p-2 sm:max-h-[86vh] sm:[min-height:280px] sm:resize-x sm:overflow-hidden"
+            )}
           >
             <DialogTitle className="sr-only">{item.title}</DialogTitle>
-            <DialogClose
-              className="glass-button glass-button-ghost absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
-              aria-label="Close video"
-            >
-              <X className="h-4 w-4" />
-            </DialogClose>
+            {videoPlayerVariant === "default" && (
+              <DialogClose
+                className="glass-button glass-button-ghost absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
+                aria-label="Close video"
+              >
+                <X className="h-4 w-4" />
+              </DialogClose>
+            )}
             {videoSrc ? (
               <div
-                className="max-h-[82vh] w-full"
-                style={{ aspectRatio: videoAspectRatio }}
+                className={cn(
+                  "w-full h-full",
+                  !isMobile && "max-h-[82vh]"
+                )}
+                style={
+                  isMobile
+                    ? undefined
+                    : { aspectRatio: videoAspectRatio }
+                }
               >
                 <VideoPlayerAdaptive
                   src={videoSrc}
                   title={item.title}
                   className="h-full w-full"
                   autoPlay
+                  onVariantChange={setVideoPlayerVariant}
+                  onClose={() => {
+                    setVideoOpen(false)
+                    setVideoSrc(null)
+                    setVideoPlayerVariant("default")
+                  }}
                   onDownload={() => {
                     void downloadVideo()
                   }}

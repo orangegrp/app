@@ -6,15 +6,13 @@ import {
   Cast,
   Check,
   Download,
-  FastForward,
   Maximize,
   Minimize,
   Pause,
   Play,
-  Rewind,
+  Redo2,
+  Undo2,
   Settings,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react"
 import Hls from "hls.js"
@@ -52,6 +50,7 @@ interface VideoPlayerMobileProps {
   autoPlay?: boolean
   onEnded?: () => void
   onDownload?: () => void
+  onClose?: () => void
 }
 
 interface VideoNerdStats {
@@ -110,6 +109,7 @@ export function VideoPlayerMobile({
   autoPlay = false,
   onEnded,
   onDownload,
+  onClose,
 }: VideoPlayerMobileProps) {
   const NETWORK_HISTORY_POINTS = 120
   const NETWORK_SAMPLE_MS = 250
@@ -125,12 +125,9 @@ export function VideoPlayerMobile({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [bufferedProgress, setBufferedProgress] = useState(0)
-  const [volume, setVolume] = useState(1)
-  const [isMuted, setIsMuted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isBuffering, setIsBuffering] = useState(false)
   const [controlsVisible, setControlsVisible] = useState(true)
-  const [supportsVolumeControl, setSupportsVolumeControl] = useState(true)
   const [showStatsForNerds, setShowStatsForNerds] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [qualityOptions, setQualityOptions] = useState<QualityOption[]>([])
@@ -140,7 +137,6 @@ export function VideoPlayerMobile({
   const [nerdStats, setNerdStats] = useState<VideoNerdStats | null>(null)
   const [networkHistory, setNetworkHistory] = useState<number[]>([])
   const [isScrubbing, setIsScrubbing] = useState(false)
-  const prevVolumeRef = useRef(1)
 
   const addTransferBytes = useCallback((bytes: number) => {
     if (!Number.isFinite(bytes) || bytes <= 0) return
@@ -289,24 +285,6 @@ export function VideoPlayerMobile({
       hlsLevelLabel,
     })
   }, [NETWORK_HISTORY_POINTS, src])
-
-  useEffect(() => {
-    const ua = navigator.userAgent
-    const isSafari =
-      /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|SamsungBrowser|Firefox/i.test(ua)
-    const isIOSWebKit = /iP(ad|hone|od)/i.test(ua)
-
-    const probe = document.createElement("video")
-    try {
-      const initial = probe.volume
-      const next = initial > 0.9 ? 0.5 : 1
-      probe.volume = next
-      const canSetVolume = Math.abs(probe.volume - next) < 0.01
-      setSupportsVolumeControl(canSetVolume && !isSafari && !isIOSWebKit)
-    } catch {
-      setSupportsVolumeControl(false)
-    }
-  }, [])
 
   useEffect(() => {
     setIsAppleDevice(/Apple/i.test(navigator.vendor || ""))
@@ -478,13 +456,6 @@ export function VideoPlayerMobile({
       updateBufferedProgress()
     }
     const onProgress = () => updateBufferedProgress()
-    const onVolumeChange = () => {
-      setVolume(video.volume)
-      setIsMuted(video.muted)
-      if (video.volume > 0) {
-        prevVolumeRef.current = video.volume
-      }
-    }
     const onRateChange = () => {
       setPlaybackRate(video.playbackRate)
     }
@@ -500,7 +471,6 @@ export function VideoPlayerMobile({
     video.addEventListener("progress", onProgress)
     video.addEventListener("waiting", onWaiting)
     video.addEventListener("canplay", onCanPlay)
-    video.addEventListener("volumechange", onVolumeChange)
     video.addEventListener("ratechange", onRateChange)
     video.addEventListener("ended", onEnded_)
     onRateChange()
@@ -513,7 +483,6 @@ export function VideoPlayerMobile({
       video.removeEventListener("progress", onProgress)
       video.removeEventListener("waiting", onWaiting)
       video.removeEventListener("canplay", onCanPlay)
-      video.removeEventListener("volumechange", onVolumeChange)
       video.removeEventListener("ratechange", onRateChange)
       video.removeEventListener("ended", onEnded_)
     }
@@ -583,26 +552,6 @@ export function VideoPlayerMobile({
   const seekRelative = useCallback((delta: number) => {
     seek(currentTime + delta)
   }, [currentTime, seek])
-
-  const toggleMute = useCallback(() => {
-    const video = videoRef.current
-    if (!video) return
-    if (video.muted || video.volume === 0) {
-      video.muted = false
-      video.volume = prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8
-      return
-    }
-    prevVolumeRef.current = video.volume
-    video.muted = true
-  }, [])
-
-  const setVideoVolume = useCallback((nextVolume: number) => {
-    const video = videoRef.current
-    if (!video) return
-    const clamped = Math.min(1, Math.max(0, nextVolume))
-    video.volume = clamped
-    video.muted = clamped === 0
-  }, [])
 
   const changePlaybackRate = useCallback((nextRate: number) => {
     const video = videoRef.current
@@ -689,7 +638,7 @@ export function VideoPlayerMobile({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger className="block w-full" onContextMenu={(e) => e.preventDefault()}>
+      <ContextMenuTrigger className="block h-full w-full" onContextMenu={(e) => e.preventDefault()}>
         <div
           ref={containerRef}
           className={cn("group relative overflow-hidden rounded-2xl bg-black fullscreen:rounded-none", className)}
@@ -838,14 +787,20 @@ export function VideoPlayerMobile({
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.01)_32%,rgba(0,0,0,0.35)_100%)]" />
 
-            <div className="relative flex h-full flex-col justify-between p-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.5rem))] sm:p-8 sm:pt-[max(2rem,calc(env(safe-area-inset-top)+0.75rem))] sm:pb-[max(2rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
-              <div className="pointer-events-auto flex items-start justify-between gap-3">
+            <div className="relative h-full">
+              <div
+                className="pointer-events-auto absolute inset-x-0 top-0 flex items-center justify-between gap-2 px-4 pt-3 pb-2"
+              >
                 <button
                   onClick={() => {
+                    if (onClose) {
+                      onClose()
+                      return
+                    }
                     if (isPlaying) setControlsVisible(false)
                   }}
                   className="mobile-glass-circle-btn h-11 w-11"
-                  aria-label="Dismiss controls"
+                  aria-label={onClose ? "Close video" : "Dismiss controls"}
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -862,63 +817,164 @@ export function VideoPlayerMobile({
                     </button>
                   )}
 
-                  <div className="mobile-glass-pill inline-flex min-h-12 items-center gap-2 px-3.5">
-                    <button
-                      onClick={toggleMute}
-                      className="mobile-glass-circle-btn h-8 w-8"
-                      aria-label={isMuted ? "Unmute" : "Mute"}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="mobile-glass-circle-btn h-11 w-11"
+                          aria-label="Playback settings"
+                          title="Playback settings"
+                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                        />
+                      }
                     >
-                      {isMuted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                      <Settings className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      side="bottom"
+                      align="end"
+                      sideOffset={8}
+                      portalContainer={isFullscreen ? containerRef.current : undefined}
+                      className="min-w-[220px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="rounded-lg px-3 py-2 text-[14px] font-medium">
+                          Speed
+                          <span className="ml-auto text-[12px] text-white/65">{playbackRate}x</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent
+                          className="min-w-[150px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
+                          sideOffset={8}
+                        >
+                          {PLAYBACK_SPEEDS.map((rate) => (
+                            <DropdownMenuItem
+                              key={rate}
+                              className="rounded-lg px-3 py-2 text-[14px]"
+                              onClick={() => changePlaybackRate(rate)}
+                            >
+                              <span className="font-medium">{rate === 1 ? "Normal" : `${rate}x`}</span>
+                              {playbackRate === rate && <Check className="ml-auto h-4 w-4 text-white/85" />}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger
+                          className={cn(
+                            "rounded-lg px-3 py-2 text-[14px] font-medium",
+                            qualityOptions.length <= 1 && "pointer-events-none opacity-60"
+                          )}
+                        >
+                          Quality
+                          <span className="ml-auto max-w-[70px] truncate text-[12px] text-white/65">
+                            {selectedQuality === -1
+                              ? "Auto"
+                              : qualityOptions.find((option) => option.value === selectedQuality)?.label.split("·")[0]?.trim() ?? "Manual"}
+                          </span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent
+                          className="max-h-56 min-w-[220px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
+                          sideOffset={8}
+                        >
+                          {qualityOptions.length > 1 ? (
+                            qualityOptions.map((option) => (
+                              <DropdownMenuItem
+                                key={option.value}
+                                className="rounded-lg px-3 py-2 text-[13px]"
+                                onClick={() => changeQuality(option.value)}
+                              >
+                                <span className="pr-2">{option.label}</span>
+                                {selectedQuality === option.value && (
+                                  <Check className="ml-auto h-4 w-4 shrink-0 text-white/85" />
+                                )}
+                              </DropdownMenuItem>
+                            ))
+                          ) : (
+                            <DropdownMenuItem
+                              disabled
+                              className="rounded-lg px-3 py-2 text-[13px] text-white/60"
+                            >
+                              Quality unavailable
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+
+                      <DropdownMenuItem
+                        className="rounded-lg px-3 py-2 text-[14px]"
+                        onClick={() => setShowStatsForNerds((prev) => !prev)}
+                      >
+                        {showStatsForNerds ? "Hide stats for nerds" : "Stats for nerds"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {onDownload && (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onDownload()
+                      }}
+                      className="mobile-glass-circle-btn h-11 w-11"
+                      aria-label="Download video"
+                      title="Download video"
+                    >
+                      <Download className="h-4 w-4" />
                     </button>
-                    {supportsVolumeControl && (
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={isMuted ? 0 : volume}
-                        onChange={(e) => setVideoVolume(Number.parseFloat(e.target.value))}
-                        className="mobile-video-volume-slider h-4 w-28 sm:w-32"
-                        style={{
-                          ["--mobile-video-volume-progress" as string]: `${Math.round((isMuted ? 0 : volume) * 100)}%`,
-                        }}
-                        aria-label="Volume"
-                      />
-                    )}
-                  </div>
+                  )}
+
+                  <button
+                    onClick={toggleFullscreen}
+                    className="mobile-glass-circle-btn h-11 w-11"
+                    aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  >
+                    {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                  </button>
+
                 </div>
               </div>
 
-              <div className="pointer-events-auto flex items-center justify-center gap-5 sm:gap-10">
-                <button
-                  onClick={() => seekRelative(-10)}
-                  className="mobile-glass-circle-btn h-16 w-16"
-                  aria-label="Back 10 seconds"
-                >
-                  <Rewind className="h-7 w-7" />
-                  <span className="sr-only">Back 10 seconds</span>
-                </button>
+              <div
+                className="pointer-events-auto absolute inset-0 flex items-center justify-center"
+              >
+                <div className="flex items-center justify-center gap-5 sm:gap-8">
+                  <button
+                    onClick={() => seekRelative(-10)}
+                    className="mobile-glass-circle-btn h-12 w-12"
+                    aria-label="Back 10 seconds"
+                  >
+                    <Undo2 className="h-5 w-5" />
+                    <span className="sr-only">Back 10 seconds</span>
+                  </button>
 
-                <button
-                  onClick={togglePlay}
-                  className="mobile-glass-circle-btn mobile-glass-circle-btn-hero h-24 w-24"
-                  aria-label={isPlaying ? "Pause" : "Play"}
-                >
-                  {isPlaying ? <Pause className="h-11 w-11" /> : <Play className="h-11 w-11 fill-white" />}
-                </button>
+                  <button
+                    onClick={togglePlay}
+                    className="mobile-glass-circle-btn mobile-glass-circle-btn-hero h-16 w-16"
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? <Pause className="h-7 w-7" /> : <Play className="h-7 w-7 fill-white" />}
+                  </button>
 
-                <button
-                  onClick={() => seekRelative(10)}
-                  className="mobile-glass-circle-btn h-16 w-16"
-                  aria-label="Forward 10 seconds"
-                >
-                  <FastForward className="h-7 w-7" />
-                  <span className="sr-only">Forward 10 seconds</span>
-                </button>
+                  <button
+                    onClick={() => seekRelative(10)}
+                    className="mobile-glass-circle-btn h-12 w-12"
+                    aria-label="Forward 10 seconds"
+                  >
+                    <Redo2 className="h-5 w-5" />
+                    <span className="sr-only">Forward 10 seconds</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="pointer-events-auto flex items-end gap-3">
-                <div className="mobile-glass-pill w-full flex-1 px-4 py-3 sm:px-5">
+              <div
+                className="pointer-events-auto absolute inset-x-0 bottom-0 flex justify-center px-4 pb-3"
+              >
+                <div className="mobile-glass-pill w-full max-w-3xl px-4 py-3 sm:px-5">
                   <div className="flex items-center gap-3">
                     <span className="min-w-11 text-xs text-white/90 tabular-nums">{formatTime(currentTime)}</span>
                     <ScrubBarContainer
@@ -945,127 +1001,6 @@ export function VideoPlayerMobile({
                     </ScrubBarContainer>
                     <span className="min-w-11 text-right text-xs text-white/90 tabular-nums">{formatTime(duration)}</span>
                   </div>
-                </div>
-
-                <div className="mobile-glass-pill flex shrink-0 items-center gap-2 p-2 sm:gap-2.5 sm:p-2.5">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <button
-                          type="button"
-                          className="mobile-glass-circle-btn h-11 w-11 sm:h-12 sm:w-12"
-                          aria-label="Playback settings"
-                          title="Playback settings"
-                          onClick={(event) => event.stopPropagation()}
-                          onPointerDown={(event) => event.stopPropagation()}
-                        />
-                      }
-                    >
-                      <Settings className="h-5 w-5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      side="top"
-                      align="end"
-                      sideOffset={8}
-                      portalContainer={isFullscreen ? containerRef.current : undefined}
-                      className="min-w-[220px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
-                    >
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger className="rounded-lg px-3 py-2 text-[14px] font-medium">
-                            Speed
-                            <span className="ml-auto text-[12px] text-white/65">{playbackRate}x</span>
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent
-                            className="min-w-[150px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
-                            sideOffset={8}
-                          >
-                            {PLAYBACK_SPEEDS.map((rate) => (
-                              <DropdownMenuItem
-                                key={rate}
-                                className="rounded-lg px-3 py-2 text-[14px]"
-                                onClick={() => changePlaybackRate(rate)}
-                              >
-                                <span className="font-medium">{rate === 1 ? "Normal" : `${rate}x`}</span>
-                                {playbackRate === rate && <Check className="ml-auto h-4 w-4 text-white/85" />}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            className={cn(
-                              "rounded-lg px-3 py-2 text-[14px] font-medium",
-                              qualityOptions.length <= 1 && "pointer-events-none opacity-60"
-                            )}
-                          >
-                            Quality
-                            <span className="ml-auto max-w-[70px] truncate text-[12px] text-white/65">
-                              {selectedQuality === -1
-                                ? "Auto"
-                                : qualityOptions.find((option) => option.value === selectedQuality)?.label.split("·")[0]?.trim() ?? "Manual"}
-                            </span>
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent
-                            className="max-h-56 min-w-[220px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
-                            sideOffset={8}
-                          >
-                            {qualityOptions.length > 1 ? (
-                              qualityOptions.map((option) => (
-                                <DropdownMenuItem
-                                  key={option.value}
-                                  className="rounded-lg px-3 py-2 text-[13px]"
-                                  onClick={() => changeQuality(option.value)}
-                                >
-                                  <span className="pr-2">{option.label}</span>
-                                  {selectedQuality === option.value && (
-                                    <Check className="ml-auto h-4 w-4 shrink-0 text-white/85" />
-                                  )}
-                                </DropdownMenuItem>
-                              ))
-                            ) : (
-                              <DropdownMenuItem
-                                disabled
-                                className="rounded-lg px-3 py-2 text-[13px] text-white/60"
-                              >
-                                Quality unavailable
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-
-                        <DropdownMenuItem
-                          className="rounded-lg px-3 py-2 text-[14px]"
-                          onClick={() => setShowStatsForNerds((prev) => !prev)}
-                        >
-                          {showStatsForNerds ? "Hide stats for nerds" : "Stats for nerds"}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {onDownload && (
-                    <button
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onDownload()
-                      }}
-                      className="mobile-glass-circle-btn h-11 w-11 sm:h-12 sm:w-12"
-                      aria-label="Download video"
-                      title="Download video"
-                    >
-                      <Download className="h-5 w-5" />
-                    </button>
-                  )}
-
-                  <button
-                    onClick={toggleFullscreen}
-                    className="mobile-glass-circle-btn h-11 w-11 sm:h-12 sm:w-12"
-                    aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-                  >
-                    {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-                  </button>
                 </div>
               </div>
             </div>

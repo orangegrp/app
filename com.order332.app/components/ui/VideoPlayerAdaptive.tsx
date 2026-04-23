@@ -13,12 +13,16 @@ interface VideoPlayerAdaptiveProps {
   autoPlay?: boolean
   onEnded?: () => void
   onDownload?: () => void
+  onVariantChange?: (variant: "default" | "mobile") => void
+  onClose?: () => void
 }
 
 const DESKTOP_MOBILE_PREF_KEY = "video-player:desktop-mobile-enabled"
 
 export function VideoPlayerAdaptive(props: VideoPlayerAdaptiveProps) {
+  const { onVariantChange, onClose, ...playerProps } = props
   const isMobile = useIsMobile()
+  const [isMobileOs, setIsMobileOs] = useState(false)
   const [desktopMobileEnabled, setDesktopMobileEnabled] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const contextActiveRef = useRef(false)
@@ -27,6 +31,16 @@ export function VideoPlayerAdaptive(props: VideoPlayerAdaptiveProps) {
 
   useEffect(() => {
     setHydrated(true)
+    try {
+      const ua = navigator.userAgent || ""
+      const platform = navigator.platform || ""
+      const touchPoints = navigator.maxTouchPoints || 0
+      const isiOS = /iPhone|iPad|iPod/i.test(ua) || (platform === "MacIntel" && touchPoints > 1)
+      const isAndroid = /Android/i.test(ua)
+      setIsMobileOs(isiOS || isAndroid)
+    } catch {
+      setIsMobileOs(false)
+    }
     try {
       const raw = localStorage.getItem(DESKTOP_MOBILE_PREF_KEY)
       setDesktopMobileEnabled(raw === "1")
@@ -93,8 +107,10 @@ export function VideoPlayerAdaptive(props: VideoPlayerAdaptiveProps) {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [isMobile])
 
-  const useMobilePlayer = isMobile || (hydrated && desktopMobileEnabled)
-  const Player = useMobilePlayer ? VideoPlayerMobile : VideoPlayer
+  const useMobilePlayer = isMobile || isMobileOs || (hydrated && desktopMobileEnabled)
+  useEffect(() => {
+    onVariantChange?.(useMobilePlayer ? "mobile" : "default")
+  }, [onVariantChange, useMobilePlayer])
 
   return (
     <div
@@ -117,7 +133,11 @@ export function VideoPlayerAdaptive(props: VideoPlayerAdaptiveProps) {
         }
       }}
     >
-      <Player {...props} />
+      {useMobilePlayer ? (
+        <VideoPlayerMobile {...playerProps} onClose={onClose} />
+      ) : (
+        <VideoPlayer {...playerProps} />
+      )}
     </div>
   )
 }

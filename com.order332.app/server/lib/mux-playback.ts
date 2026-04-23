@@ -113,6 +113,20 @@ async function getMuxSigningKey(): Promise<KeyObject> {
 export async function signMuxPlaybackToken(playbackId: string): Promise<{
   token: string
   expiresAt: string
+}>
+export async function signMuxPlaybackToken(
+  playbackId: string,
+  audience: "v" | "t"
+): Promise<{
+  token: string
+  expiresAt: string
+}>
+export async function signMuxPlaybackToken(
+  playbackId: string,
+  audience: "v" | "t" = "v"
+): Promise<{
+  token: string
+  expiresAt: string
 }> {
   const keyId = getMuxSigningKeyId()
   const now = Math.floor(Date.now() / 1000)
@@ -121,7 +135,7 @@ export async function signMuxPlaybackToken(playbackId: string): Promise<{
   const token = await new SignJWT({ kid: keyId })
     .setProtectedHeader({ alg: "RS256" })
     .setSubject(playbackId)
-    .setAudience("v")
+    .setAudience(audience)
     .setIssuedAt(now)
     .setExpirationTime(exp)
     .sign(await getMuxSigningKey())
@@ -136,9 +150,20 @@ export async function buildSignedMuxHlsUrl(playbackId: string): Promise<{
   url: string
   expiresAt: string
 }> {
-  const { token, expiresAt } = await signMuxPlaybackToken(playbackId)
+  const { token, expiresAt } = await signMuxPlaybackToken(playbackId, "v")
   return {
     url: `https://stream.mux.com/${playbackId}.m3u8?token=${encodeURIComponent(token)}`,
+    expiresAt,
+  }
+}
+
+export async function buildSignedMuxThumbnailUrl(
+  playbackId: string,
+  width = 1280
+): Promise<{ url: string; expiresAt: string }> {
+  const { token, expiresAt } = await signMuxPlaybackToken(playbackId, "t")
+  return {
+    url: `https://image.mux.com/${playbackId}/thumbnail.jpg?token=${encodeURIComponent(token)}&width=${Math.max(320, Math.floor(width))}`,
     expiresAt,
   }
 }

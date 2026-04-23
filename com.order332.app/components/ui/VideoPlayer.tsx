@@ -58,6 +58,17 @@ interface VideoNerdStats {
   hlsLevelLabel: string | null
 }
 
+type IOSVideoElement = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void
+  webkitExitFullscreen?: () => void
+  webkitDisplayingFullscreen?: boolean
+}
+
+type WebkitFullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null
+  webkitExitFullscreen?: () => Promise<void> | void
+}
+
 const PANIC_TINTS = [
   {
     line: "#00ff00",
@@ -507,12 +518,35 @@ export function VideoPlayer({
 
   // Fullscreen change listener
   useEffect(() => {
+    const video = videoRef.current as IOSVideoElement | null
+    const webkitDocument = document as WebkitFullscreenDocument
     const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
+      setIsFullscreen(
+        !!document.fullscreenElement ||
+          !!webkitDocument.webkitFullscreenElement ||
+          !!video?.webkitDisplayingFullscreen
+      )
     }
+    const onWebkitBeginFullscreen = () => setIsFullscreen(true)
+    const onWebkitEndFullscreen = () => setIsFullscreen(false)
+
+    if (video) {
+      video.addEventListener("webkitbeginfullscreen", onWebkitBeginFullscreen)
+      video.addEventListener("webkitendfullscreen", onWebkitEndFullscreen)
+    }
+
     document.addEventListener("fullscreenchange", onFullscreenChange)
-    return () =>
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange)
+
+    return () => {
+      video?.removeEventListener(
+        "webkitbeginfullscreen",
+        onWebkitBeginFullscreen
+      )
+      video?.removeEventListener("webkitendfullscreen", onWebkitEndFullscreen)
       document.removeEventListener("fullscreenchange", onFullscreenChange)
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange)
+    }
   }, [])
 
   // Auto-hide controls after 3s of inactivity
@@ -571,11 +605,56 @@ export function VideoPlayer({
 
   const toggleFullscreen = useCallback(() => {
     const container = containerRef.current
-    if (!container) return
-    if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(console.error)
-    } else {
-      document.exitFullscreen().catch(console.error)
+    const video = videoRef.current as IOSVideoElement | null
+    const webkitDocument = document as WebkitFullscreenDocument
+    if (!container || !video) return
+
+    const hasFullscreen =
+      !!document.fullscreenElement ||
+      !!webkitDocument.webkitFullscreenElement ||
+      !!video.webkitDisplayingFullscreen
+
+    if (hasFullscreen) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {})
+        return
+      }
+      if (webkitDocument.webkitExitFullscreen) {
+        void Promise.resolve(webkitDocument.webkitExitFullscreen()).catch(
+          () => {}
+        )
+        return
+      }
+      if (video.webkitExitFullscreen) {
+        video.webkitExitFullscreen()
+        setIsFullscreen(false)
+      }
+      return
+    }
+
+    if (container.requestFullscreen) {
+      container.requestFullscreen().catch(() => {
+        if (video.webkitEnterFullscreen) {
+          video.webkitEnterFullscreen()
+          setIsFullscreen(true)
+        }
+      })
+      return
+    }
+
+    if (video.requestFullscreen) {
+      video.requestFullscreen().catch(() => {
+        if (video.webkitEnterFullscreen) {
+          video.webkitEnterFullscreen()
+          setIsFullscreen(true)
+        }
+      })
+      return
+    }
+
+    if (video.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen()
+      setIsFullscreen(true)
     }
   }, [])
 

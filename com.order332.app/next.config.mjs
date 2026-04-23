@@ -75,6 +75,7 @@ const nextConfig = {
       : process.env.NEXT_PUBLIC_APP_VERSION || "dev",
   },
   turbopack: {},
+  htmlLimitedBots: /Discordbot|Twitterbot|Slackbot|LinkedInBot|WhatsApp/i,
   skipTrailingSlashRedirect: true,
   async rewrites() {
     return [

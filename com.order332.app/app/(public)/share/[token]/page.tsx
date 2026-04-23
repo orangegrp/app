@@ -4,7 +4,7 @@ import { db } from "@/server/db"
 import { supabase } from "@/server/db/supabase/client"
 import { signMusicGetUrl } from "@/server/lib/music-r2"
 import {
-  buildSignedMuxHlsUrl,
+  buildSignedMuxThumbnailUrl,
   signMuxPlaybackToken,
 } from "@/server/lib/mux-playback"
 import { ContentSharePageClient } from "./ContentSharePageClient"
@@ -102,6 +102,13 @@ async function getUnifiedShareData(token: string) {
   return getContentShareData(token)
 }
 
+function sanitizeMetaText(value: string): string {
+  return value
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\u2060\uFEFF]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params
   const data = await getUnifiedShareData(token)
@@ -118,10 +125,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (data.kind === "music") {
     const { track, coverUrl } = data
-    const title = `${track.title} — ${track.artist}`
-    const description = [track.genre, "Shared via 332"]
-      .filter(Boolean)
-      .join(" · ")
+    const title = sanitizeMetaText(`${track.title} — ${track.artist}`)
+    const description = sanitizeMetaText(
+      [track.genre, "Shared via 332"].filter(Boolean).join(" · ")
+    )
 
     return {
       title: `${title} — 332`,
@@ -155,8 +162,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const itemLabel = data.item.itemType === "video" ? "video" : "file"
-  const title = `${data.item.title} — Shared ${itemLabel}`
-  const description = data.item.description ?? `Shared ${itemLabel} via 332`
+  const title = sanitizeMetaText(`${data.item.title} — Shared ${itemLabel}`)
+  const description = sanitizeMetaText(
+    data.item.description ?? `Shared ${itemLabel} via 332`
+  )
 
   if (
     data.item.itemType === "video" &&
@@ -165,9 +174,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     data.item.muxPlaybackId
   ) {
     const playbackId = data.item.muxPlaybackId
-    const { token: playbackToken } = await signMuxPlaybackToken(playbackId)
+    const { token: playbackToken } = await signMuxPlaybackToken(playbackId, "v")
     const signedMp4Url = `https://stream.mux.com/${playbackId}.mp4?token=${encodeURIComponent(playbackToken)}`
-    const signedHls = await buildSignedMuxHlsUrl(playbackId)
+    const signedThumb = await buildSignedMuxThumbnailUrl(
+      playbackId,
+      data.item.width ?? 1280
+    )
     const width = data.item.width ?? 1280
     const height = data.item.height ?? 720
 
@@ -180,18 +192,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         url: pageUrl,
         siteName: "332",
         type: "video.other",
+        images: [
+          {
+            url: signedThumb.url,
+            width,
+            height,
+            alt: `${title} preview`,
+          },
+        ],
         videos: [
           {
             url: signedMp4Url,
             secureUrl: signedMp4Url,
             type: "video/mp4",
-            width,
-            height,
-          },
-          {
-            url: signedHls.url,
-            secureUrl: signedHls.url,
-            type: "application/x-mpegURL",
             width,
             height,
           },

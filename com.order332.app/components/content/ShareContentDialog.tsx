@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Check, Copy, Share2 } from "lucide-react"
 import { Drawer as DrawerPrimitive } from "vaul"
 import {
@@ -23,6 +23,8 @@ interface ShareContentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
+
+type EmbedFormat = "html" | "markdown"
 
 const EXPIRY_OPTIONS: Array<{
   value: ShareExpiry
@@ -51,6 +53,49 @@ const MODE_OPTIONS: Array<{
   },
 ]
 
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+}
+
+function buildContentEmbedCode({
+  shareUrl,
+  title,
+  itemType,
+  mode,
+  format,
+}: {
+  shareUrl: string
+  title: string
+  itemType: ContentItemMeta["itemType"]
+  mode: ContentShareMode
+  format: EmbedFormat
+}): string {
+  const safeTitle = escapeHtmlAttr(title)
+  const embedUrl = `${shareUrl}/embed`
+  const imageUrl = `${shareUrl}/embed/image`
+
+  if (format === "markdown") {
+    if (mode === "external" && itemType === "image") {
+      return `[![${title}](${imageUrl})](${shareUrl})`
+    }
+    return ""
+  }
+
+  if (mode === "external" && itemType === "video") {
+    return `<iframe src="${embedUrl}" title="${safeTitle}" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer" style="width:100%;max-width:960px;aspect-ratio:16/9;border:0;border-radius:16px;overflow:hidden;"></iframe>`
+  }
+
+  if (mode === "external" && itemType === "image") {
+    return `<a href="${shareUrl}" target="_blank" rel="noopener noreferrer"><img src="${imageUrl}" alt="${safeTitle}" style="display:block;max-width:100%;height:auto;border:0;border-radius:12px;"></a>`
+  }
+
+  return `<iframe src="${embedUrl}" title="${safeTitle}" loading="lazy" referrerpolicy="no-referrer" style="width:100%;max-width:760px;height:180px;border:0;border-radius:14px;overflow:hidden;"></iframe>`
+}
+
 function ShareBody({
   item,
   mode,
@@ -60,10 +105,16 @@ function ShareBody({
   shareUrl,
   expiresAt,
   copied,
+  embedCopied,
   loading,
   error,
   externalBlockedReason,
+  embedFormat,
+  setEmbedFormat,
+  embedCode,
+  markdownAllowed,
   onCopy,
+  onCopyEmbed,
   onCreate,
   onClose,
 }: {
@@ -75,10 +126,16 @@ function ShareBody({
   shareUrl: string | null
   expiresAt: string | null
   copied: boolean
+  embedCopied: boolean
   loading: boolean
   error: string | null
   externalBlockedReason: string | null
+  embedFormat: EmbedFormat
+  setEmbedFormat: (value: EmbedFormat) => void
+  embedCode: string
+  markdownAllowed: boolean
   onCopy: () => void
+  onCopyEmbed: () => void
   onCreate: () => void
   onClose: () => void
 }) {
@@ -160,35 +217,106 @@ function ShareBody({
             {error && <p className="text-xs text-destructive">{error}</p>}
           </>
         ) : (
-          <div className="flex flex-col gap-2">
-            <p className="text-xs tracking-wider text-muted-foreground">
-              SHARE LINK
-            </p>
-            <div className="flex items-center gap-2 rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
-              <span className="min-w-0 flex-1 font-mono text-xs break-all text-foreground/80">
-                {shareUrl}
-              </span>
-              <button
-                onClick={onCopy}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
-                aria-label="Copy link"
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 text-green-400" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-              </button>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs tracking-wider text-muted-foreground">
+                SHARE LINK
+              </p>
+              <div className="flex items-center gap-2 rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
+                <span className="min-w-0 flex-1 font-mono text-xs break-all text-foreground/80">
+                  {shareUrl}
+                </span>
+                <button
+                  onClick={onCopy}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
+                  aria-label="Copy link"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-green-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
+              {expiresAt ? (
+                <p className="text-xs text-muted-foreground">
+                  Expires {formatExpiry(expiresAt)}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  This link never expires
+                </p>
+              )}
             </div>
-            {expiresAt ? (
-              <p className="text-xs text-muted-foreground">
-                Expires {formatExpiry(expiresAt)}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                This link never expires
-              </p>
-            )}
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs tracking-wider text-muted-foreground">
+                  EMBED CODE
+                </p>
+                <div className="grid grid-cols-2 gap-1 rounded-lg border border-foreground/10 bg-foreground/4 p-1">
+                  <button
+                    onClick={() => setEmbedFormat("html")}
+                    aria-pressed={embedFormat === "html"}
+                    className={cn(
+                      "rounded-md px-2 py-1 text-[10px] tracking-wide transition-colors",
+                      embedFormat === "html"
+                        ? "bg-foreground/12 text-foreground"
+                        : "text-muted-foreground hover:bg-foreground/8"
+                    )}
+                  >
+                    HTML
+                  </button>
+                  <button
+                    onClick={() =>
+                      markdownAllowed && setEmbedFormat("markdown")
+                    }
+                    disabled={!markdownAllowed}
+                    aria-pressed={embedFormat === "markdown"}
+                    className={cn(
+                      "rounded-md px-2 py-1 text-[10px] tracking-wide transition-colors",
+                      embedFormat === "markdown"
+                        ? "bg-foreground/12 text-foreground"
+                        : "text-muted-foreground hover:bg-foreground/8",
+                      !markdownAllowed && "cursor-not-allowed opacity-45"
+                    )}
+                  >
+                    Markdown
+                  </button>
+                </div>
+              </div>
+
+              {!markdownAllowed && (
+                <p className="text-[11px] text-muted-foreground">
+                  Markdown embed is available for external image shares.
+                </p>
+              )}
+
+              <div className="rounded-lg border border-foreground/12 bg-foreground/4 px-3 py-2">
+                <p className="font-mono text-[11px] break-all text-foreground/85">
+                  {embedCode}
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={onCopyEmbed}
+                  className="glass-button glass-button-ghost inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px]"
+                >
+                  {embedCopied ? (
+                    <>
+                      <Check className="h-3 w-3 text-green-400" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      Copy embed
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -226,7 +354,27 @@ export function ShareContentDialog({
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [embedCopied, setEmbedCopied] = useState(false)
+  const [embedFormat, setEmbedFormat] = useState<EmbedFormat>("html")
   const [error, setError] = useState<string | null>(null)
+
+  const markdownAllowed = mode === "external" && item.itemType === "image"
+
+  useEffect(() => {
+    if (markdownAllowed) return
+    setEmbedFormat("html")
+  }, [markdownAllowed])
+
+  const embedCode = useMemo(() => {
+    if (!shareUrl) return ""
+    return buildContentEmbedCode({
+      shareUrl,
+      title: item.title,
+      itemType: item.itemType,
+      mode,
+      format: embedFormat,
+    })
+  }, [embedFormat, item.itemType, item.title, mode, shareUrl])
 
   const externalBlockedReason =
     item.itemType === "video"
@@ -242,6 +390,8 @@ export function ShareContentDialog({
       setShareUrl(null)
       setExpiresAt(null)
       setCopied(false)
+      setEmbedCopied(false)
+      setEmbedFormat("html")
       setError(null)
       setMode("internal")
       setExpiresIn("7d")
@@ -281,6 +431,24 @@ export function ShareContentDialog({
     }
   }
 
+  const handleCopyEmbed = async () => {
+    if (!embedCode) return
+    try {
+      await navigator.clipboard.writeText(embedCode)
+      setEmbedCopied(true)
+      setTimeout(() => setEmbedCopied(false), 2000)
+    } catch {
+      const el = document.createElement("textarea")
+      el.value = embedCode
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand("copy")
+      document.body.removeChild(el)
+      setEmbedCopied(true)
+      setTimeout(() => setEmbedCopied(false), 2000)
+    }
+  }
+
   const sharedProps = {
     item,
     mode,
@@ -290,10 +458,16 @@ export function ShareContentDialog({
     shareUrl,
     expiresAt,
     copied,
+    embedCopied,
     loading,
     error,
     externalBlockedReason,
+    embedFormat,
+    setEmbedFormat,
+    embedCode,
+    markdownAllowed,
     onCopy: handleCopy,
+    onCopyEmbed: handleCopyEmbed,
     onCreate: handleCreate,
     onClose: () => handleClose(false),
   }

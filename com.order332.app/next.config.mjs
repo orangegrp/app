@@ -131,6 +131,25 @@ const nextConfig = {
         ].join("; "),
       },
     ]
+    const embedHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      {
+        key: "Content-Security-Policy",
+        value: [
+          "default-src 'self'",
+          "img-src 'self' data: blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com",
+          "media-src 'self' *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.mux.com blob:",
+          "script-src 'self' 'unsafe-inline'",
+          "style-src 'self' 'unsafe-inline'",
+          "font-src 'self'",
+          "connect-src 'self' *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.supabase.co *.mux.com",
+          "frame-src 'self' blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com",
+          "object-src 'none'",
+          "frame-ancestors *",
+        ].join("; "),
+      },
+    ]
     // Fallback for environments where middleware doesn't run (e.g. static export).
     // Middleware is the primary mechanism; console-only COEP/COOP for CheerpX.
     const isolationHeaders = [
@@ -138,6 +157,8 @@ const nextConfig = {
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
     ]
     return [
+      { source: "/share/:token/embed", headers: embedHeaders },
+      { source: "/share/:token/embed/:path*", headers: embedHeaders },
       { source: "/(.*)", headers: securityHeaders },
       { source: "/webpc/:sessionId/console", headers: isolationHeaders },
     ]

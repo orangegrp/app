@@ -1029,7 +1029,10 @@ function VtDialog({
             {vtDialogIcon(status)}
             {heading}
           </AlertDialogTitle>
-          <AlertDialogDescription className="max-h-[58vh] w-full overflow-y-auto pr-1 text-left">
+          <AlertDialogDescription
+            className="max-h-[58vh] w-full overflow-y-auto pr-1 text-left"
+            render={<div />}
+          >
             {body}
             {(threatError || threatInfo) && (
               <div className="mt-3 grid gap-3 text-xs text-muted-foreground lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

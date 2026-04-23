@@ -13,6 +13,7 @@ import type {
   CreateChallengeData,
   CreatePendingRegistrationData,
   CreateMusicShareLinkData,
+  CreateContentShareLinkData,
   CreateMusicPlaylistData,
   UpdateMusicPlaylistData,
 } from "../interface"
@@ -27,6 +28,7 @@ import type {
   WebAuthnChallenge,
   PendingRegistration,
   MusicShareLink,
+  ContentShareLink,
   MusicPlaylist,
   MusicPlaylistWithTracks,
   MusicTrack,
@@ -158,6 +160,18 @@ function mapMusicShareLink(row: Record<string, unknown>): MusicShareLink {
   }
 }
 
+function mapContentShareLink(row: Record<string, unknown>): ContentShareLink {
+  return {
+    id: row.id as string,
+    token: row.token as string,
+    contentItemId: row.content_item_id as string,
+    mode: row.mode as ContentShareLink["mode"],
+    createdBy: (row.created_by as string | null) ?? null,
+    createdAt: row.created_at as string,
+    expiresAt: (row.expires_at as string | null) ?? null,
+  }
+}
+
 function mapPendingReg(row: Record<string, unknown>): PendingRegistration {
   return {
     id: row.id as string,
@@ -212,6 +226,11 @@ export class SupabaseAdapter implements DBAdapter {
       supabase.from("sessions").delete().lt("expires_at", now),
       supabase
         .from("music_share_links")
+        .delete()
+        .lt("expires_at", now)
+        .not("expires_at", "is", null),
+      supabase
+        .from("content_share_links")
         .delete()
         .lt("expires_at", now)
         .not("expires_at", "is", null),
@@ -882,6 +901,43 @@ export class SupabaseAdapter implements DBAdapter {
       dbErr("getMusicShareLinkByToken", error)
     }
     return mapMusicShareLink(data as Record<string, unknown>)
+  }
+
+  // ── Content share links ────────────────────────────────────────────────────
+
+  async createContentShareLink(
+    data: CreateContentShareLinkData
+  ): Promise<ContentShareLink> {
+    const { data: row, error } = await supabase
+      .from("content_share_links")
+      .insert({
+        token: data.token,
+        content_item_id: data.contentItemId,
+        mode: data.mode,
+        created_by: data.createdBy,
+        expires_at: data.expiresAt?.toISOString() ?? null,
+      })
+      .select()
+      .single()
+    if (error) dbErr("createContentShareLink", error)
+    return mapContentShareLink(row as Record<string, unknown>)
+  }
+
+  async getContentShareLinkByToken(
+    token: string
+  ): Promise<ContentShareLink | null> {
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from("content_share_links")
+      .select("*")
+      .eq("token", token)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .single()
+    if (error) {
+      if (error.code === "PGRST116") return null
+      dbErr("getContentShareLinkByToken", error)
+    }
+    return mapContentShareLink(data as Record<string, unknown>)
   }
 
   // ── Music playlists ────────────────────────────────────────────────────────

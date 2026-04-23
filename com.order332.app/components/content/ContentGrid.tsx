@@ -19,24 +19,28 @@ interface ContentGridProps {
   items: ContentItemMeta[]
   folders: ContentFolder[]
   currentFolderId: string | null
+  sharedItemId?: string | null
   isCreator: boolean
   onDelete: (id: string) => void
   onUpdate: (item: ContentItemMeta) => void
   onMove: (itemId: string, folderId: string | null) => void
   onNavigateFolder: (id: string | null) => void
   onFoldersChange: (folders: ContentFolder[]) => void
+  onSharedItemHandled?: () => void
 }
 
 export function ContentGrid({
   items,
   folders,
   currentFolderId,
+  sharedItemId,
   isCreator,
   onDelete,
   onUpdate,
   onMove,
   onNavigateFolder,
   onFoldersChange,
+  onSharedItemHandled,
 }: ContentGridProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const [renamingFolder, setRenamingFolder] = useState<ContentFolder | null>(
@@ -147,6 +151,8 @@ export function ContentGrid({
                       isCreator={isCreator}
                       onDelete={onDelete}
                       onUpdate={onUpdate}
+                      autoOpen={sharedItemId === item.id}
+                      onAutoOpenHandled={onSharedItemHandled}
                     />
                   </div>
                 ))}

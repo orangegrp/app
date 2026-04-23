@@ -40,6 +40,9 @@ export default function ContentPage() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(() =>
     searchParams.get("folder")
   )
+  const [sharedItemId, setSharedItemId] = useState<string | null>(() =>
+    searchParams.get("item")
+  )
   const [isCreatorMode, setIsCreatorMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +64,13 @@ export default function ContentPage() {
     },
     [router, searchParams]
   )
+
+  const handleSharedItemHandled = useCallback(() => {
+    setSharedItemId(null)
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("item")
+    router.replace(`/content?${params.toString()}`, { scroll: false })
+  }, [router, searchParams])
 
   const loadItems = useCallback(async (folderId: string | null) => {
     try {
@@ -282,12 +292,14 @@ export default function ContentPage() {
             items={filteredItems}
             folders={folders}
             currentFolderId={currentFolderId}
+            sharedItemId={sharedItemId}
             isCreator={isCreatorMode}
             onDelete={handleDelete}
             onUpdate={handleUpdate}
             onMove={handleMove}
             onNavigateFolder={navigateFolder}
             onFoldersChange={setFolders}
+            onSharedItemHandled={handleSharedItemHandled}
           />
         )}
       </div>

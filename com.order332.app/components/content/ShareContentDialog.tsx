@@ -10,33 +10,51 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { createMusicShareLink } from "@/lib/music-api"
+import {
+  createContentShareLink,
+  type ContentItemMeta,
+  type ContentShareMode,
+  type ShareExpiry,
+} from "@/lib/content-api"
 import { useIsMobile } from "@/hooks/use-mobile"
 
-type ExpiryOption = "24h" | "7d" | "never"
-
-interface ExpiryChoice {
-  value: ExpiryOption
-  label: string
-  description: string
+interface ShareContentDialogProps {
+  item: ContentItemMeta
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-const EXPIRY_OPTIONS: ExpiryChoice[] = [
+const EXPIRY_OPTIONS: Array<{
+  value: ShareExpiry
+  label: string
+  description: string
+}> = [
   { value: "24h", label: "24 hours", description: "Link expires tomorrow" },
   { value: "7d", label: "7 days", description: "Link expires in a week" },
   { value: "never", label: "Never", description: "Link never expires" },
 ]
 
-interface ShareTrackDialogProps {
-  trackId: string
-  trackTitle: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}
+const MODE_OPTIONS: Array<{
+  value: ContentShareMode
+  label: string
+  description: string
+}> = [
+  {
+    value: "internal",
+    label: "Internal",
+    description: "Requires login and opens in library",
+  },
+  {
+    value: "external",
+    label: "External",
+    description: "Public guest page",
+  },
+]
 
-// ── Shared content (used by both mobile and desktop) ─────────────────────────
-function ShareContent({
-  trackTitle,
+function ShareBody({
+  item,
+  mode,
+  setMode,
   expiresIn,
   setExpiresIn,
   shareUrl,
@@ -44,18 +62,22 @@ function ShareContent({
   copied,
   loading,
   error,
+  externalBlockedReason,
   onCopy,
   onCreate,
   onClose,
 }: {
-  trackTitle: string
-  expiresIn: ExpiryOption
-  setExpiresIn: (v: ExpiryOption) => void
+  item: ContentItemMeta
+  mode: ContentShareMode
+  setMode: (value: ContentShareMode) => void
+  expiresIn: ShareExpiry
+  setExpiresIn: (value: ShareExpiry) => void
   shareUrl: string | null
   expiresAt: string | null
   copied: boolean
   loading: boolean
   error: string | null
+  externalBlockedReason: string | null
   onCopy: () => void
   onCreate: () => void
   onClose: () => void
@@ -68,10 +90,47 @@ function ShareContent({
   return (
     <>
       <div className="flex flex-col gap-4">
-        <p className="truncate text-sm text-muted-foreground">{`"${trackTitle}"`}</p>
+        <p className="truncate text-sm text-muted-foreground">{`"${item.title}"`}</p>
 
         {!shareUrl ? (
           <>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs tracking-wider text-muted-foreground">
+                SHARE MODE
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {MODE_OPTIONS.map((opt) => {
+                  const isBlocked =
+                    opt.value === "external" && Boolean(externalBlockedReason)
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => !isBlocked && setMode(opt.value)}
+                      disabled={isBlocked}
+                      aria-pressed={mode === opt.value}
+                      className={cn(
+                        "flex flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors",
+                        mode === opt.value
+                          ? "border-foreground/30 bg-foreground/10 text-foreground"
+                          : "border-foreground/8 bg-foreground/4 text-muted-foreground hover:bg-foreground/8",
+                        isBlocked && "cursor-not-allowed opacity-50"
+                      )}
+                    >
+                      <span className="text-sm font-medium">{opt.label}</span>
+                      <span className="mt-0.5 text-[10px] opacity-60">
+                        {opt.description}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {externalBlockedReason && (
+                <p className="text-xs text-muted-foreground">
+                  {externalBlockedReason}
+                </p>
+              )}
+            </div>
+
             <div className="flex flex-col gap-1.5">
               <p className="text-xs tracking-wider text-muted-foreground">
                 LINK EXPIRES
@@ -81,6 +140,7 @@ function ShareContent({
                   <button
                     key={opt.value}
                     onClick={() => setExpiresIn(opt.value)}
+                    aria-pressed={expiresIn === opt.value}
                     className={cn(
                       "flex flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors",
                       expiresIn === opt.value
@@ -96,6 +156,7 @@ function ShareContent({
                 ))}
               </div>
             </div>
+
             {error && <p className="text-xs text-destructive">{error}</p>}
           </>
         ) : (
@@ -153,19 +214,28 @@ function ShareContent({
   )
 }
 
-export function ShareTrackDialog({
-  trackId,
-  trackTitle,
+export function ShareContentDialog({
+  item,
   open,
   onOpenChange,
-}: ShareTrackDialogProps) {
+}: ShareContentDialogProps) {
   const isMobile = useIsMobile()
-  const [expiresIn, setExpiresIn] = useState<ExpiryOption>("7d")
+  const [mode, setMode] = useState<ContentShareMode>("internal")
+  const [expiresIn, setExpiresIn] = useState<ShareExpiry>("7d")
   const [loading, setLoading] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const externalBlockedReason =
+    item.itemType === "video"
+      ? item.videoStatus !== "ready"
+        ? "External video shares are available after processing finishes."
+        : null
+      : item.vtScanStatus !== "clean"
+        ? "External sharing is only available for files marked clean by VirusTotal."
+        : null
 
   const handleClose = (next: boolean) => {
     if (!next) {
@@ -173,6 +243,8 @@ export function ShareTrackDialog({
       setExpiresAt(null)
       setCopied(false)
       setError(null)
+      setMode("internal")
+      setExpiresIn("7d")
     }
     onOpenChange(next)
   }
@@ -181,7 +253,7 @@ export function ShareTrackDialog({
     setLoading(true)
     setError(null)
     try {
-      const result = await createMusicShareLink(trackId, expiresIn)
+      const result = await createContentShareLink(item.id, mode, expiresIn)
       setShareUrl(result.shareUrl)
       setExpiresAt(result.expiresAt)
     } catch (e) {
@@ -210,7 +282,9 @@ export function ShareTrackDialog({
   }
 
   const sharedProps = {
-    trackTitle,
+    item,
+    mode,
+    setMode,
     expiresIn,
     setExpiresIn,
     shareUrl,
@@ -218,12 +292,12 @@ export function ShareTrackDialog({
     copied,
     loading,
     error,
+    externalBlockedReason,
     onCopy: handleCopy,
     onCreate: handleCreate,
     onClose: () => handleClose(false),
   }
 
-  // ── Mobile: vaul bottom sheet (avoids vaul touch event conflicts) ─────────
   if (isMobile) {
     return (
       <DrawerPrimitive.Root
@@ -235,16 +309,16 @@ export function ShareTrackDialog({
           <DrawerPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/40" />
           <DrawerPrimitive.Content className="fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-popover pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none">
             <DrawerPrimitive.Title className="sr-only">
-              Share track
+              Share content
             </DrawerPrimitive.Title>
             <div className="flex shrink-0 items-center px-4 pt-3 pb-1">
               <div className="mx-auto h-1 w-10 rounded-full bg-foreground/20" />
             </div>
             <div className="flex flex-col gap-1 px-5 pt-3 pb-2">
               <p className="text-base font-semibold text-foreground">
-                Share track
+                Share content
               </p>
-              <ShareContent {...sharedProps} />
+              <ShareBody {...sharedProps} />
             </div>
           </DrawerPrimitive.Content>
         </DrawerPrimitive.Portal>
@@ -252,7 +326,6 @@ export function ShareTrackDialog({
     )
   }
 
-  // ── Desktop: centered base-ui dialog ─────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
@@ -260,26 +333,21 @@ export function ShareTrackDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <DialogHeader>
-          <DialogTitle>Share track</DialogTitle>
+          <DialogTitle>Share content</DialogTitle>
         </DialogHeader>
-        <ShareContent {...sharedProps} />
+        <ShareBody {...sharedProps} />
       </DialogContent>
     </Dialog>
   )
 }
 
-// Convenience trigger button + dialog in one component
-interface ShareTrackButtonProps {
-  trackId: string
-  trackTitle: string
-  className?: string
-}
-
-export function ShareTrackButton({
-  trackId,
-  trackTitle,
+export function ShareContentButton({
+  item,
   className,
-}: ShareTrackButtonProps) {
+}: {
+  item: ContentItemMeta
+  className?: string
+}) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -290,16 +358,11 @@ export function ShareTrackButton({
           setOpen(true)
         }}
         className={className}
-        aria-label="Share track"
+        aria-label="Share content"
       >
         <Share2 className="h-3.5 w-3.5" />
       </button>
-      <ShareTrackDialog
-        trackId={trackId}
-        trackTitle={trackTitle}
-        open={open}
-        onOpenChange={setOpen}
-      />
+      <ShareContentDialog item={item} open={open} onOpenChange={setOpen} />
     </>
   )
 }

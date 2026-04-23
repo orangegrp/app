@@ -124,6 +124,8 @@ const nextConfig = {
           "style-src 'self' 'unsafe-inline'",
           "font-src 'self'",
           "media-src 'self' *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.mux.com blob:",
+          "frame-src 'self' blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com",
+          "object-src 'self' blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com",
           "connect-src 'self' *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.supabase.co *.mux.com",
           "frame-ancestors 'none'",
         ].join("; "),

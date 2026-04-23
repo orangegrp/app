@@ -24,6 +24,10 @@ import { webpcDiskUrlRoutes } from "@/server/routes/webpc/disk-url"
 import { contentItemRoutes } from "@/server/routes/content/items"
 import { contentFolderRoutes } from "@/server/routes/content/folders"
 import { contentScanRoutes } from "@/server/routes/content/scans"
+import {
+  contentShareAuthRoutes,
+  contentSharePublicRoutes,
+} from "@/server/routes/content/share"
 import { musicTrackRoutes } from "@/server/routes/music/tracks"
 import {
   musicShareAuthRoutes,
@@ -53,6 +57,11 @@ function isBotIdAllowlisted(method: string, pathname: string): boolean {
   if (m === "GET" && pathname === "/api/cron/cleanup") return true
   // Public music share endpoint — OG scrapers (Discord, Twitter, etc.) don't send BotID headers
   if (m === "GET" && /^\/api\/music\/share\/[A-Za-z0-9_-]{43}$/.test(pathname))
+    return true
+  if (
+    m === "GET" &&
+    /^\/api\/content\/share\/[A-Za-z0-9_-]{43}$/.test(pathname)
+  )
     return true
   return false
 }
@@ -339,6 +348,13 @@ app.route("/admin/ai-usage", adminAiUsageRoutes)
 // POST   /content/items/video/refresh      — refresh Mux processing statuses
 // DELETE /content/items/:id     — delete item (requires app.content + app.content.upload)
 app.route("/content/items", contentItemRoutes)
+
+// POST   /content/share          — create share link (requires app.content)
+// GET    /content/share/:token   — public: resolve content share metadata
+// POST   /content/share/:token/video/source  — public: signed video source URL
+// POST   /content/share/:token/download-url  — public: signed file download URL (1h)
+app.route("/content/share", contentShareAuthRoutes)
+app.route("/content/share", contentSharePublicRoutes)
 
 // GET    /content/folders        — list all folders flat (requires app.content)
 // POST   /content/folders        — create folder (requires app.content.upload)

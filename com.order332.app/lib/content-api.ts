@@ -2,6 +2,8 @@ import { apiGet, apiDelete, apiPost } from "./api-client"
 import { useAuthStore } from "./auth-store"
 
 export type ContentItemType = "image" | "audio" | "pdf" | "download" | "video"
+export type ContentShareMode = "internal" | "external"
+export type ShareExpiry = "24h" | "7d" | "never"
 
 const CONTENT_ITEM_TYPES = new Set<ContentItemType>([
   "image",
@@ -82,6 +84,12 @@ export interface ContentItemMeta {
   muxPlaybackId: string | null
   videoStatus: VideoStatus | null
   videoError: string | null
+}
+
+export interface ContentShareLinkResult {
+  token: string
+  shareUrl: string
+  expiresAt: string | null
 }
 
 export function normalizeContentItemType(
@@ -251,6 +259,38 @@ export async function fetchVideoDownloadUrl(
   id: string
 ): Promise<{ url: string }> {
   return apiPost<{ url: string }>("/content/items/video/download-url", { id })
+}
+
+export async function createContentShareLink(
+  contentItemId: string,
+  mode: ContentShareMode,
+  expiresIn: ShareExpiry
+): Promise<ContentShareLinkResult> {
+  return apiPost<ContentShareLinkResult>("/content/share", {
+    contentItemId,
+    mode,
+    expiresIn,
+  })
+}
+
+export async function fetchSharedContentVideoSource(
+  token: string
+): Promise<{ url: string; expiresAt: string }> {
+  return apiPost<{ url: string; expiresAt: string }>(
+    `/content/share/${encodeURIComponent(token)}/video/source`,
+    {},
+    { skipAuth: true }
+  )
+}
+
+export async function fetchSharedContentDownloadUrl(
+  token: string
+): Promise<{ url: string; expiresInSec: number }> {
+  return apiPost<{ url: string; expiresInSec: number }>(
+    `/content/share/${encodeURIComponent(token)}/download-url`,
+    {},
+    { skipAuth: true }
+  )
 }
 
 // ── Folder CRUD ───────────────────────────────────────────────────────────────

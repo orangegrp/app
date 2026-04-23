@@ -9,6 +9,8 @@ import type {
   WebAuthnChallenge,
   PendingRegistration,
   MusicShareLink,
+  ContentShareLink,
+  ContentShareMode,
   MusicPlaylist,
   MusicPlaylistWithTracks,
 } from "@/server/lib/types"
@@ -97,6 +99,14 @@ export interface CreatePendingRegistrationData {
 export interface CreateMusicShareLinkData {
   token: string
   trackId: string
+  createdBy: string
+  expiresAt: Date | null
+}
+
+export interface CreateContentShareLinkData {
+  token: string
+  contentItemId: string
+  mode: ContentShareMode
   createdBy: string
   expiresAt: Date | null
 }
@@ -212,6 +222,12 @@ export interface DBAdapter {
   // Music share links
   createMusicShareLink(data: CreateMusicShareLinkData): Promise<MusicShareLink>
   getMusicShareLinkByToken(token: string): Promise<MusicShareLink | null>
+
+  // Content share links
+  createContentShareLink(
+    data: CreateContentShareLinkData
+  ): Promise<ContentShareLink>
+  getContentShareLinkByToken(token: string): Promise<ContentShareLink | null>
 
   // Music playlists
   listMusicPlaylists(): Promise<MusicPlaylist[]>

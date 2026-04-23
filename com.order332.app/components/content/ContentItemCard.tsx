@@ -54,12 +54,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { VideoPlayer } from "@/components/ui/VideoPlayer"
+import { ShareContentButton } from "@/components/content/ShareContentDialog"
 
 interface ContentItemCardProps {
   item: ContentItemMeta
   isCreator: boolean
   onDelete: (id: string) => void
   onUpdate: (item: ContentItemMeta) => void
+  autoOpen?: boolean
+  onAutoOpenHandled?: () => void
 }
 
 export function ContentItemCard({
@@ -67,6 +70,8 @@ export function ContentItemCard({
   isCreator,
   onDelete,
   onUpdate,
+  autoOpen = false,
+  onAutoOpenHandled,
 }: ContentItemCardProps) {
   const [imageExpanded, setImageExpanded] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -74,6 +79,10 @@ export function ContentItemCard({
   const [vtOpen, setVtOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [videoOpen, setVideoOpen] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(false)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoActionError, setVideoActionError] = useState<string | null>(null)
@@ -97,6 +106,10 @@ export function ContentItemCard({
     item.width && item.height && item.width > 0 && item.height > 0
       ? `min(92vw, ${(72 * (item.width / item.height)).toFixed(2)}vh)`
       : "min(92vw, 1100px)"
+  const isChromiumBrowser =
+    typeof navigator !== "undefined" &&
+    /(Chrome|CriOS|Edg|OPR)/.test(navigator.userAgent) &&
+    !/Firefox/i.test(navigator.userAgent)
 
   const handleRetry = async () => {
     try {
@@ -131,6 +144,40 @@ export function ContentItemCard({
     }
   }
 
+  const triggerDirectDownload = () => {
+    const a = document.createElement("a")
+    a.href = item.publicUrl
+    a.download = item.title
+    a.rel = "noopener noreferrer"
+    a.click()
+  }
+
+  const autoHandleDownloadItem = () => {
+    const status = item.vtScanStatus
+    if (status === "pending" || status === "scanning") {
+      openVtInfo()
+      return
+    }
+    if (status === "flagged" || status === "error") {
+      openVtGate(triggerDirectDownload)
+      return
+    }
+    triggerDirectDownload()
+  }
+
+  const autoHandlePdfOpen = () => {
+    const status = item.vtScanStatus
+    if (status === "pending" || status === "scanning") {
+      openVtInfo()
+      return
+    }
+    if (status === "flagged" || status === "error") {
+      openVtGate(() => setPdfOpen(true))
+      return
+    }
+    setPdfOpen(true)
+  }
+
   const downloadVideo = async () => {
     if (item.videoStatus && item.videoStatus !== "ready") return
     setVideoLoading(true)
@@ -146,6 +193,77 @@ export function ContentItemCard({
       setVideoLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!autoOpen) return
+
+    if (
+      itemType === "video" &&
+      (item.videoStatus ?? "processing") === "ready"
+    ) {
+      void openVideo().finally(() => onAutoOpenHandled?.())
+      return
+    }
+
+    if (itemType === "image") {
+      setImageExpanded(true)
+      onAutoOpenHandled?.()
+      return
+    }
+
+    if (itemType === "download") {
+      autoHandleDownloadItem()
+      onAutoOpenHandled?.()
+      return
+    }
+
+    if (itemType === "pdf") {
+      autoHandlePdfOpen()
+      onAutoOpenHandled?.()
+      return
+    }
+
+    onAutoOpenHandled?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen, item.id])
+
+  useEffect(() => {
+    if (itemType !== "pdf" || !pdfOpen) return
+
+    let cancelled = false
+    let objectUrl: string | null = null
+
+    setPdfLoading(true)
+    setPdfError(null)
+
+    fetch(item.publicUrl)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to load PDF")
+        const blob = await res.blob()
+        objectUrl = URL.createObjectURL(blob)
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl)
+          return
+        }
+        setPdfPreviewUrl(objectUrl)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setPdfError(err instanceof Error ? err.message : "Failed to load PDF")
+      })
+      .finally(() => {
+        if (!cancelled) setPdfLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+      setPdfPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [item.publicUrl, itemType, pdfOpen])
 
   return (
     <div
@@ -175,6 +293,14 @@ export function ContentItemCard({
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}
+
+      <ShareContentButton
+        item={item}
+        className={cn(
+          "glass-button glass-button-glass absolute z-10 flex h-7 w-7 items-center justify-center rounded-full border-white/25 bg-white/18 text-white opacity-0 shadow-[0_10px_26px_rgba(0,0,0,0.38)] transition-opacity group-hover:opacity-100 hover:bg-white/24",
+          isCreator ? "top-2 right-10" : "top-2 right-2"
+        )}
+      />
 
       {/* Delete confirm */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
@@ -212,7 +338,12 @@ export function ContentItemCard({
         />
       )}
       {itemType === "pdf" && (
-        <PdfCard item={item} onVtBadge={openVtInfo} onVtGate={openVtGate} />
+        <PdfCard
+          item={item}
+          onVtBadge={openVtInfo}
+          onVtGate={openVtGate}
+          onOpenPdf={() => setPdfOpen(true)}
+        />
       )}
       {itemType === "download" && (
         <DownloadCard
@@ -276,6 +407,64 @@ export function ContentItemCard({
                 <Spinner size="md" clockwise />
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* PDF preview dialog */}
+      {itemType === "pdf" && (
+        <Dialog open={pdfOpen} onOpenChange={setPdfOpen}>
+          <DialogContent
+            showCloseButton={false}
+            style={{
+              width: "100dvw",
+              maxWidth: "100dvw",
+              height: "100dvh",
+              maxHeight: "100dvh",
+            }}
+            className="rounded-none p-2 sm:p-3"
+          >
+            <DialogTitle className="sr-only">{item.title}</DialogTitle>
+            <DialogClose
+              className="glass-button glass-button-ghost absolute top-3 right-3 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
+              aria-label="Close PDF preview"
+            >
+              <X className="h-4 w-4" />
+            </DialogClose>
+            <div className="h-full w-full overflow-hidden rounded-lg bg-black/20">
+              {pdfLoading ? (
+                <div className="flex h-full items-center justify-center">
+                  <Spinner size="md" clockwise />
+                </div>
+              ) : pdfError ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+                  <p className="text-sm text-destructive">{pdfError}</p>
+                  <p className="text-xs text-muted-foreground">
+                    This PDF could not be embedded.
+                  </p>
+                </div>
+              ) : pdfPreviewUrl ? (
+                isChromiumBrowser ? (
+                  <iframe
+                    src={`${pdfPreviewUrl}#toolbar=1&navpanes=0&view=FitH`}
+                    title={item.title}
+                    className="h-full w-full"
+                  />
+                ) : (
+                  <object
+                    data={pdfPreviewUrl}
+                    type="application/pdf"
+                    className="h-full w-full"
+                  >
+                    <iframe
+                      src={`${pdfPreviewUrl}#toolbar=1&navpanes=0&view=FitH`}
+                      title={item.title}
+                      className="h-full w-full"
+                    />
+                  </object>
+                )
+              ) : null}
+            </div>
           </DialogContent>
         </Dialog>
       )}
@@ -421,7 +610,7 @@ function VideoCard({
         <Video className="h-8 w-8 text-white/70" />
         {isReady && (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm">
+            <span className="glass-button glass-button-glass flex h-12 w-12 items-center justify-center rounded-full border-white/25 bg-white/18 text-white shadow-[0_12px_28px_rgba(0,0,0,0.42)] backdrop-blur-xl">
               <Play className="ml-0.5 h-5 w-5 fill-current" />
             </span>
           </span>
@@ -492,39 +681,41 @@ function PdfCard({
   item,
   onVtBadge,
   onVtGate,
+  onOpenPdf,
 }: {
   item: ContentItemMeta
   onVtBadge: () => void
   onVtGate: (fn: () => void) => void
+  onOpenPdf: () => void
 }) {
   const status = item.vtScanStatus
   const isBlocked = status === "pending" || status === "scanning"
 
-  const handleOpen = (e: React.MouseEvent) => {
-    if (isBlocked) {
-      e.preventDefault()
+  const handleOpen = () => {
+    if (isBlocked) return
+    if (status === "flagged" || status === "error") {
+      onVtGate(onOpenPdf)
       return
     }
-    if (status === "flagged" || status === "error") {
-      e.preventDefault()
-      onVtGate(() =>
-        window.open(item.publicUrl, "_blank", "noopener,noreferrer")
-      )
-    }
+    onOpenPdf()
   }
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground/5">
-          <FileText className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <VtBadge status={status} stats={item.vtScanStats} onClick={onVtBadge} />
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground/5">
+        <FileText className="h-5 w-5 text-muted-foreground" />
       </div>
       <div>
-        <p className="truncate text-sm font-medium text-foreground">
-          {item.title}
-        </p>
+        <div className="flex items-start gap-2">
+          <p className="truncate text-sm font-medium text-foreground">
+            {item.title}
+          </p>
+          <VtBadge
+            status={status}
+            stats={item.vtScanStats}
+            onClick={onVtBadge}
+          />
+        </div>
         {item.description && (
           <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
             {item.description}
@@ -535,10 +726,7 @@ function PdfCard({
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <a
-          href={isBlocked ? undefined : item.publicUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
           onClick={handleOpen}
           className={cn(
             "inline-flex items-center gap-1.5 text-xs transition-colors",
@@ -547,11 +735,11 @@ function PdfCard({
               : "text-muted-foreground hover:text-foreground"
           )}
           aria-disabled={isBlocked}
-          title={isBlocked ? "Awaiting scan" : "Open in new tab"}
+          title={isBlocked ? "Awaiting scan" : "Open preview"}
         >
           <ExternalLink className="h-3.5 w-3.5" />
           Open
-        </a>
+        </button>
         <a
           href={isBlocked ? undefined : item.publicUrl}
           download={item.title}
@@ -624,16 +812,20 @@ function DownloadCard({
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground/5">
-          <File className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <VtBadge status={status} stats={item.vtScanStats} onClick={onVtBadge} />
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground/5">
+        <File className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="flex-1">
-        <p className="truncate text-sm font-medium text-foreground">
-          {item.title}
-        </p>
+        <div className="flex items-start gap-2">
+          <p className="truncate text-sm font-medium text-foreground">
+            {item.title}
+          </p>
+          <VtBadge
+            status={status}
+            stats={item.vtScanStats}
+            onClick={onVtBadge}
+          />
+        </div>
         {item.description && (
           <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
             {item.description}

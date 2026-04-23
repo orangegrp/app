@@ -9,6 +9,18 @@ export interface MusicShareLink {
   expiresAt: string | null
 }
 
+export type ContentShareMode = "internal" | "external"
+
+export interface ContentShareLink {
+  id: string
+  token: string
+  contentItemId: string
+  mode: ContentShareMode
+  createdBy: string | null
+  createdAt: string
+  expiresAt: string | null
+}
+
 export interface User {
   id: string
   createdAt: Date

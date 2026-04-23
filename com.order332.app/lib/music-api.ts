@@ -18,6 +18,8 @@ export interface MusicTrackMeta {
   coverUrl?: string | null
   lyricsUrl?: string | null
   lyricsType?: LyricsType | null
+  transliteratedLyricsUrl?: string | null
+  transliteratedLyricsType?: LyricsType | null
 }
 
 export interface MusicTrackUpdateMeta {
@@ -102,6 +104,14 @@ export async function fetchTrackLyrics(
   )
 }
 
+export async function fetchTrackTransliteratedLyrics(
+  trackId: string
+): Promise<{ content: string; type: LyricsType }> {
+  return apiGet<{ content: string; type: LyricsType }>(
+    `/music/tracks/${encodeURIComponent(trackId)}/lyrics/transliterated`
+  )
+}
+
 export async function presignAiLyricsTempAudio(file: File): Promise<{
   tempAudioKey: string
   signedUrl: string
@@ -145,6 +155,22 @@ export async function generateAiLyrics(params: {
     languageCode: AiLyricsLanguageCode
     warnings?: string[]
   }>("/music/tracks/lyrics/ai", params)
+}
+
+export async function generateAiLyricsTransliteration(params: {
+  trackId: string
+}): Promise<{
+  lyrics: string
+  type: "lrc"
+  source: "ai"
+  warnings?: string[]
+}> {
+  return apiPost<{
+    lyrics: string
+    type: "lrc"
+    source: "ai"
+    warnings?: string[]
+  }>("/music/tracks/lyrics/transliterate", params)
 }
 
 /**

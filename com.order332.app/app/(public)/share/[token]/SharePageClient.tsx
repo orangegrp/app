@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { AlignLeft, Music2, Pause, Play } from "lucide-react"
+import { AlignLeft, Languages, Music2, Pause, Play } from "lucide-react"
 import {
   AudioPlayerProvider,
   useAudioPlayer,
@@ -40,6 +40,8 @@ interface ShareTrackData {
   coverUrl: string | null
   lyricsUrl: string | null
   lyricsType: "lrc" | "txt" | null
+  transliteratedLyricsUrl: string | null
+  transliteratedLyricsType: "lrc" | "txt" | null
 }
 
 interface SharePageClientProps {
@@ -284,6 +286,14 @@ function SharePlayer({
   const player = useAudioPlayer()
   const isMobile = useIsMobile()
   const hasLyrics = !!lyrics
+  const [transliteratedLyrics, setTransliteratedLyrics] = useState<string | null>(
+    null
+  )
+  const [showTransliteratedLyrics, setShowTransliteratedLyrics] =
+    useState<boolean>(() => {
+      if (typeof window === "undefined") return false
+      return localStorage.getItem("music:showTransliteratedLyrics") === "true"
+    })
 
   const [showLyrics, setShowLyrics] = useState<boolean>(() => {
     if (typeof window === "undefined") return false
@@ -296,6 +306,38 @@ function SharePlayer({
       localStorage.setItem("music:showLyrics", String(next))
       return next
     })
+
+  const toggleTransliteratedLyrics = () =>
+    setShowTransliteratedLyrics((v) => {
+      const next = !v
+      localStorage.setItem("music:showTransliteratedLyrics", String(next))
+      return next
+    })
+
+  const hasTransliteratedLyrics =
+    !!track.transliteratedLyricsUrl && track.transliteratedLyricsType === "lrc"
+
+  useEffect(() => {
+    if (
+      !showTransliteratedLyrics ||
+      !hasTransliteratedLyrics ||
+      transliteratedLyrics
+    ) {
+      return
+    }
+    fetch(track.transliteratedLyricsUrl as string)
+      .then((r) => (r.ok ? r.text() : Promise.reject()))
+      .then((content) => setTransliteratedLyrics(content))
+      .catch(() => {
+        setShowTransliteratedLyrics(false)
+        localStorage.setItem("music:showTransliteratedLyrics", "false")
+      })
+  }, [
+    hasTransliteratedLyrics,
+    showTransliteratedLyrics,
+    track.transliteratedLyricsUrl,
+    transliteratedLyrics,
+  ])
 
   const handleSeek = (t: number) => player.seek(t)
 
@@ -379,7 +421,7 @@ function SharePlayer({
                   </div>
                 )}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">
                   {track.title}
                 </p>
@@ -387,6 +429,24 @@ function SharePlayer({
                   {track.artist}
                 </p>
               </div>
+              {hasTransliteratedLyrics && (
+                <button
+                  onClick={toggleTransliteratedLyrics}
+                  className={cn(
+                    "glass-button glass-button-ghost ml-auto flex h-8 shrink-0 items-center gap-1 rounded-full px-2 text-xs",
+                    showTransliteratedLyrics &&
+                      "bg-white/10 !text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.95)] shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+                  )}
+                  aria-label={
+                    showTransliteratedLyrics
+                      ? "Hide pronunciation lyrics"
+                      : "Show pronunciation lyrics"
+                  }
+                >
+                  <Languages className="h-3.5 w-3.5" />
+                  Pronunciation
+                </button>
+              )}
             </div>
             <div
               className="scrollbar-hide min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-2"
@@ -401,6 +461,10 @@ function SharePlayer({
                 <LyricsDisplay
                   lyricsContent={lyrics}
                   lyricsType={lyricsType}
+                  transliteratedLyricsContent={
+                    showTransliteratedLyrics ? transliteratedLyrics : null
+                  }
+                  transliteratedLyricsType={track.transliteratedLyricsType ?? "txt"}
                   onSeek={handleSeek}
                 />
               )}
@@ -444,12 +508,36 @@ function SharePlayer({
                   "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
               }}
             >
-              <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
-                LYRICS
-              </p>
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <p className="text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                  LYRICS
+                </p>
+                {hasTransliteratedLyrics && (
+                  <button
+                    onClick={toggleTransliteratedLyrics}
+                    className={cn(
+                      "glass-button glass-button-ghost flex h-8 items-center gap-1 rounded-full px-2 text-xs",
+                      showTransliteratedLyrics &&
+                        "bg-white/10 !text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.95)] shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+                    )}
+                    aria-label={
+                      showTransliteratedLyrics
+                        ? "Hide pronunciation lyrics"
+                        : "Show pronunciation lyrics"
+                    }
+                  >
+                    <Languages className="h-3.5 w-3.5" />
+                    Pronunciation
+                  </button>
+                )}
+              </div>
               <LyricsDisplay
                 lyricsContent={lyrics!}
                 lyricsType={lyricsType}
+                transliteratedLyricsContent={
+                  showTransliteratedLyrics ? transliteratedLyrics : null
+                }
+                transliteratedLyricsType={track.transliteratedLyricsType ?? "txt"}
                 onSeek={handleSeek}
               />
             </div>

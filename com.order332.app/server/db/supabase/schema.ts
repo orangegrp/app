@@ -346,6 +346,9 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       "lyrics_key",
       "lyrics_url",
       "lyrics_type",
+      "transliterated_lyrics_key",
+      "transliterated_lyrics_url",
+      "transliterated_lyrics_type",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS music_tracks (
@@ -363,7 +366,10 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
         cover_url    TEXT,
         lyrics_key   TEXT,
         lyrics_url   TEXT,
-        lyrics_type  TEXT        CHECK (lyrics_type IN ('lrc', 'txt'))
+        lyrics_type  TEXT        CHECK (lyrics_type IN ('lrc', 'txt')),
+        transliterated_lyrics_key  TEXT,
+        transliterated_lyrics_url  TEXT,
+        transliterated_lyrics_type TEXT CHECK (transliterated_lyrics_type IN ('lrc', 'txt'))
       );
       CREATE INDEX IF NOT EXISTS music_tracks_uploaded_by_idx ON music_tracks (uploaded_by);
       CREATE INDEX IF NOT EXISTS music_tracks_created_at_idx  ON music_tracks (created_at DESC);
@@ -470,6 +476,7 @@ export async function validateAndMigrateSchema(): Promise<void> {
     await ensureWelcomeWizardColumn(sql)
     await ensureWebAuthnPendingRegistrationColumn(sql)
     await ensureAlbumColumn(sql)
+    await ensureTransliteratedLyricsColumns(sql)
     await ensureMusicPlaylistTables(sql)
     await ensureContentVideoColumns(sql)
 
@@ -550,6 +557,22 @@ async function ensureAlbumColumn(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(
     "ALTER TABLE music_tracks ADD COLUMN IF NOT EXISTS album TEXT"
   )
+}
+
+async function ensureTransliteratedLyricsColumns(
+  sql: postgres.Sql
+): Promise<void> {
+  await sql.unsafe(
+    "ALTER TABLE music_tracks ADD COLUMN IF NOT EXISTS transliterated_lyrics_key TEXT"
+  )
+  await sql.unsafe(
+    "ALTER TABLE music_tracks ADD COLUMN IF NOT EXISTS transliterated_lyrics_url TEXT"
+  )
+  await sql.unsafe(`
+    ALTER TABLE music_tracks
+    ADD COLUMN IF NOT EXISTS transliterated_lyrics_type TEXT
+      CHECK (transliterated_lyrics_type IN ('lrc', 'txt'))
+  `)
 }
 
 /** Creates music playlist tables if they don't exist. */

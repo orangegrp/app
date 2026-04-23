@@ -45,6 +45,9 @@ function rowToMusicTrack(row: Record<string, unknown>): MusicTrack {
     lyricsKey: row.lyrics_key as string | null,
     lyricsUrl: row.lyrics_url as string | null,
     lyricsType: row.lyrics_type as 'lrc' | 'txt' | null,
+    transliteratedLyricsKey: row.transliterated_lyrics_key as string | null,
+    transliteratedLyricsUrl: row.transliterated_lyrics_url as string | null,
+    transliteratedLyricsType: row.transliterated_lyrics_type as 'lrc' | 'txt' | null,
   }
 }
 
@@ -119,9 +122,12 @@ musicSharePublicRoutes.get('/:token', async (c) => {
 
   const track = rowToMusicTrack(trackRow as Record<string, unknown>)
 
-  const keysToSign = [track.audioKey, track.coverKey ?? null, track.lyricsKey ?? null].filter(
-    Boolean
-  ) as string[]
+  const keysToSign = [
+    track.audioKey,
+    track.coverKey ?? null,
+    track.lyricsKey ?? null,
+    track.transliteratedLyricsKey ?? null,
+  ].filter(Boolean) as string[]
   const signed = await signMusicGetUrls(keysToSign, 3600)
 
   return c.json({
@@ -137,6 +143,10 @@ musicSharePublicRoutes.get('/:token', async (c) => {
         ? (signed.get(track.lyricsKey) ?? track.lyricsUrl)
         : track.lyricsUrl,
       lyricsType: track.lyricsType ?? null,
+      transliteratedLyricsUrl: track.transliteratedLyricsKey
+        ? (signed.get(track.transliteratedLyricsKey) ?? track.transliteratedLyricsUrl)
+        : track.transliteratedLyricsUrl,
+      transliteratedLyricsType: track.transliteratedLyricsType ?? null,
     },
     expiresAt: link.expiresAt,
   })

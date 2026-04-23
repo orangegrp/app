@@ -112,9 +112,12 @@ musicPlaylistRoutes.get("/:id", async (c) => {
 
   const keysToSign = playlist.tracks.flatMap(
     (t) =>
-      [t.audioKey, t.coverKey ?? null, t.lyricsKey ?? null].filter(
-        Boolean
-      ) as string[]
+      [
+        t.audioKey,
+        t.coverKey ?? null,
+        t.lyricsKey ?? null,
+        t.transliteratedLyricsKey ?? null,
+      ].filter(Boolean) as string[]
   )
   const signed =
     keysToSign.length > 0
@@ -137,6 +140,10 @@ musicPlaylistRoutes.get("/:id", async (c) => {
       ? (signed.get(t.lyricsKey) ?? t.lyricsUrl)
       : t.lyricsUrl,
     lyricsType: t.lyricsType ?? null,
+    transliteratedLyricsUrl: t.transliteratedLyricsKey
+      ? (signed.get(t.transliteratedLyricsKey) ?? t.transliteratedLyricsUrl)
+      : t.transliteratedLyricsUrl,
+    transliteratedLyricsType: t.transliteratedLyricsType ?? null,
   }))
 
   return c.json({ playlist: { ...playlist, tracks } })

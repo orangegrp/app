@@ -128,3 +128,24 @@ export async function getMusicObjectText(logicalKey: string): Promise<string> {
   const text = await body.transformToString()
   return text
 }
+
+/**
+ * Writes small text objects (lyrics) to R2.
+ */
+export async function putMusicObjectText(
+  logicalKey: string,
+  content: string,
+  contentType = 'text/plain; charset=utf-8',
+): Promise<void> {
+  const cfg = resolveR2ClientConfig()
+  const client = getR2S3Client(cfg)
+  const Key = toMusicObjectKey(logicalKey)
+  await client.send(
+    new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key,
+      ContentType: contentType,
+      Body: content,
+    }),
+  )
+}

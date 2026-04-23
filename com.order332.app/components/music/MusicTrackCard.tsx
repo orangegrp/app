@@ -27,6 +27,7 @@ import {
   formatDuration,
   fetchTrackLyrics,
   generateAiLyrics,
+  generateAiLyricsTransliteration,
   type LyricsType,
   type MusicTrackMeta,
   type MusicPlaylistMeta,
@@ -78,6 +79,8 @@ type PointerPoint = {
 const COVER_ACCEPT = ["image/jpeg", "image/png", "image/webp"].join(",")
 const LYRICS_ACCEPT = ".lrc,.txt,text/plain"
 const WAVEFORM_HEIGHTS = [78, 62, 88]
+const NON_LATIN_SCRIPT_REGEX =
+  /[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}\p{Number}\p{Punctuation}\p{Separator}\p{Symbol}]/u
 
 type LyricsSearchStatus =
   | "idle"
@@ -213,6 +216,15 @@ export function MusicTrackCard({
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorLyrics, setEditorLyrics] = useState("")
   const [editorLoading, setEditorLoading] = useState(false)
+  const [transliterationGenerating, setTransliterationGenerating] =
+    useState(false)
+  const [transliterationError, setTransliterationError] = useState<string | null>(
+    null
+  )
+  const [transliterationSuccess, setTransliterationSuccess] = useState(false)
+  const [transliterationEligibility, setTransliterationEligibility] = useState<
+    "checking" | "eligible" | "ineligible" | "unavailable"
+  >("checking")
   useEffect(() => {
     if (!editOpen) {
       setCoverPreview(track.coverUrl ?? null)
@@ -224,6 +236,10 @@ export function MusicTrackCard({
       setFetchedLyricsSource("lrclib")
       setAiGenerating(false)
       setAiError(null)
+      setTransliterationGenerating(false)
+      setTransliterationError(null)
+      setTransliterationSuccess(false)
+      setTransliterationEligibility("checking")
     }
   }, [editOpen, track.coverUrl])
   const [editTitle, setEditTitle] = useState("")
@@ -411,6 +427,47 @@ export function MusicTrackCard({
       setEditorLoading(false)
     }
   }, [fetchedLyrics, lyricsFile, track.id, track.lyricsUrl])
+
+  useEffect(() => {
+    if (!editOpen) return
+    if (!track.lyricsUrl || track.lyricsType !== "lrc") {
+      setTransliterationEligibility("unavailable")
+      return
+    }
+    setTransliterationEligibility("checking")
+    fetchTrackLyrics(track.id)
+      .then(({ content, type }) => {
+        if (type !== "lrc") {
+          setTransliterationEligibility("unavailable")
+          return
+        }
+        const lyricsText = content
+          .split("\n")
+          .map((line) => line.replace(/^(\[(\d{1,2}:\d{2}[.:]\d{2,3})\])+/, ""))
+          .join("\n")
+        setTransliterationEligibility(
+          NON_LATIN_SCRIPT_REGEX.test(lyricsText) ? "eligible" : "ineligible"
+        )
+      })
+      .catch(() => setTransliterationEligibility("unavailable"))
+  }, [editOpen, track.id, track.lyricsType, track.lyricsUrl])
+
+  const generateTransliteratedLyricsForTrack = useCallback(async () => {
+    if (transliterationEligibility !== "eligible") return
+    setTransliterationGenerating(true)
+    setTransliterationError(null)
+    setTransliterationSuccess(false)
+    try {
+      await generateAiLyricsTransliteration({ trackId: track.id })
+      setTransliterationSuccess(true)
+    } catch (err) {
+      setTransliterationError(
+        err instanceof Error ? err.message : "Pronunciation generation failed"
+      )
+    } finally {
+      setTransliterationGenerating(false)
+    }
+  }, [track.id, transliterationEligibility])
 
   const handleSave = async () => {
     if (!editTitle.trim() || !editArtist.trim()) return
@@ -957,6 +1014,46 @@ export function MusicTrackCard({
                   Open full-screen lyrics editor
                 </Button>
               )}
+
+              <div className="rounded-lg border border-foreground/10 bg-foreground/4 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Generate pronunciation lyrics (Latin script)
+                  </p>
+                  <Button
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => void generateTransliteratedLyricsForTrack()}
+                    disabled={
+                      transliterationGenerating ||
+                      transliterationEligibility !== "eligible"
+                    }
+                  >
+                    {transliterationGenerating
+                      ? "Generating..."
+                      : "Generate pronunciation"}
+                  </Button>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground/60">
+                  {transliterationEligibility === "checking"
+                    ? "Checking eligibility..."
+                    : transliterationEligibility === "eligible"
+                      ? "Eligible: non-Latin script detected in source LRC lyrics."
+                      : transliterationEligibility === "ineligible"
+                        ? "Not eligible: source lyrics do not contain non-Latin script."
+                        : "Unavailable: this track must already have LRC lyrics attached."}
+                </p>
+                {transliterationError && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {transliterationError}
+                  </p>
+                )}
+                {transliterationSuccess && !transliterationError && (
+                  <p className="mt-1 text-xs text-emerald-400">
+                    Pronunciation lyrics generated and saved.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
           <input

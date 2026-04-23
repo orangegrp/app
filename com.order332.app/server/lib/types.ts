@@ -227,6 +227,9 @@ export interface MusicTrack {
   lyricsKey?: string | null
   lyricsUrl?: string | null
   lyricsType?: LyricsType | null
+  transliteratedLyricsKey?: string | null
+  transliteratedLyricsUrl?: string | null
+  transliteratedLyricsType?: LyricsType | null
 }
 
 export interface MusicPlaylist {

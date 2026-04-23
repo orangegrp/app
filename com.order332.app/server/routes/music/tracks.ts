@@ -21,6 +21,7 @@ import {
 import {
   deleteMusicObjects,
   getMusicObjectText,
+  putMusicObjectText,
   signMusicGetUrl,
   signMusicGetUrls,
   signMusicPutUrl,
@@ -36,6 +37,9 @@ const AI_LYRICS_TMP_PREFIX = "tmp/lyrics-ai"
 const AI_LYRICS_MAX_AUDIO_BYTES = 250 * 1024 * 1024
 const AI_LYRICS_MAX_DURATION_SEC = 60 * 20
 const AI_LYRICS_MODEL = "openai/gpt-5.4-nano" as const
+const AI_TRANSLITERATION_MODEL = "openai/gpt-5.4-nano" as const
+const NON_LATIN_SCRIPT_REGEX =
+  /[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}\p{Number}\p{Punctuation}\p{Separator}\p{Symbol}]/u
 const AUDIO_EXTS_ALLOWED_FOR_AI = new Set([
   ".mp3",
   ".ogg",
@@ -97,6 +101,34 @@ function normalizeLyricsLine(text: string): string {
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function hasNonLatinScript(content: string): boolean {
+  return NON_LATIN_SCRIPT_REGEX.test(content)
+}
+
+function extractLrcLyricsText(content: string): string {
+  const rows = content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+  return rows
+    .map((line) => line.replace(/^(\[(\d{1,2}:\d{2}[.:]\d{2,3})\])+/, ""))
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+}
+
+async function transliterateLrcWithGateway(input: string): Promise<string> {
+  const { text } = await generateText({
+    model: AI_TRANSLITERATION_MODEL,
+    maxOutputTokens: 4500,
+    temperature: 0,
+    prompt:
+      "You transliterate synced song lyrics (LRC) into Latin script for pronunciation. Return only LRC lines. Preserve every timestamp tag exactly as-is. Keep line count and line order. Do not translate meaning. Do not add metadata tags. Do not add commentary. Input:\n" +
+      input,
+  })
+  return text.trim()
 }
 
 function buildLrcFromWords(words: ElevenWord[]): string | null {
@@ -220,6 +252,12 @@ function assertElevenLabsConfigured() {
   }
 }
 
+function assertAiGatewayConfigured() {
+  if (!process.env.AI_GATEWAY_API_KEY?.trim()) {
+    throw new Error("AI gateway is not configured")
+  }
+}
+
 async function repairLrcWithGateway(input: string): Promise<string> {
   if (isValidLrc(input)) return input
   if (!process.env.AI_GATEWAY_API_KEY?.trim()) return input
@@ -263,9 +301,12 @@ musicTrackRoutes.get("/", async (c) => {
 
   const keysToSign = tracks.flatMap(
     (t) =>
-      [t.audioKey, t.coverKey ?? null, t.lyricsKey ?? null].filter(
-        Boolean
-      ) as string[]
+      [
+        t.audioKey,
+        t.coverKey ?? null,
+        t.lyricsKey ?? null,
+        t.transliteratedLyricsKey ?? null,
+      ].filter(Boolean) as string[]
   )
   const signed = await signMusicGetUrls(keysToSign)
   const result = tracks.map((t) => ({
@@ -275,6 +316,9 @@ musicTrackRoutes.get("/", async (c) => {
     lyricsUrl: t.lyricsKey
       ? (signed.get(t.lyricsKey) ?? t.lyricsUrl)
       : t.lyricsUrl,
+    transliteratedLyricsUrl: t.transliteratedLyricsKey
+      ? (signed.get(t.transliteratedLyricsKey) ?? t.transliteratedLyricsUrl)
+      : t.transliteratedLyricsUrl,
   }))
   return c.json({ tracks: result })
 })
@@ -298,6 +342,7 @@ musicTrackRoutes.get("/:id/source", rateLimitByUser(120, 60_000), async (c) => {
     track.audioKey,
     track.coverKey ?? null,
     track.lyricsKey ?? null,
+    track.transliteratedLyricsKey ?? null,
   ].filter(Boolean) as string[]
   const signed = await signMusicGetUrls(keysToSign)
 
@@ -311,6 +356,10 @@ musicTrackRoutes.get("/:id/source", rateLimitByUser(120, 60_000), async (c) => {
       lyricsUrl: track.lyricsKey
         ? (signed.get(track.lyricsKey) ?? track.lyricsUrl)
         : track.lyricsUrl,
+      transliteratedLyricsUrl: track.transliteratedLyricsKey
+        ? (signed.get(track.transliteratedLyricsKey) ??
+          track.transliteratedLyricsUrl)
+        : track.transliteratedLyricsUrl,
     },
   })
 })
@@ -492,6 +541,7 @@ musicTrackRoutes.post(
       track.audioKey,
       track.coverKey ?? null,
       track.lyricsKey ?? null,
+      track.transliteratedLyricsKey ?? null,
     ].filter(Boolean) as string[]
     const signed = await signMusicGetUrls(keysToSign)
     return c.json(
@@ -505,6 +555,10 @@ musicTrackRoutes.post(
           lyricsUrl: track.lyricsKey
             ? (signed.get(track.lyricsKey) ?? track.lyricsUrl)
             : track.lyricsUrl,
+          transliteratedLyricsUrl: track.transliteratedLyricsKey
+            ? (signed.get(track.transliteratedLyricsKey) ??
+              track.transliteratedLyricsUrl)
+            : track.transliteratedLyricsUrl,
         },
       },
       201
@@ -616,6 +670,7 @@ musicTrackRoutes.patch(
       updated.audioKey,
       updated.coverKey ?? null,
       updated.lyricsKey ?? null,
+      updated.transliteratedLyricsKey ?? null,
     ].filter(Boolean) as string[]
     const signed = await signMusicGetUrls(signKeys)
     return c.json({
@@ -628,6 +683,10 @@ musicTrackRoutes.patch(
         lyricsUrl: updated.lyricsKey
           ? (signed.get(updated.lyricsKey) ?? updated.lyricsUrl)
           : updated.lyricsUrl,
+        transliteratedLyricsUrl: updated.transliteratedLyricsKey
+          ? (signed.get(updated.transliteratedLyricsKey) ??
+            updated.transliteratedLyricsUrl)
+          : updated.transliteratedLyricsUrl,
       },
     })
   }
@@ -643,7 +702,9 @@ musicTrackRoutes.delete(
 
     const { data, error } = await supabase
       .from("music_tracks")
-      .select("id, audio_key, cover_key, lyrics_key, uploaded_by")
+      .select(
+        "id, audio_key, cover_key, lyrics_key, transliterated_lyrics_key, uploaded_by"
+      )
       .eq("id", id)
       .single()
 
@@ -660,6 +721,7 @@ musicTrackRoutes.delete(
       data.audio_key,
       data.cover_key,
       data.lyrics_key,
+      data.transliterated_lyrics_key,
     ].filter(Boolean) as string[]
     if (keysToDelete.length > 0) {
       await deleteMusicObjects(keysToDelete)
@@ -946,6 +1008,148 @@ musicTrackRoutes.post(
   }
 )
 
+// POST /music/tracks/lyrics/transliterate — generate Latin-script pronunciation LRC
+musicTrackRoutes.post(
+  "/lyrics/transliterate",
+  requirePermission(PERMISSIONS.APP_MUSIC_UPLOAD),
+  rateLimitByUser(12, 60_000),
+  async (c) => {
+    const user = c.get("user")
+    const hourlyLimit = checkRateLimit(
+      `music:lyrics-transliterate:${user.id}`,
+      30,
+      60 * 60_000
+    )
+    if (hourlyLimit.limited) {
+      c.header("Retry-After", String(hourlyLimit.retryAfter))
+      return jsonError(c, "rate_limited", "Too many transliteration requests", 429)
+    }
+
+    let body: { trackId?: unknown }
+    try {
+      body = await c.req.json()
+    } catch {
+      return jsonError(c, "invalid_json", "Invalid JSON", 400)
+    }
+
+    const trackId = typeof body.trackId === "string" ? body.trackId : ""
+    if (!trackId) {
+      return jsonError(c, "invalid_request", "trackId is required", 400)
+    }
+
+    const { data: row, error } = await supabase
+      .from("music_tracks")
+      .select(
+        "id, uploaded_by, lyrics_key, lyrics_type, transliterated_lyrics_key"
+      )
+      .eq("id", trackId)
+      .single()
+    if (error || !row) {
+      return jsonError(c, "track_not_found", "Track not found", 404)
+    }
+
+    const isSuperuser = user.permissions === "*"
+    if (!isSuperuser && row.uploaded_by !== user.id) {
+      return jsonError(c, "forbidden", "Forbidden", 403)
+    }
+
+    if (!row.lyrics_key) {
+      return jsonError(c, "lyrics_missing", "No lyrics file found", 404)
+    }
+    if (row.lyrics_type !== "lrc") {
+      return jsonError(
+        c,
+        "lyrics_type_invalid",
+        "Only LRC lyrics can be transliterated",
+        422
+      )
+    }
+
+    let sourceLrc = ""
+    try {
+      sourceLrc = await getMusicObjectText(row.lyrics_key as string)
+    } catch (err) {
+      console.error("[music/tracks] transliteration source fetch error:", err)
+      return jsonError(c, "lyrics_fetch_failed", "Failed to fetch source lyrics", 500)
+    }
+
+    if (!isValidLrc(sourceLrc)) {
+      return jsonError(c, "invalid_lrc", "Source lyrics are not valid LRC", 422)
+    }
+
+    const lyricsText = extractLrcLyricsText(sourceLrc)
+    if (!lyricsText || !hasNonLatinScript(lyricsText)) {
+      return jsonError(
+        c,
+        "not_eligible",
+        "Only lyrics with non-Latin script can be transliterated",
+        422
+      )
+    }
+
+    try {
+      assertAiGatewayConfigured()
+    } catch {
+      return jsonError(c, "not_configured", "AI gateway is not configured", 503)
+    }
+
+    try {
+      const transliterated = await transliterateLrcWithGateway(sourceLrc)
+      if (!isValidLrc(transliterated)) {
+        return jsonError(
+          c,
+          "invalid_output",
+          "AI returned invalid transliterated LRC",
+          502
+        )
+      }
+
+      const transliteratedKey = generateMusicStorageKey(
+        "lyrics",
+        user.id,
+        "text/plain",
+        "lyrics.transliterated.lrc"
+      )
+      await putMusicObjectText(transliteratedKey, transliterated)
+
+      const { error: updateError } = await supabase
+        .from("music_tracks")
+        .update({
+          transliterated_lyrics_key: transliteratedKey,
+          transliterated_lyrics_url: MUSIC_ASSET_URL_PLACEHOLDER,
+          transliterated_lyrics_type: "lrc",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", trackId)
+      if (updateError) {
+        console.error("[music/tracks] transliteration update error:", updateError)
+        await deleteMusicObjects([transliteratedKey])
+        return jsonError(c, "save_failed", "Failed to save transliterated lyrics", 500)
+      }
+
+      const oldTransliteratedKey = row.transliterated_lyrics_key as string | null
+      if (oldTransliteratedKey && oldTransliteratedKey !== transliteratedKey) {
+        await deleteMusicObjects([oldTransliteratedKey])
+      }
+
+      trackAiUsage(user.id, "lyricsTransliteration", lyricsText.length)
+      return c.json({
+        lyrics: transliterated,
+        type: "lrc",
+        source: "ai",
+      })
+    } catch (err) {
+      console.error("[music/tracks] transliteration error:", err)
+      return jsonError(
+        c,
+        "transliteration_failed",
+        "Failed to transliterate lyrics",
+        500
+      )
+    }
+  }
+)
+
 // GET /music/tracks/lyrics/search — proxy LRCLIB fetch, stream result via SSE
 musicTrackRoutes.get("/lyrics/search", async (c) => {
   const trackName = (c.req.query("track_name") ?? "").trim()
@@ -1022,6 +1226,33 @@ musicTrackRoutes.get("/:id/lyrics", async (c) => {
   }
 })
 
+// GET /music/tracks/:id/lyrics/transliterated — fetch transliterated lyrics content
+musicTrackRoutes.get("/:id/lyrics/transliterated", async (c) => {
+  const id = c.req.param("id")
+
+  const { data, error } = await supabase
+    .from("music_tracks")
+    .select("transliterated_lyrics_key, transliterated_lyrics_type")
+    .eq("id", id)
+    .single()
+
+  if (error || !data) {
+    return c.json({ error: "Track not found" }, 404)
+  }
+
+  if (!data.transliterated_lyrics_key) {
+    return c.json({ error: "No transliterated lyrics available" }, 404)
+  }
+
+  try {
+    const content = await getMusicObjectText(data.transliterated_lyrics_key as string)
+    return c.json({ content, type: data.transliterated_lyrics_type ?? "txt" })
+  } catch (err) {
+    console.error("[music/tracks] transliterated lyrics fetch error:", err)
+    return c.json({ error: "Failed to fetch transliterated lyrics" }, 500)
+  }
+})
+
 function rowToMusicTrack(row: Record<string, unknown>): MusicTrack {
   return {
     id: row.id as string,
@@ -1040,5 +1271,9 @@ function rowToMusicTrack(row: Record<string, unknown>): MusicTrack {
     lyricsKey: row.lyrics_key as string | null,
     lyricsUrl: row.lyrics_url as string | null,
     lyricsType: row.lyrics_type as "lrc" | "txt" | null,
+    transliteratedLyricsKey: row.transliterated_lyrics_key as string | null,
+    transliteratedLyricsUrl: row.transliterated_lyrics_url as string | null,
+    transliteratedLyricsType:
+      (row.transliterated_lyrics_type as "lrc" | "txt" | null) ?? null,
   }
 }

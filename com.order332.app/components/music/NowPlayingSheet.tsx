@@ -6,6 +6,7 @@ import { Drawer as DrawerPrimitive } from "vaul"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import {
   AlignLeft,
+  Languages,
   GripVertical,
   ListMusic,
   Music2,
@@ -43,6 +44,7 @@ import { FormattedGenre } from "./FormattedGenre"
 import { hasRenderableGenre } from "@/lib/music-genre"
 import {
   fetchTrackLyrics,
+  fetchTrackTransliteratedLyrics,
   type LoopMode,
   type LyricsType,
   type MusicTrackMeta,
@@ -471,6 +473,9 @@ interface SettingsRowProps {
   hasLyrics: boolean
   showLyrics: boolean
   onToggleLyrics: () => void
+  hasTransliteratedLyrics: boolean
+  showTransliteratedLyrics: boolean
+  onToggleTransliteratedLyrics: () => void
   showQueue: boolean
   onToggleQueue: () => void
   onShare: () => void
@@ -479,6 +484,9 @@ function SettingsRow({
   hasLyrics,
   showLyrics,
   onToggleLyrics,
+  hasTransliteratedLyrics,
+  showTransliteratedLyrics,
+  onToggleTransliteratedLyrics,
   showQueue,
   onToggleQueue,
   onShare,
@@ -522,6 +530,24 @@ function SettingsRow({
           aria-label={showLyrics ? "Show artwork" : "Show lyrics"}
         >
           <AlignLeft className="h-5 w-5" />
+        </button>
+      )}
+      {hasTransliteratedLyrics && (
+        <button
+          onClick={onToggleTransliteratedLyrics}
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+            showTransliteratedLyrics
+              ? "bg-white/10 !text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.95)] shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+              : "glass-button glass-button-ghost text-muted-foreground hover:text-foreground"
+          )}
+          aria-label={
+            showTransliteratedLyrics
+              ? "Hide pronunciation lyrics"
+              : "Show pronunciation lyrics"
+          }
+        >
+          <Languages className="h-5 w-5" />
         </button>
       )}
     </div>
@@ -626,12 +652,25 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
   const [shareOpen, setShareOpen] = useState(false)
   const [lyricsContent, setLyricsContent] = useState<string | null>(null)
   const [lyricsType, setLyricsType] = useState<LyricsType>("txt")
+  const [transliteratedLyricsContent, setTransliteratedLyricsContent] =
+    useState<string | null>(null)
+  const [transliteratedLyricsType, setTransliteratedLyricsType] =
+    useState<LyricsType>("txt")
+  const [transliteratedLyricsLoading, setTransliteratedLyricsLoading] =
+    useState(false)
+  const [transliteratedLyricsMissing, setTransliteratedLyricsMissing] =
+    useState(false)
   const [showQueue, setShowQueue] = useState(false)
 
   const [showLyrics, setShowLyrics] = useState<boolean>(() => {
     if (typeof window === "undefined") return false
     return localStorage.getItem("music:showLyrics") === "true"
   })
+  const [showTransliteratedLyrics, setShowTransliteratedLyrics] =
+    useState<boolean>(() => {
+      if (typeof window === "undefined") return false
+      return localStorage.getItem("music:showTransliteratedLyrics") === "true"
+    })
 
   const toggleLyrics = () =>
     setShowLyrics((v) => {
@@ -643,11 +682,25 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
 
   const toggleQueue = () => setShowQueue((v) => !v)
 
+  const toggleTransliteratedLyrics = () => {
+    if (!lyricsContent || lyricsType !== "lrc" || transliteratedLyricsMissing)
+      return
+    setShowTransliteratedLyrics((v) => {
+      const next = !v
+      localStorage.setItem("music:showTransliteratedLyrics", String(next))
+      return next
+    })
+  }
+
   useEffect(() => {
     if (!currentTrack?.lyricsUrl || !currentTrack.id) {
       setLyricsContent(null)
+      setTransliteratedLyricsContent(null)
+      setTransliteratedLyricsMissing(false)
       return
     }
+    setTransliteratedLyricsContent(null)
+    setTransliteratedLyricsMissing(false)
     fetchTrackLyrics(currentTrack.id)
       .then(({ content, type }) => {
         setLyricsContent(content)
@@ -656,9 +709,49 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
       .catch(() => setLyricsContent(null))
   }, [currentTrack?.id, currentTrack?.lyricsUrl])
 
+  useEffect(() => {
+    if (
+      !showTransliteratedLyrics ||
+      !currentTrack?.id ||
+      !lyricsContent ||
+      lyricsType !== "lrc" ||
+      transliteratedLyricsContent ||
+      transliteratedLyricsLoading ||
+      transliteratedLyricsMissing
+    ) {
+      return
+    }
+    setTransliteratedLyricsLoading(true)
+    fetchTrackTransliteratedLyrics(currentTrack.id)
+      .then(({ content, type }) => {
+        setTransliteratedLyricsContent(content)
+        setTransliteratedLyricsType(type)
+        setTransliteratedLyricsMissing(false)
+      })
+      .catch(() => {
+        setShowTransliteratedLyrics(false)
+        localStorage.setItem("music:showTransliteratedLyrics", "false")
+        setTransliteratedLyricsMissing(true)
+      })
+      .finally(() => setTransliteratedLyricsLoading(false))
+  }, [
+    currentTrack?.id,
+    lyricsContent,
+    lyricsType,
+    showTransliteratedLyrics,
+    transliteratedLyricsContent,
+    transliteratedLyricsLoading,
+    transliteratedLyricsMissing,
+  ])
+
   if (!currentTrack) return null
 
   const hasLyrics = !!lyricsContent
+  const hasTransliteratedLyrics =
+    hasLyrics &&
+    lyricsType === "lrc" &&
+    (!!currentTrack.transliteratedLyricsUrl || !!transliteratedLyricsContent) &&
+    !transliteratedLyricsMissing
   const handleSeek = (t: number) => player.seek(t)
 
   // Active mobile panel: queue > lyrics > art
@@ -779,7 +872,7 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                           </div>
                         )}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-foreground">
                           {currentTrack.title}
                         </p>
@@ -787,6 +880,24 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                           {currentTrack.artist}
                         </p>
                       </div>
+                      {hasTransliteratedLyrics && (
+                        <button
+                          onClick={toggleTransliteratedLyrics}
+                          className={cn(
+                            "glass-button glass-button-ghost ml-auto flex h-8 shrink-0 items-center gap-1 rounded-full px-2 text-xs",
+                            showTransliteratedLyrics &&
+                              "bg-white/10 !text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.95)] shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+                          )}
+                          aria-label={
+                            showTransliteratedLyrics
+                              ? "Hide pronunciation lyrics"
+                              : "Show pronunciation lyrics"
+                          }
+                        >
+                          <Languages className="h-3.5 w-3.5" />
+                          Pronunciation
+                        </button>
+                      )}
                     </div>
                     <div
                       className="scrollbar-hide flex-1 overflow-y-auto overscroll-y-contain px-5 py-2"
@@ -801,6 +912,12 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                         <LyricsDisplay
                           lyricsContent={lyricsContent}
                           lyricsType={lyricsType}
+                          transliteratedLyricsContent={
+                            showTransliteratedLyrics
+                              ? transliteratedLyricsContent
+                              : null
+                          }
+                          transliteratedLyricsType={transliteratedLyricsType}
                           onSeek={handleSeek}
                         />
                       )}
@@ -842,6 +959,9 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                     hasLyrics={hasLyrics}
                     showLyrics={showLyrics}
                     onToggleLyrics={toggleLyrics}
+                    hasTransliteratedLyrics={hasTransliteratedLyrics}
+                    showTransliteratedLyrics={showTransliteratedLyrics}
+                    onToggleTransliteratedLyrics={toggleTransliteratedLyrics}
                     showQueue={showQueue}
                     onToggleQueue={toggleQueue}
                     onShare={() => setShareOpen(true)}
@@ -950,12 +1070,38 @@ export function NowPlayingSheet({ open, onClose }: NowPlayingSheetProps) {
                         "linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)",
                     }}
                   >
-                    <p className="mb-6 text-[10px] tracking-[0.2em] text-muted-foreground/40">
-                      LYRICS
-                    </p>
+                    <div className="mb-6 flex items-center justify-between gap-3">
+                      <p className="text-[10px] tracking-[0.2em] text-muted-foreground/40">
+                        LYRICS
+                      </p>
+                      {hasTransliteratedLyrics && (
+                        <button
+                          onClick={toggleTransliteratedLyrics}
+                          className={cn(
+                            "glass-button glass-button-ghost flex h-8 items-center gap-1 rounded-full px-2 text-xs",
+                            showTransliteratedLyrics &&
+                              "bg-white/10 !text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.95)] shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+                          )}
+                          aria-label={
+                            showTransliteratedLyrics
+                              ? "Hide pronunciation lyrics"
+                              : "Show pronunciation lyrics"
+                          }
+                        >
+                          <Languages className="h-3.5 w-3.5" />
+                          Pronunciation
+                        </button>
+                      )}
+                    </div>
                     <LyricsDisplay
                       lyricsContent={lyricsContent!}
                       lyricsType={lyricsType}
+                      transliteratedLyricsContent={
+                        showTransliteratedLyrics
+                          ? transliteratedLyricsContent
+                          : null
+                      }
+                      transliteratedLyricsType={transliteratedLyricsType}
                       onSeek={handleSeek}
                     />
                   </div>

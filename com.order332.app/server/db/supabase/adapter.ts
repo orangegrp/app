@@ -1000,6 +1000,12 @@ export class SupabaseAdapter implements DBAdapter {
         lyricsKey: (t.lyrics_key as string | null) ?? null,
         lyricsUrl: (t.lyrics_url as string | null) ?? null,
         lyricsType: (t.lyrics_type as "lrc" | "txt" | null) ?? null,
+        transliteratedLyricsKey:
+          (t.transliterated_lyrics_key as string | null) ?? null,
+        transliteratedLyricsUrl:
+          (t.transliterated_lyrics_url as string | null) ?? null,
+        transliteratedLyricsType:
+          (t.transliterated_lyrics_type as "lrc" | "txt" | null) ?? null,
       }
     })
 

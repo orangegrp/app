@@ -7,6 +7,8 @@ import { parseLrc, useLrcSync } from "@/hooks/useLrc"
 interface LyricsDisplayProps {
   lyricsContent: string
   lyricsType: "lrc" | "txt"
+  transliteratedLyricsContent?: string | null
+  transliteratedLyricsType?: "lrc" | "txt"
   /** Called with seek time in seconds when user clicks a synced line. */
   onSeek?: (timeSec: number) => void
 }
@@ -14,12 +16,22 @@ interface LyricsDisplayProps {
 export function LyricsDisplay({
   lyricsContent,
   lyricsType,
+  transliteratedLyricsContent,
+  transliteratedLyricsType,
   onSeek,
 }: LyricsDisplayProps) {
   if (lyricsType === "txt") {
     return <PlainLyrics content={lyricsContent} />
   }
-  return <SyncedLyrics content={lyricsContent} onSeek={onSeek} />
+  return (
+    <SyncedLyrics
+      content={lyricsContent}
+      transliteratedContent={
+        transliteratedLyricsType === "lrc" ? transliteratedLyricsContent : null
+      }
+      onSeek={onSeek}
+    />
+  )
 }
 
 function PlainLyrics({ content }: { content: string }) {
@@ -32,12 +44,25 @@ function PlainLyrics({ content }: { content: string }) {
 
 function SyncedLyrics({
   content,
+  transliteratedContent,
   onSeek,
 }: {
   content: string
+  transliteratedContent?: string | null
   onSeek?: (timeSec: number) => void
 }) {
   const lines = useMemo(() => parseLrc(content), [content])
+  const transliteratedLines = useMemo(
+    () => (transliteratedContent ? parseLrc(transliteratedContent) : []),
+    [transliteratedContent]
+  )
+  const transliteratedByTime = useMemo(() => {
+    const map = new Map<number, string>()
+    for (const line of transliteratedLines) {
+      if (!map.has(line.timeMs)) map.set(line.timeMs, line.text)
+    }
+    return map
+  }, [transliteratedLines])
   const { activeIndex } = useLrcSync(lines)
   // Scroll anchor is a non-focusable <span> so scrollIntoView never steals focus
   const activeRef = useRef<HTMLSpanElement>(null)
@@ -75,7 +100,25 @@ function SyncedLyrics({
           >
             {/* Non-focusable scroll anchor — must not be a button/input */}
             <span ref={isActive ? activeRef : undefined} aria-hidden="true" />
-            {line.text || <span className="text-muted-foreground/20">·</span>}
+            <span className="block">
+              {line.text || <span className="text-muted-foreground/20">·</span>}
+            </span>
+            {transliteratedContent && (
+              <span
+                className={cn(
+                  "mt-0.5 block text-sm leading-6 font-normal",
+                  isActive
+                    ? "text-foreground"
+                    : isPast
+                      ? "text-muted-foreground/35"
+                      : "text-muted-foreground/75"
+                )}
+              >
+                {transliteratedByTime.get(line.timeMs) ??
+                  transliteratedLines[i]?.text ??
+                  ""}
+              </span>
+            )}
           </button>
         )
       })}

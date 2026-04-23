@@ -36,6 +36,20 @@ interface VideoNerdStats {
   bufferedAheadSec: number
   transferKbps: number | null
   bandwidthEstimateKbps: number | null
+  muxPlaybackId: string | null
+  sourceHost: string | null
+  sourcePath: string | null
+  readyState: number
+  networkState: number
+  bufferedRanges: number
+  seekableRanges: number
+  hlsLevelCount: number
+  hlsCurrentLevel: number | null
+  hlsLoadLevel: number | null
+  hlsNextAutoLevel: number | null
+  hlsLatencySec: number | null
+  hlsDrift: number | null
+  hlsCodecs: string | null
   playbackRate: number
   volumePercent: number
   isMuted: boolean
@@ -43,6 +57,33 @@ interface VideoNerdStats {
   totalFrames: number | null
   hlsLevelLabel: string | null
 }
+
+const PANIC_TINTS = [
+  {
+    line: "#00ff00",
+    trackBg: "rgba(0, 255, 0, 0.28)",
+    bufferBg: "rgba(0, 255, 0, 0.58)",
+    thumbGlow: "rgba(0,255,0,0.85)",
+  },
+  {
+    line: "#00ff66",
+    trackBg: "rgba(0, 255, 102, 0.28)",
+    bufferBg: "rgba(0, 255, 102, 0.58)",
+    thumbGlow: "rgba(0,255,102,0.85)",
+  },
+  {
+    line: "#00ffaa",
+    trackBg: "rgba(0, 255, 170, 0.28)",
+    bufferBg: "rgba(0, 255, 170, 0.58)",
+    thumbGlow: "rgba(0,255,170,0.85)",
+  },
+  {
+    line: "#00ffd5",
+    trackBg: "rgba(0, 255, 213, 0.28)",
+    bufferBg: "rgba(0, 255, 213, 0.58)",
+    thumbGlow: "rgba(0,255,213,0.85)",
+  },
+] as const
 
 export function VideoPlayer({
   src,
@@ -70,9 +111,13 @@ export function VideoPlayer({
   const [controlsVisible, setControlsVisible] = useState(true)
   const [supportsVolumeControl, setSupportsVolumeControl] = useState(true)
   const [showStatsForNerds, setShowStatsForNerds] = useState(false)
+  const [panicMode, setPanicMode] = useState(false)
+  const [panicTintIndex, setPanicTintIndex] = useState(0)
   const [nerdStats, setNerdStats] = useState<VideoNerdStats | null>(null)
   const [networkHistory, setNetworkHistory] = useState<number[]>([])
   const prevVolumeRef = useRef(1)
+  const keySequenceRef = useRef("")
+  const lastKeyAtRef = useRef<number | null>(null)
 
   const updateNerdStats = useCallback(() => {
     const video = videoRef.current
@@ -128,6 +173,7 @@ export function VideoPlayer({
     const activeLevelIndex = hlsRef.current?.currentLevel ?? -1
     const level =
       activeLevelIndex >= 0 ? hlsRef.current?.levels?.[activeLevelIndex] : null
+    const hlsInstance = hlsRef.current
     const bandwidthEstimate = hlsRef.current?.bandwidthEstimate ?? 0
     const bandwidthEstimateKbps =
       Number.isFinite(bandwidthEstimate) && bandwidthEstimate > 0
@@ -135,6 +181,26 @@ export function VideoPlayer({
         : null
     const hlsLevelLabel = level
       ? `${level.width || "?"}x${level.height || "?"} · ${Math.round((level.bitrate ?? 0) / 1000)} kbps`
+      : null
+
+    const sourceUrl = video.currentSrc || src
+    let sourceHost: string | null = null
+    let sourcePath: string | null = null
+    let muxPlaybackId: string | null = null
+    try {
+      const parsed = new URL(sourceUrl)
+      sourceHost = parsed.host
+      sourcePath = parsed.pathname
+      const muxMatch = parsed.pathname.match(/\/([A-Za-z0-9_-]{8,})\.m3u8$/)
+      muxPlaybackId = muxMatch?.[1] ?? null
+    } catch {
+      sourceHost = null
+      sourcePath = null
+      muxPlaybackId = null
+    }
+
+    const codecs = level
+      ? [level.videoCodec, level.audioCodec].filter(Boolean).join(" | ")
       : null
 
     const networkMetric =
@@ -153,6 +219,38 @@ export function VideoPlayer({
       bufferedAheadSec,
       transferKbps,
       bandwidthEstimateKbps,
+      muxPlaybackId,
+      sourceHost,
+      sourcePath,
+      readyState: video.readyState,
+      networkState: video.networkState,
+      bufferedRanges: video.buffered.length,
+      seekableRanges: video.seekable.length,
+      hlsLevelCount: hlsInstance?.levels.length ?? 0,
+      hlsCurrentLevel: hlsInstance
+        ? hlsInstance.currentLevel >= 0
+          ? hlsInstance.currentLevel
+          : null
+        : null,
+      hlsLoadLevel: hlsInstance
+        ? hlsInstance.loadLevel >= 0
+          ? hlsInstance.loadLevel
+          : null
+        : null,
+      hlsNextAutoLevel: hlsInstance
+        ? hlsInstance.nextAutoLevel >= 0
+          ? hlsInstance.nextAutoLevel
+          : null
+        : null,
+      hlsLatencySec:
+        typeof hlsInstance?.latency === "number"
+          ? Number(hlsInstance.latency.toFixed(2))
+          : null,
+      hlsDrift:
+        typeof hlsInstance?.drift === "number"
+          ? Number(hlsInstance.drift.toFixed(3))
+          : null,
+      hlsCodecs: codecs || null,
       playbackRate: video.playbackRate,
       volumePercent: Math.round(video.volume * 100),
       isMuted: video.muted,
@@ -160,7 +258,7 @@ export function VideoPlayer({
       totalFrames,
       hlsLevelLabel,
     })
-  }, [])
+  }, [src])
 
   useEffect(() => {
     const ua = navigator.userAgent
@@ -240,6 +338,74 @@ export function VideoPlayer({
     transferBytesSinceSampleRef.current = 0
     lastTransferSampleAtRef.current = null
   }, [src])
+
+  useEffect(() => {
+    const code = "332"
+    const sequenceTimeoutMs = 5000
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+
+      if (event.key.length !== 1) return
+      const now = Date.now()
+      if (
+        lastKeyAtRef.current !== null &&
+        now - lastKeyAtRef.current > sequenceTimeoutMs
+      ) {
+        keySequenceRef.current = ""
+      }
+      lastKeyAtRef.current = now
+
+      const nextExpected = code[keySequenceRef.current.length]
+      if (event.key === nextExpected) {
+        keySequenceRef.current += event.key
+      } else if (event.key === code[0]) {
+        keySequenceRef.current = code[0]
+      } else {
+        keySequenceRef.current = ""
+      }
+
+      if (keySequenceRef.current === code) {
+        setPanicMode((prev) => !prev)
+        keySequenceRef.current = ""
+        lastKeyAtRef.current = null
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!panicMode) {
+      setPanicTintIndex(0)
+      return
+    }
+    let active = true
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const tick = () => {
+      if (!active) return
+      setPanicTintIndex(Math.floor(Math.random() * PANIC_TINTS.length))
+      const nextInMs = Math.floor(50 + Math.random() * 101)
+      timer = setTimeout(tick, nextInMs)
+    }
+
+    tick()
+    return () => {
+      active = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [panicMode])
+
+  const panicTint = PANIC_TINTS[panicTintIndex]
 
   const networkPeak = useMemo(
     () => Math.max(1, ...networkHistory),
@@ -532,13 +698,58 @@ export function VideoPlayer({
                 <span>
                   {nerdStats.isMuted ? "Muted" : `${nerdStats.volumePercent}%`}
                 </span>
+                <span className="text-white/65">ready/network</span>
+                <span>
+                  {nerdStats.readyState} / {nerdStats.networkState}
+                </span>
+                <span className="text-white/65">Ranges</span>
+                <span>
+                  buffered {nerdStats.bufferedRanges} · seekable{" "}
+                  {nerdStats.seekableRanges}
+                </span>
+                <span className="text-white/65">Mux playback ID</span>
+                <span className="truncate">
+                  {nerdStats.muxPlaybackId ?? "-"}
+                </span>
+                <span className="text-white/65">Source host</span>
+                <span className="truncate">{nerdStats.sourceHost ?? "-"}</span>
+                <span className="text-white/65">Source path</span>
+                <span className="truncate">{nerdStats.sourcePath ?? "-"}</span>
                 {nerdStats.hlsLevelLabel && (
                   <>
                     <span className="text-white/65">HLS level</span>
                     <span>{nerdStats.hlsLevelLabel}</span>
                   </>
                 )}
+                <span className="text-white/65">HLS indexes</span>
+                <span>
+                  cur {nerdStats.hlsCurrentLevel ?? "-"} · load{" "}
+                  {nerdStats.hlsLoadLevel ?? "-"} · auto{" "}
+                  {nerdStats.hlsNextAutoLevel ?? "-"}
+                </span>
+                <span className="text-white/65">HLS levels</span>
+                <span>{nerdStats.hlsLevelCount}</span>
+                <span className="text-white/65">HLS latency</span>
+                <span>
+                  {nerdStats.hlsLatencySec ?? "-"}s · drift{" "}
+                  {nerdStats.hlsDrift ?? "-"}
+                </span>
+                <span className="text-white/65">Codecs</span>
+                <span className="truncate">{nerdStats.hlsCodecs ?? "-"}</span>
               </div>
+            </div>
+          )}
+
+          {panicMode && (
+            <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-20 flex flex-col items-start gap-0.5 overflow-hidden">
+              {Array.from({ length: 64 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="[animation:panic-text-flash_420ms_steps(2,end)_infinite] text-[10px] leading-none font-black tracking-tight text-red-500 [text-shadow:0_0_4px_rgba(255,0,0,0.95)]"
+                >
+                  Panic!
+                </span>
+              ))}
             </div>
           )}
 
@@ -567,13 +778,39 @@ export function VideoPlayer({
                 onScrub={seek}
                 className="gap-2"
               >
-                <ScrubBarTrack>
+                <ScrubBarTrack
+                  className={cn(panicMode && "transition-colors duration-75")}
+                  style={
+                    panicMode
+                      ? {
+                          borderColor: panicTint.line,
+                          backgroundColor: panicTint.trackBg,
+                          ["--panic-line" as string]: panicTint.line,
+                          ["--panic-glow" as string]: panicTint.thumbGlow,
+                        }
+                      : undefined
+                  }
+                >
                   <div
                     className="absolute inset-y-0 left-0 rounded-full bg-white/25"
-                    style={{ width: `${bufferedProgress}%` }}
+                    style={{
+                      width: `${bufferedProgress}%`,
+                      ...(panicMode
+                        ? {
+                            backgroundColor: panicTint.bufferBg,
+                          }
+                        : null),
+                    }}
                   />
-                  <ScrubBarProgress />
-                  <ScrubBarThumb />
+                  <ScrubBarProgress
+                    className={cn(panicMode && "bg-[var(--panic-line)]")}
+                  />
+                  <ScrubBarThumb
+                    className={cn(
+                      panicMode &&
+                        "bg-[var(--panic-line)] shadow-[0_0_10px_var(--panic-glow)]"
+                    )}
+                  />
                 </ScrubBarTrack>
                 <ScrubBarTimeLabel time={currentTime} className="ml-2" />
               </ScrubBarContainer>

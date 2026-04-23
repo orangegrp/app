@@ -110,10 +110,8 @@ const nextConfig = {
   async headers() {
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
-      { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       // unsafe-inline/unsafe-eval are required by Next.js (inline scripts) and Tailwind (style injection).
-      // frame-ancestors 'none' duplicates X-Frame-Options for CSP-aware browsers.
       {
         key: "Content-Security-Policy",
         value: [
@@ -134,6 +132,9 @@ const nextConfig = {
     const embedHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Access-Control-Allow-Origin", value: "*" },
+      { key: "Access-Control-Allow-Methods", value: "GET, HEAD, OPTIONS" },
+      { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
       {
         key: "Content-Security-Policy",
         value: [

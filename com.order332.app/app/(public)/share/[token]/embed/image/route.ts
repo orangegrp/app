@@ -5,6 +5,20 @@ interface RouteParams {
   params: Promise<{ token: string }>
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Cross-Origin-Resource-Policy": "cross-origin",
+}
+
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  })
+}
+
 export async function GET(_req: Request, { params }: RouteParams) {
   const { token } = await params
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
@@ -42,6 +56,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
     headers: {
       "Content-Type": upstream.headers.get("content-type") ?? "image/*",
       "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+      ...CORS_HEADERS,
     },
   })
 }

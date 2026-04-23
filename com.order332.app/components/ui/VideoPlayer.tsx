@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react"
 import Hls from "hls.js"
+import type { FragLoadedData } from "hls.js"
 import { cn } from "@/lib/utils"
 import {
   ContextMenu,
@@ -33,6 +34,8 @@ interface VideoPlayerProps {
 interface VideoNerdStats {
   resolution: string
   bufferedAheadSec: number
+  transferKbps: number | null
+  bandwidthEstimateKbps: number | null
   playbackRate: number
   volumePercent: number
   isMuted: boolean
@@ -48,14 +51,18 @@ export function VideoPlayer({
   autoPlay = false,
   onEnded,
 }: VideoPlayerProps) {
+  const NETWORK_HISTORY_POINTS = 24
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const transferBytesSinceSampleRef = useRef(0)
+  const lastTransferSampleAtRef = useRef<number | null>(null)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [bufferedProgress, setBufferedProgress] = useState(0)
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -64,6 +71,7 @@ export function VideoPlayer({
   const [supportsVolumeControl, setSupportsVolumeControl] = useState(true)
   const [showStatsForNerds, setShowStatsForNerds] = useState(false)
   const [nerdStats, setNerdStats] = useState<VideoNerdStats | null>(null)
+  const [networkHistory, setNetworkHistory] = useState<number[]>([])
   const prevVolumeRef = useRef(1)
 
   const updateNerdStats = useCallback(() => {
@@ -103,12 +111,39 @@ export function VideoPlayer({
         : null
     }
 
+    const now = Date.now()
+    const lastSampleAt = lastTransferSampleAtRef.current
+    const elapsedSec = lastSampleAt
+      ? Math.max(0.25, (now - lastSampleAt) / 1000)
+      : 1
+    lastTransferSampleAtRef.current = now
+    const transferredBytes = transferBytesSinceSampleRef.current
+    transferBytesSinceSampleRef.current = 0
+
+    const transferKbps =
+      transferredBytes > 0
+        ? Math.round((transferredBytes * 8) / 1000 / elapsedSec)
+        : null
+
     const activeLevelIndex = hlsRef.current?.currentLevel ?? -1
     const level =
       activeLevelIndex >= 0 ? hlsRef.current?.levels?.[activeLevelIndex] : null
+    const bandwidthEstimate = hlsRef.current?.bandwidthEstimate ?? 0
+    const bandwidthEstimateKbps =
+      Number.isFinite(bandwidthEstimate) && bandwidthEstimate > 0
+        ? Math.round(bandwidthEstimate / 1000)
+        : null
     const hlsLevelLabel = level
       ? `${level.width || "?"}x${level.height || "?"} · ${Math.round((level.bitrate ?? 0) / 1000)} kbps`
       : null
+
+    const networkMetric =
+      transferKbps ??
+      bandwidthEstimateKbps ??
+      Math.round(bufferedAheadSec * 300)
+    setNetworkHistory((prev) =>
+      [...prev, Math.max(1, networkMetric)].slice(-NETWORK_HISTORY_POINTS)
+    )
 
     setNerdStats({
       resolution:
@@ -116,6 +151,8 @@ export function VideoPlayer({
           ? `${video.videoWidth}x${video.videoHeight}`
           : "Unknown",
       bufferedAheadSec,
+      transferKbps,
+      bandwidthEstimateKbps,
       playbackRate: video.playbackRate,
       volumePercent: Math.round(video.volume * 100),
       isMuted: video.muted,
@@ -158,11 +195,22 @@ export function VideoPlayer({
       const hls = new Hls({ enableWorker: true, lowLatencyMode: false })
       hls.loadSource(src)
       hls.attachMedia(video)
+      const onFragLoaded = (_event: string, data: FragLoadedData) => {
+        const loaded = data.payload?.byteLength
+        if (
+          typeof loaded === "number" &&
+          Number.isFinite(loaded) &&
+          loaded > 0
+        ) {
+          transferBytesSinceSampleRef.current += loaded
+        }
+      }
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           console.error("[VideoPlayer] HLS fatal error:", data)
         }
       })
+      hls.on(Hls.Events.FRAG_LOADED, onFragLoaded)
       hlsRef.current = hls
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari native HLS — no WebKit-specific API usage, just set src
@@ -175,6 +223,8 @@ export function VideoPlayer({
     return () => {
       hlsRef.current?.destroy()
       hlsRef.current = null
+      transferBytesSinceSampleRef.current = 0
+      lastTransferSampleAtRef.current = null
     }
   }, [src])
 
@@ -185,6 +235,34 @@ export function VideoPlayer({
     return () => window.clearInterval(timer)
   }, [showStatsForNerds, updateNerdStats])
 
+  useEffect(() => {
+    setNetworkHistory([])
+    transferBytesSinceSampleRef.current = 0
+    lastTransferSampleAtRef.current = null
+  }, [src])
+
+  const networkPeak = useMemo(
+    () => Math.max(1, ...networkHistory),
+    [networkHistory]
+  )
+  const networkGraph = useMemo(() => {
+    const points = networkHistory.length
+      ? networkHistory
+      : [1, 1, 1, 1, 1, 1, 1, 1]
+    const width = 220
+    const height = 60
+    const stepX = points.length > 1 ? width / (points.length - 1) : width
+    const coords = points.map((point, index) => {
+      const x = index * stepX
+      const ratio = Math.max(0, Math.min(1, point / networkPeak))
+      const y = height - ratio * (height - 4) - 2
+      return { x, y }
+    })
+    const linePath = coords.map(({ x, y }) => `${x},${y}`).join(" ")
+    const areaPath = `${linePath} ${width},${height} 0,${height}`
+    return { width, height, linePath, areaPath }
+  }, [networkHistory, networkPeak])
+
   // Wire video events to state
   useEffect(() => {
     const video = videoRef.current
@@ -192,10 +270,40 @@ export function VideoPlayer({
 
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
-    const onTimeUpdate = () => setCurrentTime(video.currentTime)
-    const onDurationChange = () => setDuration(video.duration || 0)
+    const updateBufferedProgress = () => {
+      const currentDuration = video.duration || 0
+      if (!currentDuration || video.buffered.length === 0) {
+        setBufferedProgress(0)
+        return
+      }
+      let bufferedEnd = 0
+      for (let i = 0; i < video.buffered.length; i += 1) {
+        const start = video.buffered.start(i)
+        const end = video.buffered.end(i)
+        if (video.currentTime >= start && video.currentTime <= end) {
+          bufferedEnd = end
+          break
+        }
+        if (end > bufferedEnd) bufferedEnd = end
+      }
+      setBufferedProgress(
+        Math.max(0, Math.min(100, (bufferedEnd / currentDuration) * 100))
+      )
+    }
+    const onTimeUpdate = () => {
+      setCurrentTime(video.currentTime)
+      updateBufferedProgress()
+    }
+    const onDurationChange = () => {
+      setDuration(video.duration || 0)
+      updateBufferedProgress()
+    }
     const onWaiting = () => setIsBuffering(true)
-    const onCanPlay = () => setIsBuffering(false)
+    const onCanPlay = () => {
+      setIsBuffering(false)
+      updateBufferedProgress()
+    }
+    const onProgress = () => updateBufferedProgress()
     const onVolumeChange = () => {
       setVolume(video.volume)
       setIsMuted(video.muted)
@@ -212,6 +320,7 @@ export function VideoPlayer({
     video.addEventListener("pause", onPause)
     video.addEventListener("timeupdate", onTimeUpdate)
     video.addEventListener("durationchange", onDurationChange)
+    video.addEventListener("progress", onProgress)
     video.addEventListener("waiting", onWaiting)
     video.addEventListener("canplay", onCanPlay)
     video.addEventListener("volumechange", onVolumeChange)
@@ -222,6 +331,7 @@ export function VideoPlayer({
       video.removeEventListener("pause", onPause)
       video.removeEventListener("timeupdate", onTimeUpdate)
       video.removeEventListener("durationchange", onDurationChange)
+      video.removeEventListener("progress", onProgress)
       video.removeEventListener("waiting", onWaiting)
       video.removeEventListener("canplay", onCanPlay)
       video.removeEventListener("volumechange", onVolumeChange)
@@ -345,6 +455,67 @@ export function VideoPlayer({
               <p className="mb-1 font-medium tracking-wider text-white/70 uppercase">
                 Stats for nerds
               </p>
+              <div className="mb-2">
+                <div className="mb-1 flex items-center justify-between text-[10px] text-white/65">
+                  <span>Network</span>
+                  <span>
+                    {nerdStats.transferKbps
+                      ? `${nerdStats.transferKbps} kbps`
+                      : nerdStats.bandwidthEstimateKbps
+                        ? `~${nerdStats.bandwidthEstimateKbps} kbps`
+                        : "estimating..."}
+                  </span>
+                </div>
+                <div className="rounded-sm border border-white/12 bg-black/35 p-1">
+                  <svg
+                    viewBox={`0 0 ${networkGraph.width} ${networkGraph.height}`}
+                    className="h-[44px] w-full"
+                    preserveAspectRatio="none"
+                    aria-label="Network transfer graph"
+                  >
+                    <defs>
+                      <linearGradient
+                        id="network-line-gradient"
+                        x1="0"
+                        y1="1"
+                        x2="1"
+                        y2="0"
+                      >
+                        <stop offset="0%" stopColor="rgba(248,113,113,0.95)" />
+                        <stop offset="45%" stopColor="rgba(250,204,21,0.95)" />
+                        <stop offset="100%" stopColor="rgba(74,222,128,0.95)" />
+                      </linearGradient>
+                      <linearGradient
+                        id="network-area-gradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop offset="0%" stopColor="rgba(74,222,128,0.28)" />
+                        <stop offset="40%" stopColor="rgba(250,204,21,0.16)" />
+                        <stop
+                          offset="100%"
+                          stopColor="rgba(248,113,113,0.06)"
+                        />
+                      </linearGradient>
+                    </defs>
+                    <polyline
+                      points={networkGraph.areaPath}
+                      fill="url(#network-area-gradient)"
+                      stroke="none"
+                    />
+                    <polyline
+                      points={networkGraph.linePath}
+                      fill="none"
+                      stroke="url(#network-line-gradient)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
                 <span className="text-white/65">Viewport</span>
                 <span>{nerdStats.resolution}</span>
@@ -397,6 +568,10 @@ export function VideoPlayer({
                 className="gap-2"
               >
                 <ScrubBarTrack>
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-white/25"
+                    style={{ width: `${bufferedProgress}%` }}
+                  />
                   <ScrubBarProgress />
                   <ScrubBarThumb />
                 </ScrubBarTrack>

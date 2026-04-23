@@ -82,6 +82,7 @@ export interface ContentItemMeta {
   muxUploadId: string | null
   muxAssetId: string | null
   muxPlaybackId: string | null
+  videoThumbnailUrl?: string | null
   videoStatus: VideoStatus | null
   videoError: string | null
 }

@@ -239,7 +239,12 @@ export function ContentSharePageClient({
               style={{ aspectRatio }}
               className="w-full overflow-hidden rounded-xl"
             >
-              <VideoPlayer src={videoUrl} className="h-full w-full" autoPlay />
+              <VideoPlayer
+                src={videoUrl}
+                title={item.title}
+                className="h-full w-full"
+                autoPlay
+              />
             </div>
           ) : null}
         </div>

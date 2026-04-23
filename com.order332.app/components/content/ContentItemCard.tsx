@@ -102,6 +102,14 @@ export function ContentItemCard({
     item.width && item.height && item.width > 0 && item.height > 0
       ? `${item.width} / ${item.height}`
       : "16 / 9"
+  const videoAspectRatioValue =
+    item.width && item.height && item.width > 0 && item.height > 0
+      ? item.width / item.height
+      : 16 / 9
+  const videoDialogMinWidthPx = Math.max(
+    420,
+    Math.round(280 * videoAspectRatioValue)
+  )
   const videoDialogWidth =
     item.width && item.height && item.width > 0 && item.height > 0
       ? `min(92vw, ${(72 * (item.width / item.height)).toFixed(2)}vh)`
@@ -381,8 +389,12 @@ export function ContentItemCard({
         >
           <DialogContent
             showCloseButton={false}
-            style={{ width: videoDialogWidth, maxWidth: "92vw" }}
-            className="p-2 sm:max-h-[86vh] sm:[min-height:280px] sm:[min-width:420px] sm:resize sm:overflow-auto"
+            style={{
+              width: videoDialogWidth,
+              maxWidth: "92vw",
+              minWidth: `min(92vw, ${videoDialogMinWidthPx}px)`,
+            }}
+            className="p-2 sm:max-h-[86vh] sm:[min-height:280px] sm:resize-x sm:overflow-hidden"
           >
             <DialogTitle className="sr-only">{item.title}</DialogTitle>
             <DialogClose
@@ -398,8 +410,12 @@ export function ContentItemCard({
               >
                 <VideoPlayer
                   src={videoSrc}
+                  title={item.title}
                   className="h-full w-full"
                   autoPlay
+                  onDownload={() => {
+                    void downloadVideo()
+                  }}
                 />
               </div>
             ) : (
@@ -606,8 +622,24 @@ function VideoCard({
           isReady ? "cursor-pointer" : "cursor-not-allowed opacity-70"
         )}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
-        <Video className="h-8 w-8 text-white/70" />
+        {item.videoThumbnailUrl ? (
+          <>
+            <Image
+              src={item.videoThumbnailUrl}
+              alt={`${item.title} thumbnail`}
+              fill
+              unoptimized
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 33vw"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/35" />
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
+            <Video className="h-8 w-8 text-white/70" />
+          </>
+        )}
         {isReady && (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <span className="glass-button glass-button-glass flex h-12 w-12 items-center justify-center rounded-full border-white/25 bg-white/18 text-white shadow-[0_12px_28px_rgba(0,0,0,0.42)] backdrop-blur-xl">

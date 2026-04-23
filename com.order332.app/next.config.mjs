@@ -117,7 +117,7 @@ const nextConfig = {
         key: "Content-Security-Policy",
         value: [
           "default-src 'self'",
-          "img-src 'self' cdn.discordapp.com data: blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.github.com raw.githubusercontent.com github.com",
+          "img-src 'self' cdn.discordapp.com data: blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.github.com raw.githubusercontent.com github.com *.mux.com",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline'",
@@ -140,7 +140,7 @@ const nextConfig = {
         key: "Content-Security-Policy",
         value: [
           "default-src 'self'",
-          "img-src 'self' data: blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com",
+          "img-src 'self' data: blob: *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.mux.com",
           "media-src 'self' *.supabase.co *.r2.cloudflarestorage.com *.eu.r2.cloudflarestorage.com *.mux.com blob:",
           "script-src 'self' 'unsafe-inline'",
           "style-src 'self' 'unsafe-inline'",

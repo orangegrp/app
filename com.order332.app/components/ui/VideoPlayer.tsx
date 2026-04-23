@@ -1,7 +1,20 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react"
+import {
+  Airplay,
+  Cast,
+  Check,
+  Download,
+  Maximize,
+  Minimize,
+  Pause,
+  Play,
+  Settings,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react"
 import Hls from "hls.js"
 import type { FragLoadedData } from "hls.js"
 import { cn } from "@/lib/utils"
@@ -12,6 +25,15 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   ScrubBarContainer,
   ScrubBarProgress,
@@ -26,9 +48,11 @@ interface VideoPlayerProps {
   src: string
   /** Thumbnail/poster image URL shown before playback. */
   poster?: string
+  title?: string
   className?: string
   autoPlay?: boolean
   onEnded?: () => void
+  onDownload?: () => void
 }
 
 interface VideoNerdStats {
@@ -69,6 +93,15 @@ type WebkitFullscreenDocument = Document & {
   webkitExitFullscreen?: () => Promise<void> | void
 }
 
+type WebKitAirPlayVideoElement = HTMLVideoElement & {
+  webkitShowPlaybackTargetPicker?: () => void
+}
+
+interface QualityOption {
+  value: number
+  label: string
+}
+
 const PANIC_TINTS = [
   {
     line: "#00ff00",
@@ -96,20 +129,29 @@ const PANIC_TINTS = [
   },
 ] as const
 
+const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+
 export function VideoPlayer({
   src,
   poster,
+  title,
   className,
   autoPlay = false,
   onEnded,
+  onDownload,
 }: VideoPlayerProps) {
-  const NETWORK_HISTORY_POINTS = 24
+  const NETWORK_HISTORY_POINTS = 120
+  const NETWORK_SAMPLE_MS = 250
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<Hls | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transferBytesSinceSampleRef = useRef(0)
   const lastTransferSampleAtRef = useRef<number | null>(null)
+  const lastMeasuredTransferKbpsRef = useRef<number | null>(null)
+  const statsCardRef = useRef<HTMLDivElement>(null)
+  const statsDragPointerIdRef = useRef<number | null>(null)
+  const statsDragOffsetRef = useRef({ x: 0, y: 0 })
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -122,6 +164,12 @@ export function VideoPlayer({
   const [controlsVisible, setControlsVisible] = useState(true)
   const [supportsVolumeControl, setSupportsVolumeControl] = useState(true)
   const [showStatsForNerds, setShowStatsForNerds] = useState(false)
+  const [statsPosition, setStatsPosition] = useState({ x: 12, y: 12 })
+  const [playbackRate, setPlaybackRate] = useState(1)
+  const [qualityOptions, setQualityOptions] = useState<QualityOption[]>([])
+  const [selectedQuality, setSelectedQuality] = useState(-1)
+  const [remotePlaybackAvailable, setRemotePlaybackAvailable] = useState(false)
+  const [isAppleDevice, setIsAppleDevice] = useState(false)
   const [panicMode, setPanicMode] = useState(false)
   const [panicTintIndex, setPanicTintIndex] = useState(0)
   const [nerdStats, setNerdStats] = useState<VideoNerdStats | null>(null)
@@ -129,6 +177,37 @@ export function VideoPlayer({
   const prevVolumeRef = useRef(1)
   const keySequenceRef = useRef("")
   const lastKeyAtRef = useRef<number | null>(null)
+
+  const addTransferBytes = useCallback((bytes: number) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return
+    transferBytesSinceSampleRef.current += bytes
+  }, [])
+
+  const deriveQualityOptions = useCallback((hls: Hls): QualityOption[] => {
+    const mapped = hls.levels.map((level, index) => {
+      const height = level.height || 0
+      const width = level.width || 0
+      const bitrateKbps = Math.max(1, Math.round((level.bitrate ?? 0) / 1000))
+      const resolutionLabel =
+        width > 0 && height > 0 ? `${height}p (${width}x${height})` : `Level ${index + 1}`
+      return {
+        value: index,
+        label: `${resolutionLabel} · ${bitrateKbps} kbps`,
+      }
+    })
+
+    const uniqueByLabel = new Map<string, QualityOption>()
+    for (const option of mapped) {
+      if (!uniqueByLabel.has(option.label)) {
+        uniqueByLabel.set(option.label, option)
+      }
+    }
+
+    return [
+      { value: -1, label: "Auto" },
+      ...Array.from(uniqueByLabel.values()).sort((a, b) => b.value - a.value),
+    ]
+  }, [])
 
   const updateNerdStats = useCallback(() => {
     const video = videoRef.current
@@ -180,6 +259,9 @@ export function VideoPlayer({
       transferredBytes > 0
         ? Math.round((transferredBytes * 8) / 1000 / elapsedSec)
         : null
+    if (transferKbps !== null) {
+      lastMeasuredTransferKbpsRef.current = transferKbps
+    }
 
     const activeLevelIndex = hlsRef.current?.currentLevel ?? -1
     const level =
@@ -216,8 +298,9 @@ export function VideoPlayer({
 
     const networkMetric =
       transferKbps ??
+      lastMeasuredTransferKbpsRef.current ??
       bandwidthEstimateKbps ??
-      Math.round(bufferedAheadSec * 300)
+      1
     setNetworkHistory((prev) =>
       [...prev, Math.max(1, networkMetric)].slice(-NETWORK_HISTORY_POINTS)
     )
@@ -269,7 +352,7 @@ export function VideoPlayer({
       totalFrames,
       hlsLevelLabel,
     })
-  }, [src])
+  }, [NETWORK_HISTORY_POINTS, src])
 
   useEffect(() => {
     const ua = navigator.userAgent
@@ -290,6 +373,45 @@ export function VideoPlayer({
     }
   }, [])
 
+  useEffect(() => {
+    setIsAppleDevice(/Apple/i.test(navigator.vendor || ""))
+    const video = videoRef.current as WebKitAirPlayVideoElement | null
+    if (!video) {
+      setRemotePlaybackAvailable(false)
+      return
+    }
+
+    if (typeof video.webkitShowPlaybackTargetPicker === "function") {
+      setRemotePlaybackAvailable(true)
+      return
+    }
+
+    if (!("remote" in video)) {
+      setRemotePlaybackAvailable(false)
+      return
+    }
+
+    const remote = video.remote
+    let watchId: number | undefined
+    setRemotePlaybackAvailable(true)
+    remote
+      .watchAvailability((available) => {
+        if (available) setRemotePlaybackAvailable(true)
+      })
+      .then((id) => {
+        watchId = id
+      })
+      .catch(() => {
+        setRemotePlaybackAvailable(true)
+      })
+
+    return () => {
+      if (watchId != null) {
+        remote.cancelWatchAvailability(watchId).catch(() => {})
+      }
+    }
+  }, [src])
+
   // Initialise HLS.js
   useEffect(() => {
     const video = videoRef.current
@@ -304,6 +426,7 @@ export function VideoPlayer({
       const hls = new Hls({ enableWorker: true, lowLatencyMode: false })
       hls.loadSource(src)
       hls.attachMedia(video)
+
       const onFragLoaded = (_event: string, data: FragLoadedData) => {
         const loaded = data.payload?.byteLength
         if (
@@ -311,22 +434,36 @@ export function VideoPlayer({
           Number.isFinite(loaded) &&
           loaded > 0
         ) {
-          transferBytesSinceSampleRef.current += loaded
+          addTransferBytes(loaded)
         }
+      }
+      const onManifestParsed = () => {
+        setQualityOptions(deriveQualityOptions(hls))
+        setSelectedQuality(hls.autoLevelEnabled ? -1 : hls.loadLevel)
+      }
+      const onLevelSwitched = () => {
+        const desired = hls.autoLevelEnabled ? -1 : hls.loadLevel
+        setSelectedQuality(desired >= 0 ? desired : -1)
       }
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           console.error("[VideoPlayer] HLS fatal error:", data)
         }
       })
+      hls.on(Hls.Events.MANIFEST_PARSED, onManifestParsed)
       hls.on(Hls.Events.FRAG_LOADED, onFragLoaded)
+      hls.on(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
       hlsRef.current = hls
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari native HLS — no WebKit-specific API usage, just set src
       video.src = src
+      setQualityOptions([])
+      setSelectedQuality(-1)
     } else {
       // Direct video URL fallback
       video.src = src
+      setQualityOptions([])
+      setSelectedQuality(-1)
     }
 
     return () => {
@@ -334,21 +471,113 @@ export function VideoPlayer({
       hlsRef.current = null
       transferBytesSinceSampleRef.current = 0
       lastTransferSampleAtRef.current = null
+      lastMeasuredTransferKbpsRef.current = null
     }
-  }, [src])
+  }, [addTransferBytes, deriveQualityOptions, src])
 
   useEffect(() => {
     if (!showStatsForNerds) return
     updateNerdStats()
-    const timer = window.setInterval(updateNerdStats, 1000)
+    const timer = window.setInterval(updateNerdStats, NETWORK_SAMPLE_MS)
     return () => window.clearInterval(timer)
-  }, [showStatsForNerds, updateNerdStats])
+  }, [NETWORK_SAMPLE_MS, showStatsForNerds, updateNerdStats])
 
   useEffect(() => {
     setNetworkHistory([])
     transferBytesSinceSampleRef.current = 0
     lastTransferSampleAtRef.current = null
+    lastMeasuredTransferKbpsRef.current = null
   }, [src])
+
+  const clampStatsPosition = useCallback((x: number, y: number) => {
+    const container = containerRef.current
+    const statsCard = statsCardRef.current
+    if (!container || !statsCard) return { x, y }
+
+    const margin = 8
+    const maxX = Math.max(margin, container.clientWidth - statsCard.offsetWidth - margin)
+    const maxY = Math.max(margin, container.clientHeight - statsCard.offsetHeight - margin)
+
+    return {
+      x: Math.min(Math.max(x, margin), maxX),
+      y: Math.min(Math.max(y, margin), maxY),
+    }
+  }, [])
+
+  const onStatsDragStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest("button")) return
+      const container = containerRef.current
+      const statsCard = statsCardRef.current
+      if (!container || !statsCard) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const containerRect = container.getBoundingClientRect()
+      const cardRect = statsCard.getBoundingClientRect()
+      statsDragOffsetRef.current = {
+        x: event.clientX - cardRect.left,
+        y: event.clientY - cardRect.top,
+      }
+
+      const next = clampStatsPosition(
+        event.clientX - containerRect.left - statsDragOffsetRef.current.x,
+        event.clientY - containerRect.top - statsDragOffsetRef.current.y
+      )
+      setStatsPosition(next)
+
+      statsDragPointerIdRef.current = event.pointerId
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    [clampStatsPosition]
+  )
+
+  const onStatsDragMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (statsDragPointerIdRef.current !== event.pointerId) return
+      const container = containerRef.current
+      if (!container) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const containerRect = container.getBoundingClientRect()
+      const next = clampStatsPosition(
+        event.clientX - containerRect.left - statsDragOffsetRef.current.x,
+        event.clientY - containerRect.top - statsDragOffsetRef.current.y
+      )
+      setStatsPosition(next)
+    },
+    [clampStatsPosition]
+  )
+
+  const onStatsDragEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (statsDragPointerIdRef.current !== event.pointerId) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    statsDragPointerIdRef.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!showStatsForNerds) return
+    const clamped = clampStatsPosition(statsPosition.x, statsPosition.y)
+    if (clamped.x !== statsPosition.x || clamped.y !== statsPosition.y) {
+      setStatsPosition(clamped)
+    }
+  }, [clampStatsPosition, isFullscreen, showStatsForNerds, statsPosition.x, statsPosition.y])
+
+  useEffect(() => {
+    if (!showStatsForNerds) return
+    const onResize = () => {
+      setStatsPosition((prev) => clampStatsPosition(prev.x, prev.y))
+    }
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [clampStatsPosition, showStatsForNerds])
 
   useEffect(() => {
     const code = "332"
@@ -418,10 +647,12 @@ export function VideoPlayer({
 
   const panicTint = PANIC_TINTS[panicTintIndex]
 
-  const networkPeak = useMemo(
-    () => Math.max(1, ...networkHistory),
-    [networkHistory]
-  )
+  const networkPeak = useMemo(() => {
+    if (networkHistory.length === 0) return 1
+    const sorted = [...networkHistory].sort((a, b) => a - b)
+    const idx = Math.max(0, Math.floor(sorted.length * 0.9) - 1)
+    return Math.max(1, sorted[idx] ?? 1)
+  }, [networkHistory])
   const networkGraph = useMemo(() => {
     const points = networkHistory.length
       ? networkHistory
@@ -488,6 +719,9 @@ export function VideoPlayer({
         prevVolumeRef.current = video.volume
       }
     }
+    const onRateChange = () => {
+      setPlaybackRate(video.playbackRate)
+    }
     const onEnded_ = () => {
       setIsPlaying(false)
       onEnded?.()
@@ -501,7 +735,9 @@ export function VideoPlayer({
     video.addEventListener("waiting", onWaiting)
     video.addEventListener("canplay", onCanPlay)
     video.addEventListener("volumechange", onVolumeChange)
+    video.addEventListener("ratechange", onRateChange)
     video.addEventListener("ended", onEnded_)
+    onRateChange()
 
     return () => {
       video.removeEventListener("play", onPlay)
@@ -512,6 +748,7 @@ export function VideoPlayer({
       video.removeEventListener("waiting", onWaiting)
       video.removeEventListener("canplay", onCanPlay)
       video.removeEventListener("volumechange", onVolumeChange)
+      video.removeEventListener("ratechange", onRateChange)
       video.removeEventListener("ended", onEnded_)
     }
   }, [onEnded])
@@ -603,6 +840,36 @@ export function VideoPlayer({
     video.muted = clamped === 0
   }, [])
 
+  const changePlaybackRate = useCallback((nextRate: number) => {
+    const video = videoRef.current
+    if (!video) return
+    video.playbackRate = nextRate
+    setPlaybackRate(nextRate)
+  }, [])
+
+  const changeQuality = useCallback((nextLevel: number) => {
+    const hls = hlsRef.current
+    if (!hls) return
+    const normalizedLevel = Number.isInteger(nextLevel) ? nextLevel : -1
+    hls.currentLevel = normalizedLevel
+    hls.nextLevel = normalizedLevel
+    hls.loadLevel = normalizedLevel
+    setSelectedQuality(normalizedLevel)
+  }, [])
+
+  const promptRemotePlayback = useCallback(() => {
+    const video = videoRef.current as WebKitAirPlayVideoElement | null
+    if (!video) return
+
+    if (isAppleDevice) {
+      video.webkitShowPlaybackTargetPicker?.()
+      return
+    }
+
+    if (!("remote" in video)) return
+    video.remote.prompt().catch(() => {})
+  }, [isAppleDevice])
+
   const toggleFullscreen = useCallback(() => {
     const container = containerRef.current
     const video = videoRef.current as IOSVideoElement | null
@@ -667,7 +934,7 @@ export function VideoPlayer({
         <div
           ref={containerRef}
           className={cn(
-            "group relative overflow-hidden rounded-2xl bg-black",
+            "group relative overflow-hidden rounded-2xl bg-black fullscreen:rounded-none",
             className
           )}
           onMouseMove={showControls}
@@ -683,7 +950,8 @@ export function VideoPlayer({
             poster={poster}
             autoPlay={autoPlay}
             playsInline
-            className="w-full"
+            x-webkit-airplay="allow"
+            className="h-full w-full object-contain object-center"
             style={{ display: "block" }}
             crossOrigin="anonymous"
           />
@@ -696,10 +964,39 @@ export function VideoPlayer({
           )}
 
           {showStatsForNerds && nerdStats && (
-            <div className="pointer-events-none absolute top-3 left-3 z-20 max-w-[min(92%,420px)] rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-[11px] text-white/90 backdrop-blur-md">
-              <p className="mb-1 font-medium tracking-wider text-white/70 uppercase">
-                Stats for nerds
-              </p>
+            <div
+              ref={statsCardRef}
+              className="absolute z-20 max-h-[calc(100%-24px)] max-w-[min(92%,420px)] overflow-auto rounded-lg border border-white/20 bg-black/60 px-3 py-2 text-[11px] text-white/90 backdrop-blur-md [scrollbar-color:rgba(255,255,255,0.28)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/28 [&::-webkit-scrollbar-track]:bg-transparent"
+              style={{ left: `${statsPosition.x}px`, top: `${statsPosition.y}px` }}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div
+                className="mb-1 flex cursor-move touch-none items-center gap-2"
+                onPointerDown={onStatsDragStart}
+                onPointerMove={onStatsDragMove}
+                onPointerUp={onStatsDragEnd}
+                onPointerCancel={onStatsDragEnd}
+              >
+                <p className="font-medium tracking-wider text-white/70 uppercase">
+                  Stats for nerds
+                </p>
+                <button
+                  type="button"
+                  aria-label="Close stats for nerds"
+                  className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-sm text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setShowStatsForNerds(false)
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <div className="mb-2">
                 <div className="mb-1 flex items-center justify-between text-[10px] text-white/65">
                   <span>Network</span>
@@ -832,6 +1129,26 @@ export function VideoPlayer({
             </div>
           )}
 
+          {title && (
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-0 z-20 transition-opacity duration-300",
+                controlsVisible ? "opacity-100" : "opacity-0"
+              )}
+            >
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to bottom, oklch(0 0 0 / 68%) 0%, transparent 100%)",
+                }}
+              />
+              <div className="relative z-10 px-4 pt-3 pb-6">
+                <p className="truncate text-sm font-medium text-white/95">{title}</p>
+              </div>
+            </div>
+          )}
+
           {/* Controls overlay */}
           <div
             className={cn(
@@ -842,7 +1159,7 @@ export function VideoPlayer({
           >
             {/* Glass gradient fade */}
             <div
-              className="absolute inset-0 rounded-b-2xl"
+              className="absolute inset-0 rounded-b-2xl fullscreen:rounded-none"
               style={{
                 background:
                   "linear-gradient(to top, oklch(0 0 0 / 70%) 0%, transparent 100%)",
@@ -858,7 +1175,10 @@ export function VideoPlayer({
                 className="gap-2"
               >
                 <ScrubBarTrack
-                  className={cn(panicMode && "transition-colors duration-75")}
+                  className={cn(
+                    "h-1.5 transition-[height] duration-150 ease-out hover:h-2",
+                    panicMode && "transition-colors duration-75"
+                  )}
                   style={
                     panicMode
                       ? {
@@ -949,6 +1269,139 @@ export function VideoPlayer({
 
                 <div className="flex-1" />
 
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="glass-button glass-button-ghost flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
+                        aria-label="Playback settings"
+                        title="Playback settings"
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                      />
+                    }
+                  >
+                    <Settings className="h-4 w-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="end"
+                    sideOffset={8}
+                    alignOffset={0}
+                    portalContainer={isFullscreen ? containerRef.current : undefined}
+                    className="min-w-[210px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="rounded-lg px-3 py-2 text-[14px] font-medium">
+                        Speed
+                        <span className="ml-auto text-[12px] text-white/65">
+                          {playbackRate}x
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent
+                        className="min-w-[150px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
+                        sideOffset={8}
+                      >
+                        {PLAYBACK_SPEEDS.map((rate) => (
+                          <DropdownMenuItem
+                            key={rate}
+                            className="rounded-lg px-3 py-2 text-[14px]"
+                            onClick={() => changePlaybackRate(rate)}
+                          >
+                            <span className="font-medium">
+                              {rate === 1 ? "Normal" : `${rate}x`}
+                            </span>
+                            {playbackRate === rate && (
+                              <Check className="ml-auto h-4 w-4 text-white/85" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger
+                        className={cn(
+                          "rounded-lg px-3 py-2 text-[14px] font-medium",
+                          qualityOptions.length <= 1 &&
+                            "pointer-events-none opacity-60"
+                        )}
+                      >
+                        Quality
+                        <span className="ml-auto max-w-[70px] truncate text-[12px] text-white/65">
+                          {selectedQuality === -1
+                            ? "Auto"
+                            : qualityOptions
+                                .find((option) => option.value === selectedQuality)
+                                ?.label.split("·")[0]
+                                ?.trim() ?? "Manual"}
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent
+                        className="max-h-56 min-w-[220px] rounded-xl border border-white/20 bg-black/62 p-1.5 text-[14px] text-white/92 backdrop-blur-lg"
+                        sideOffset={8}
+                      >
+                        {qualityOptions.length > 1 ? (
+                          qualityOptions.map((option) => (
+                            <DropdownMenuItem
+                              key={option.value}
+                              className="rounded-lg px-3 py-2 text-[13px]"
+                              onClick={() => changeQuality(option.value)}
+                            >
+                              <span className="pr-2">{option.label}</span>
+                              {selectedQuality === option.value && (
+                                <Check className="ml-auto h-4 w-4 shrink-0 text-white/85" />
+                              )}
+                            </DropdownMenuItem>
+                          ))
+                        ) : (
+                          <DropdownMenuItem
+                            disabled
+                            className="rounded-lg px-3 py-2 text-[13px] text-white/60"
+                          >
+                            Quality unavailable
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {remotePlaybackAvailable && (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      promptRemotePlayback()
+                    }}
+                    className="glass-button glass-button-ghost flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
+                    aria-label={isAppleDevice ? "AirPlay" : "Cast to device"}
+                    title={isAppleDevice ? "AirPlay" : "Cast"}
+                  >
+                    {isAppleDevice ? (
+                      <Airplay className="h-4 w-4" />
+                    ) : (
+                      <Cast className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+
+                {onDownload && (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onDownload()
+                    }}
+                    className="glass-button glass-button-ghost flex h-9 w-9 items-center justify-center rounded-full text-white/95 hover:text-white"
+                    aria-label="Download video"
+                    title="Download video"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                )}
+
                 {/* Fullscreen */}
                 <button
                   onClick={toggleFullscreen}
@@ -966,7 +1419,7 @@ export function VideoPlayer({
           </div>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent portalContainer={isFullscreen ? containerRef.current : undefined}>
         <ContextMenuGroup>
           <ContextMenuItem
             onClick={() => {

@@ -124,10 +124,14 @@ export default async function ContentEmbedPage({ params }: Props) {
     }
 
     return (
-      <div className="w-full p-2 text-white">
+      <div className="w-full text-white">
         <div
           style={{
-            ...widgetFrameStyle(220),
+            width: "100%",
+            minHeight: "220px",
+            borderRadius: "8px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            background: "transparent",
             aspectRatio:
               row.width && row.height && row.width > 0 && row.height > 0
                 ? `${row.width} / ${row.height}`
@@ -138,10 +142,11 @@ export default async function ContentEmbedPage({ params }: Props) {
           {videoUrl ? (
             <VideoPlayer
               src={videoUrl}
+              title={row.title as string}
               className="h-full w-full rounded-none"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-white/70">
+            <div className="flex h-full w-full items-center justify-center bg-black text-sm text-white/70">
               Video preview unavailable
             </div>
           )}

@@ -21,7 +21,10 @@ import {
   getMuxWhoAmI,
   type MuxAsset,
 } from "@/server/lib/mux"
-import { buildSignedMuxHlsUrl } from "@/server/lib/mux-playback"
+import {
+  buildSignedMuxHlsUrl,
+  buildSignedMuxThumbnailUrl,
+} from "@/server/lib/mux-playback"
 import {
   getVtFileReport,
   requiresVtScan,
@@ -191,9 +194,40 @@ contentItemRoutes.get("/", async (c) => {
     .filter((i) => i.itemType !== "video")
     .map((i) => i.storageKey)
   const signed = await signUrls(CONTENT_LIBRARY_BUCKET, storageKeys)
+  const videoThumbnailById = new Map<string, string | null>()
+  await Promise.all(
+    items.map(async (item) => {
+      if (
+        item.itemType !== "video" ||
+        item.videoStatus !== "ready" ||
+        !item.muxPlaybackId
+      ) {
+        videoThumbnailById.set(item.id, null)
+        return
+      }
+      try {
+        const preferredWidth =
+          typeof item.width === "number" && item.width > 0
+            ? item.width
+            : 640
+        const { url } = await buildSignedMuxThumbnailUrl(
+          item.muxPlaybackId,
+          preferredWidth
+        )
+        videoThumbnailById.set(item.id, url)
+      } catch (error) {
+        console.error(
+          `[content/items] failed to sign thumbnail for ${item.id}:`,
+          error
+        )
+        videoThumbnailById.set(item.id, null)
+      }
+    })
+  )
   const result = items.map((i) => ({
     ...i,
     publicUrl: signed.get(i.storageKey) ?? i.publicUrl,
+    videoThumbnailUrl: videoThumbnailById.get(i.id) ?? null,
   }))
   return c.json({ items: result })
 })

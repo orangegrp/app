@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Download, Eye, File, Shield, Video, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { VideoPlayer } from "@/components/ui/VideoPlayer"
+import { VideoPlayerAdaptive } from "@/components/ui/VideoPlayerAdaptive"
 import {
   Dialog,
   DialogClose,
@@ -239,7 +239,7 @@ export function ContentSharePageClient({
               style={{ aspectRatio }}
               className="w-full overflow-hidden rounded-xl"
             >
-              <VideoPlayer
+              <VideoPlayerAdaptive
                 src={videoUrl}
                 title={item.title}
                 className="h-full w-full"

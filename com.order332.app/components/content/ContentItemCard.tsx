@@ -53,7 +53,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { VideoPlayer } from "@/components/ui/VideoPlayer"
+import { VideoPlayerAdaptive } from "@/components/ui/VideoPlayerAdaptive"
 import { ShareContentButton } from "@/components/content/ShareContentDialog"
 
 interface ContentItemCardProps {
@@ -408,7 +408,7 @@ export function ContentItemCard({
                 className="max-h-[82vh] w-full"
                 style={{ aspectRatio: videoAspectRatio }}
               >
-                <VideoPlayer
+                <VideoPlayerAdaptive
                   src={videoSrc}
                   title={item.title}
                   className="h-full w-full"

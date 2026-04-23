@@ -2,7 +2,7 @@ import type { CSSProperties } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Download, File, Shield, ShieldAlert, ShieldCheck } from "lucide-react"
-import { VideoPlayer } from "@/components/ui/VideoPlayer"
+import { VideoPlayerAdaptive } from "@/components/ui/VideoPlayerAdaptive"
 import { db } from "@/server/db"
 import { supabase } from "@/server/db/supabase/client"
 import { buildSignedMuxHlsUrl } from "@/server/lib/mux-playback"
@@ -140,7 +140,7 @@ export default async function ContentEmbedPage({ params }: Props) {
           className="overflow-hidden"
         >
           {videoUrl ? (
-            <VideoPlayer
+            <VideoPlayerAdaptive
               src={videoUrl}
               title={row.title as string}
               className="h-full w-full rounded-none"

@@ -158,9 +158,12 @@ const nextConfig = {
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
     ]
     return [
+      {
+        source: "/:path((?!share/[^/]+/embed(?:/.*)?$).*)",
+        headers: securityHeaders,
+      },
       { source: "/share/:token/embed", headers: embedHeaders },
       { source: "/share/:token/embed/:path*", headers: embedHeaders },
-      { source: "/(.*)", headers: securityHeaders },
       { source: "/webpc/:sessionId/console", headers: isolationHeaders },
     ]
   },

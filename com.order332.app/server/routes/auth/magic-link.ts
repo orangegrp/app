@@ -8,6 +8,7 @@ import { sha256, randomBase64url, safeCompare } from '@/server/lib/crypto'
 import { isLoginMethodAllowed } from '@/server/lib/login-methods'
 import { rateLimit } from '@/server/middleware/rate-limit'
 import { MAGIC_LINK_RATE_LIMIT } from '@/server/lib/constants'
+import { getLocationFromRequest } from '@/server/lib/geoip'
 import type { HonoEnv } from '@/server/lib/types'
 
 export const magicLinkRoutes = new Hono<HonoEnv>()
@@ -113,6 +114,7 @@ magicLinkRoutes.post('/verify', rateLimit(10, 60_000), async (c) => {
     expiresAt,
     ipAddress: c.req.header('x-forwarded-for')?.split(',')[0]?.trim(),
     userAgent: c.req.header('user-agent'),
+    location: getLocationFromRequest(c.req.raw).displayLabel,
   })
 
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)

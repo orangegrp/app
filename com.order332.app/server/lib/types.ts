@@ -81,6 +81,7 @@ export interface Session {
   lastUsedAt: Date
   ipAddress?: string
   userAgent?: string
+  location?: string
 }
 
 export interface MagicToken {
@@ -97,6 +98,7 @@ export interface MagicToken {
 export type QRSessionStatus =
   | "pending"
   | "scanned"
+  | "otp-verified"
   | "approved"
   | "rejected"
   | "expired"
@@ -110,6 +112,10 @@ export interface QRLoginSession {
   desktopUserAgent?: string
   desktopLocation?: string
   mobileUserId?: string
+  /** 6-char uppercase alphanumeric OTP generated on scan, stored normalized (no dash). */
+  otp?: string
+  /** Set when the mobile client polls /mobile-status and receives otp-verified status. Blocks old clients from approving without having gone through the OTP display step. */
+  mobileAcknowledged?: boolean
   expiresAt: Date
   createdAt: Date
   scannedAt?: Date
@@ -256,6 +262,7 @@ export interface HonoEnv {
       id: string
       permissions: string
       isPwa: boolean
+      sessionId: string
     }
   }
 }

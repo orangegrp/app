@@ -13,6 +13,7 @@ import { magicLinkRoutes } from "@/server/routes/auth/magic-link"
 import { qrRoutes } from "@/server/routes/auth/qr"
 import { refreshRoutes } from "@/server/routes/auth/refresh"
 import { accountRoutes } from "@/server/routes/auth/account"
+import { sessionRoutes } from "@/server/routes/auth/sessions"
 import { devLoginRoutes } from "@/server/routes/auth/dev-login"
 import { adminInviteRoutes } from "@/server/routes/admin/invites"
 import { adminUserRoutes } from "@/server/routes/admin/users"
@@ -165,6 +166,10 @@ auth.route("/", refreshRoutes)
 // Account management
 // /auth/account/*
 auth.route("/account", accountRoutes)
+
+// Session management
+// GET /auth/sessions, DELETE /auth/sessions/:id, DELETE /auth/sessions/others
+auth.route("/", sessionRoutes)
 
 // Dev login bypass (development only — returns 404 in production)
 // POST /auth/dev-login

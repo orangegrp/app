@@ -1,4 +1,5 @@
 import "server-only"
+import crypto from "crypto"
 import { Hono } from "hono"
 import { z } from "zod"
 import { setCookie } from "hono/cookie"
@@ -25,8 +26,23 @@ import { UAParser } from "ua-parser-js"
 
 export const qrRoutes = new Hono<HonoEnv>()
 
+// OTP helpers — 6-char uppercase alphanumeric, no ambiguous chars (0/O/1/I/L)
+const OTP_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+function generateOtp(): string {
+  const bytes = crypto.randomBytes(6)
+  return Array.from(bytes, (b) => OTP_CHARS[b % OTP_CHARS.length]).join("")
+}
+
+function formatOtp(otp: string): string {
+  return otp.slice(0, 3) + "-" + otp.slice(3)
+}
+
+function normalizeOtp(raw: string): string {
+  return raw.replace(/-/g, "").toUpperCase().trim()
+}
+
 function desktopPayloadFromSession(session: QRLoginSession): {
-  sessionId: string
   desktop: { ip: string; location: string; device: string }
 } {
   const desktopIp = session.desktopIp ?? "unknown"
@@ -40,7 +56,6 @@ function desktopPayloadFromSession(session: QRLoginSession): {
     deviceLabel = `${browserName} on ${osName}`
   }
   return {
-    sessionId: session.id,
     desktop: {
       ip: desktopIp,
       location: locationLabel,
@@ -78,6 +93,7 @@ qrRoutes.post("/init", rateLimit(10, 60_000), async (c) => {
 
 // GET /auth/qr/code?sessionId=<id>
 // Desktop polls for status; QR URL token rotates every 1s (HMAC-SHA256).
+// Once scanned or further along, returns status-only (no QR URL needed).
 qrRoutes.get("/code", rateLimit(240, 60_000), async (c) => {
   const sessionId = c.req.query("sessionId")
   if (!sessionId) return c.json({ error: "Missing sessionId" }, 400)
@@ -92,8 +108,10 @@ qrRoutes.get("/code", rateLimit(240, 60_000), async (c) => {
     return c.json({ status: "expired" })
   }
 
-  // For terminal statuses, return status only
+  // For terminal and post-scan statuses, return status only (no QR URL)
   if (
+    session.status === "scanned" ||
+    session.status === "otp-verified" ||
     session.status === "approved" ||
     session.status === "rejected" ||
     session.status === "expired"
@@ -118,7 +136,8 @@ qrRoutes.get("/code", rateLimit(240, 60_000), async (c) => {
 
 // POST /auth/qr/scan
 // Mobile user (must be logged in) scans the QR code.
-// Verifies rolling HMAC token, marks session as scanned, returns desktop location/device info.
+// Verifies rolling HMAC token, generates OTP, marks session as scanned.
+// Returns the OTP only — desktop info is withheld until OTP is verified.
 qrRoutes.post("/scan", rateLimit(60, 60_000), requireAuth, async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = z
@@ -145,11 +164,12 @@ qrRoutes.post("/scan", rateLimit(60, 60_000), requireAuth, async (c) => {
     return c.json({ error: "qr_session_invalid" }, 400)
   }
 
-  if (session.status === "scanned") {
+  // Idempotent re-scan: same user already scanned, return stored OTP (no desktop info yet)
+  if (session.status === "scanned" || session.status === "otp-verified") {
     if (session.mobileUserId !== mobileUser.id) {
       return c.json({ error: "qr_session_invalid" }, 400)
     }
-    return c.json(desktopPayloadFromSession(session))
+    return c.json({ sessionId: session.id, otp: formatOtp(session.otp ?? "") })
   }
 
   if (session.status !== "pending") {
@@ -164,20 +184,81 @@ qrRoutes.post("/scan", rateLimit(60, 60_000), requireAuth, async (c) => {
     return c.json({ error: "qr_token_invalid" }, 400)
   }
 
+  const otp = generateOtp()
+
   await db.updateQRSessionStatus(sessionId, "scanned", {
     mobileUserId: mobileUser.id,
+    otp,
     scannedAt: new Date(),
   })
 
-  const updated = await db.getQRSession(sessionId)
-  if (!updated) {
+  return c.json({ sessionId, otp: formatOtp(otp) })
+})
+
+// POST /auth/qr/verify-otp
+// Desktop submits the OTP shown on the mobile device.
+// No auth required — desktop is unauthenticated.
+// Transitions session: scanned → otp-verified (safe to reveal desktop info to mobile).
+qrRoutes.post("/verify-otp", rateLimit(10, 60_000), async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = z
+    .object({
+      sessionId: z.string().uuid(),
+      otp: z.string().min(1),
+    })
+    .safeParse(body)
+  if (!parsed.success) return c.json({ error: "Invalid request" }, 400)
+
+  const { sessionId, otp } = parsed.data
+
+  const session = await db.getQRSession(sessionId)
+  if (!session || session.expiresAt < new Date() || session.status !== "scanned") {
     return c.json({ error: "qr_session_invalid" }, 400)
   }
-  return c.json(desktopPayloadFromSession(updated))
+
+  if (normalizeOtp(otp) !== session.otp) {
+    return c.json({ error: "otp_invalid" }, 400)
+  }
+
+  await db.updateQRSessionStatus(sessionId, "otp-verified")
+
+  return c.json({ ok: true })
+})
+
+// GET /auth/qr/mobile-status?sessionId=<id>
+// Mobile polls for session status changes after scanning.
+// Desktop info is only included once status reaches otp-verified or approved.
+qrRoutes.get("/mobile-status", rateLimit(120, 60_000), requireAuth, async (c) => {
+  const sessionId = c.req.query("sessionId")
+  if (!sessionId) return c.json({ error: "Missing sessionId" }, 400)
+
+  const session = await db.getQRSession(sessionId)
+  if (!session || session.mobileUserId !== c.get("user").id) {
+    return c.json({ error: "qr_session_invalid" }, 400)
+  }
+
+  if (session.expiresAt < new Date()) {
+    await db.updateQRSessionStatus(sessionId, "expired", { resolvedAt: new Date() })
+    return c.json({ status: "expired" })
+  }
+
+  const shouldRevealDesktop =
+    session.status === "otp-verified" || session.status === "approved"
+
+  // Set mobileAcknowledged when mobile first sees the otp-verified state.
+  // Blocks old/cached clients that never poll this endpoint from being able to approve.
+  if (session.status === "otp-verified" && !session.mobileAcknowledged) {
+    await db.updateQRSessionStatus(sessionId, "otp-verified", { mobileAcknowledged: true })
+  }
+
+  return c.json({
+    status: session.status,
+    ...(shouldRevealDesktop ? desktopPayloadFromSession(session) : {}),
+  })
 })
 
 // POST /auth/qr/approve
-// Mobile user approves the login request.
+// Mobile user approves the login request (only allowed after OTP is verified).
 qrRoutes.post("/approve", rateLimit(30, 60_000), requireAuth, async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = z.object({ sessionId: z.string().uuid() }).safeParse(body)
@@ -189,7 +270,8 @@ qrRoutes.post("/approve", rateLimit(30, 60_000), requireAuth, async (c) => {
   const session = await db.getQRSession(sessionId)
   if (
     !session ||
-    session.status !== "scanned" ||
+    session.status !== "otp-verified" ||
+    !session.mobileAcknowledged ||
     session.mobileUserId !== mobileUser.id ||
     session.expiresAt < new Date()
   ) {
@@ -214,7 +296,11 @@ qrRoutes.post("/reject", rateLimit(30, 60_000), requireAuth, async (c) => {
   const mobileUser = c.get("user")
 
   const session = await db.getQRSession(sessionId)
-  if (session && session.mobileUserId === mobileUser.id) {
+  if (
+    session &&
+    session.mobileUserId === mobileUser.id &&
+    (session.status === "scanned" || session.status === "otp-verified")
+  ) {
     await db.updateQRSessionStatus(sessionId, "rejected", {
       resolvedAt: new Date(),
     })
@@ -259,6 +345,7 @@ qrRoutes.post("/finalize", rateLimit(10, 60_000), async (c) => {
     expiresAt,
     ipAddress: getClientIp(c.req.raw),
     userAgent: c.req.header("user-agent"),
+    location: getLocationFromRequest(c.req.raw).displayLabel,
   })
 
   const accessToken = await signAccessToken(

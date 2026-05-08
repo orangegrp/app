@@ -44,6 +44,7 @@ devLoginRoutes.post('/dev-login', async (c) => {
     expiresAt,
     ipAddress: c.req.header('x-forwarded-for')?.split(',')[0]?.trim(),
     userAgent: c.req.header('user-agent'),
+    location: 'Local',
   })
   const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)
   const refreshToken = await signRefreshToken(user.id, session.id, isPwa)

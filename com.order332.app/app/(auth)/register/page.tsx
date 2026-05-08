@@ -246,11 +246,13 @@ export default function RegisterPage() {
         {step === "invite" && (
           <form onSubmit={handleClaimInvite} className="flex flex-col gap-3">
             <input
+              data-slot="input"
               type="text"
               placeholder="Invite code"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-              className="glass-card w-full rounded-xl border-0 bg-transparent px-4 py-3 text-sm tracking-widest text-foreground outline-none placeholder:text-muted-foreground/40 focus:ring-1 focus:ring-white/10"
+              className="w-full rounded-lg px-3 py-2 tracking-wider text-foreground placeholder:text-muted-foreground"
+              style={{ minHeight: '44px', fontSize: '1rem' }}
               autoComplete="off"
               autoCapitalize="characters"
               spellCheck={false}

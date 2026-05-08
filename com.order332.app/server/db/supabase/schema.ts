@@ -110,6 +110,7 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       "last_used_at",
       "ip_address",
       "user_agent",
+      "location",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS sessions (
@@ -121,7 +122,8 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         last_used_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         ip_address TEXT,
-        user_agent TEXT
+        user_agent TEXT,
+        location TEXT
       );
       CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
       CREATE INDEX IF NOT EXISTS sessions_refresh_token_hash_idx ON sessions(refresh_token_hash);
@@ -161,6 +163,8 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       "desktop_user_agent",
       "desktop_location",
       "mobile_user_id",
+      "otp",
+      "mobile_acknowledged",
       "expires_at",
       "created_at",
       "scanned_at",
@@ -479,6 +483,9 @@ export async function validateAndMigrateSchema(): Promise<void> {
     await ensureTransliteratedLyricsColumns(sql)
     await ensureMusicPlaylistTables(sql)
     await ensureContentVideoColumns(sql)
+    await ensureQrOtpColumn(sql)
+    await ensureQrMobileAcknowledgedColumn(sql)
+    await ensureSessionLocationColumn(sql)
 
     console.log("[DB] Schema validation complete")
   } finally {
@@ -608,5 +615,26 @@ async function ensureMusicPlaylistTables(sql: postgres.Sql): Promise<void> {
   )
   await sql.unsafe(
     `CREATE INDEX IF NOT EXISTS music_playlist_tracks_track_id_idx   ON music_playlist_tracks (track_id)`
+  )
+}
+
+/** Adds OTP column to qr_login_sessions for the mutual-presence verification step. */
+async function ensureQrOtpColumn(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(
+    "ALTER TABLE qr_login_sessions ADD COLUMN IF NOT EXISTS otp TEXT"
+  )
+}
+
+/** Adds mobile_acknowledged flag — set when mobile polls /mobile-status after otp-verified; blocks old clients from approving without going through the OTP display step. */
+async function ensureQrMobileAcknowledgedColumn(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(
+    "ALTER TABLE qr_login_sessions ADD COLUMN IF NOT EXISTS mobile_acknowledged BOOLEAN NOT NULL DEFAULT false"
+  )
+}
+
+/** Adds location column to sessions for displaying session origin in account settings. */
+async function ensureSessionLocationColumn(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location TEXT"
   )
 }

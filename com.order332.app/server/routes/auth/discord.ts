@@ -13,6 +13,7 @@ import {
 } from '@/server/lib/jwt'
 import { hmacSign, sha256, randomBase64url, safeCompare } from '@/server/lib/crypto'
 import { canUnlinkDiscord } from '@/server/lib/login-methods'
+import { getLocationFromRequest } from '@/server/lib/geoip'
 import type { HonoEnv } from '@/server/lib/types'
 
 export const discordRoutes = new Hono<HonoEnv>()
@@ -312,6 +313,7 @@ discordRoutes.get('/callback', async (c) => {
       expiresAt,
       ipAddress: c.req.header('x-forwarded-for')?.split(',')[0]?.trim(),
       userAgent: c.req.header('user-agent'),
+      location: getLocationFromRequest(c.req.raw).displayLabel,
     })
 
     const accessToken = await signAccessToken(user.id, session.id, user.permissions, isPwa)

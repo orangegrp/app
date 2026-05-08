@@ -7,7 +7,7 @@ import type { HonoEnv } from '@/server/lib/types'
 // Dev bypass: in development, accept Authorization: Bearer dev-token
 // Returns a mock admin user for localhost testing
 const DEV_TOKEN = 'dev-token'
-const DEV_USER = { id: 'dev-user-id', permissions: '*', isPwa: false }
+const DEV_USER = { id: 'dev-user-id', permissions: '*', isPwa: false, sessionId: 'dev-session-id' }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -39,7 +39,7 @@ export const requireAuth = createMiddleware<HonoEnv>(async (c, next) => {
       return c.json({ error: 'Unauthorized' }, 401)
     }
 
-    c.set('user', { id: payload.sub, permissions: payload.permissions, isPwa: payload.isPwa })
+    c.set('user', { id: payload.sub, permissions: payload.permissions, isPwa: payload.isPwa, sessionId: payload.sessionId })
     return next()
   } catch {
     return c.json({ error: 'Unauthorized' }, 401)

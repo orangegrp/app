@@ -20,6 +20,7 @@ import { sha256 } from "@/server/lib/crypto"
 import { WEBAUTHN_CHALLENGE_LIFETIME } from "@/server/lib/constants"
 import { setCookie } from "hono/cookie"
 import { isLoginMethodAllowed } from "@/server/lib/login-methods"
+import { getLocationFromRequest } from "@/server/lib/geoip"
 import type { HonoEnv } from "@/server/lib/types"
 
 export const passkeyRoutes = new Hono<HonoEnv>()
@@ -175,6 +176,7 @@ passkeyRoutes.post("/register/finish", async (c) => {
     expiresAt,
     ipAddress: c.req.header("x-forwarded-for")?.split(",")[0]?.trim(),
     userAgent: c.req.header("user-agent"),
+    location: getLocationFromRequest(c.req.raw).displayLabel,
   })
 
   const accessToken = await signAccessToken(
@@ -308,6 +310,7 @@ passkeyRoutes.post("/verify", rateLimit(10, 60_000), async (c) => {
     expiresAt,
     ipAddress: c.req.header("x-forwarded-for")?.split(",")[0]?.trim(),
     userAgent: c.req.header("user-agent"),
+    location: getLocationFromRequest(c.req.raw).displayLabel,
   })
 
   const accessToken = await signAccessToken(

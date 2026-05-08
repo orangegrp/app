@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { applyProductImprovementConsent, capture, reset } from "@/lib/analytics"
 import { isProductImprovementConsentAllowedSync } from "@/lib/product-improvement-consent"
-import { Key, Trash2, ArrowLeft, ExternalLink } from "lucide-react"
+import { Key, Trash2, ArrowLeft, ExternalLink, Monitor, Smartphone, Tablet } from "lucide-react"
 import { PageBackground } from "@/components/layout/PageBackground"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -43,6 +43,17 @@ interface PasskeyRow {
   lastUsedAt: string | null
   deviceType: string
   backedUp: boolean
+}
+
+interface SessionRow {
+  id: string
+  device: "desktop" | "mobile" | "tablet"
+  browser: string
+  os: string
+  location: string | null
+  isPwa: boolean
+  createdAt: string
+  lastUsedAt: string
 }
 
 interface MeProfile {
@@ -87,6 +98,11 @@ export default function SettingsPage() {
   const [serverVersion, setServerVersion] = useState<string | null>(null)
   const [passkeys, setPasskeys] = useState<PasskeyRow[]>([])
   const [pkLoading, setPkLoading] = useState(true)
+  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [sessionRevoking, setSessionRevoking] = useState<string | null>(null)
+  const [revokeAllBusy, setRevokeAllBusy] = useState(false)
   const [addingPk, setAddingPk] = useState(false)
   const [newPkName, setNewPkName] = useState("")
   const [pkError, setPkError] = useState<string | null>(null)
@@ -138,6 +154,20 @@ export default function SettingsPage() {
     }
   }, [])
 
+  const loadSessions = useCallback(async () => {
+    try {
+      const data = await apiGet<{ sessions: SessionRow[]; currentSessionId: string }>(
+        "/auth/sessions"
+      )
+      setSessions(data.sessions)
+      setCurrentSessionId(data.currentSessionId)
+    } catch {
+      setSessions([])
+    } finally {
+      setSessionsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void fetch("/api/version")
       .then((r) => r.json())
@@ -148,6 +178,10 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadPasskeys()
   }, [loadPasskeys])
+
+  useEffect(() => {
+    void loadSessions()
+  }, [loadSessions])
 
   useEffect(() => {
     void loadMe()
@@ -300,6 +334,26 @@ export default function SettingsPage() {
     } catch {
       setPkError("Could not remove passkey")
       setPasskeyToRemove(null)
+    }
+  }
+
+  const handleRevokeSession = async (id: string) => {
+    setSessionRevoking(id)
+    try {
+      await apiDelete(`/auth/sessions/${id}`, {})
+      await loadSessions()
+    } finally {
+      setSessionRevoking(null)
+    }
+  }
+
+  const handleRevokeOtherSessions = async () => {
+    setRevokeAllBusy(true)
+    try {
+      await apiDelete("/auth/sessions/others", {})
+      await loadSessions()
+    } finally {
+      setRevokeAllBusy(false)
     }
   }
 
@@ -616,6 +670,98 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Active Sessions */}
+        <div className="glass-card mb-6 rounded-2xl p-6">
+          <p className="card-label mb-4">Active Sessions</p>
+          <p className="mb-4 text-xs tracking-wider text-muted-foreground">
+            Devices currently signed in to your account.
+          </p>
+          {sessionsLoading ? (
+            <div className="flex justify-center py-6">
+              <Spinner size="md" clockwise />
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="py-2 text-xs tracking-wider text-muted-foreground/70">
+              No sessions found.
+            </p>
+          ) : (
+            <>
+              <ul className="mb-4 divide-y divide-white/5 overflow-hidden rounded-xl border border-white/5">
+                {sessions.map((s) => {
+                  const isCurrent = s.id === currentSessionId
+                  const DeviceIcon =
+                    s.device === "mobile"
+                      ? Smartphone
+                      : s.device === "tablet"
+                        ? Tablet
+                        : Monitor
+                  return (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <DeviceIcon
+                        size={16}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm tracking-wider">
+                            {s.browser} on {s.os}
+                          </p>
+                          {isCurrent && (
+                            <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] tracking-widest text-foreground/70">
+                              This device
+                            </span>
+                          )}
+                          {s.isPwa && (
+                            <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] tracking-widest text-muted-foreground">
+                              PWA
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[10px] tracking-widest text-muted-foreground/70">
+                          {s.location ?? "Unknown location"} · Last active{" "}
+                          {new Date(s.lastUsedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      {!isCurrent && (
+                        <button
+                          type="button"
+                          onClick={() => void handleRevokeSession(s.id)}
+                          disabled={sessionRevoking === s.id}
+                          className="glass-button glass-button-ghost shrink-0 rounded-lg px-3 py-1.5 text-[11px] tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {sessionRevoking === s.id ? (
+                            <Spinner size="xs" />
+                          ) : (
+                            "Revoke"
+                          )}
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+              {sessions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => void handleRevokeOtherSessions()}
+                  disabled={revokeAllBusy}
+                  className="glass-button glass-button-ghost rounded-xl px-5 py-2.5 text-xs tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  style={{ minHeight: "38px" }}
+                >
+                  {revokeAllBusy ? (
+                    <Spinner size="xs" />
+                  ) : (
+                    "Sign out all other devices"
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
 

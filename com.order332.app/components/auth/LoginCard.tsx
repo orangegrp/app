@@ -1,7 +1,8 @@
 "use client"
 import Image from "next/image"
 import dynamic from "next/dynamic"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuthStore } from "@/lib/auth-store"
 import { hardNavigateTo } from "@/lib/hard-navigation"
@@ -130,6 +131,47 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   default: "Sign-in failed. Please try again.",
 }
 
+function CardApprovalGlow({ rect }: { rect: DOMRect }) {
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top + rect.height / 2
+  const w = rect.width + 48
+  const h = rect.height + 48
+
+  const orb: React.CSSProperties = {
+    position: "absolute",
+    width: 100,
+    height: 100,
+    borderRadius: "50%",
+    background: "radial-gradient(circle, oklch(1 0 0 / 90%) 0%, transparent 70%)",
+    filter: "blur(28px)",
+  }
+
+  return (
+    <>
+      <style>{`
+        @keyframes qr-spin { to { transform: rotate(360deg); } }
+        @keyframes qr-orb-pulse { 0%,100% { opacity:.3 } 50% { opacity:.75 } }
+      `}</style>
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          left: cx - w / 2,
+          top: cy - h / 2,
+          width: w,
+          height: h,
+          pointerEvents: "none",
+          zIndex: 9999,
+          animation: "qr-spin 2.4s linear infinite",
+        }}
+      >
+        <div style={{ ...orb, top: -32, left: "50%", transform: "translateX(-50%)", animation: "qr-orb-pulse 1.3s ease-in-out infinite" }} />
+        <div style={{ ...orb, bottom: -32, left: "50%", transform: "translateX(-50%)", animation: "qr-orb-pulse 1.3s ease-in-out infinite 0.65s" }} />
+      </div>
+    </>
+  )
+}
+
 export function LoginCard() {
   const setAuth = useAuthStore((s) => s.setAuth)
   const router = useRouter()
@@ -140,6 +182,16 @@ export function LoginCard() {
   const [devError, setDevError] = useState<string | null>(null)
   const [fatalError, setFatalError] = useState<string | null>(null)
   const [oauthError, setOauthError] = useState<string | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [isApproving, setIsApproving] = useState(false)
+  const [cardRect, setCardRect] = useState<DOMRect | null>(null)
+  const commitRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    if (!isApproving) return
+    const t = setTimeout(() => { commitRef.current?.() }, 2000)
+    return () => clearTimeout(t)
+  }, [isApproving])
 
   useEffect(() => {
     const code = searchParams.get("error")
@@ -269,7 +321,9 @@ export function LoginCard() {
   ]
 
   return (
-    <div className="glass-card login-card w-full max-w-sm rounded-3xl px-8 py-10">
+    <>
+    {isApproving && cardRect && createPortal(<CardApprovalGlow rect={cardRect} />, document.body)}
+    <div ref={cardRef} className="glass-card login-card w-full max-w-sm rounded-3xl px-8 py-10" style={cardRect ? { minHeight: cardRect.height } : undefined}>
       <div className="mb-8 flex flex-col items-center gap-4">
         <Image
           src="/icons/polygon.svg"
@@ -416,12 +470,15 @@ export function LoginCard() {
           )}
 
           {activeTab === "qr" && (
-            <div className="flex flex-col gap-3">
-              <p className="text-center text-xs tracking-wider text-muted-foreground">
-                Scan with your logged-in mobile device
-              </p>
-              <QRLoginPanel onFatalError={setFatalError} />
-            </div>
+            <QRLoginPanel
+              onFatalError={setFatalError}
+              onApproved={(commit) => {
+                commitRef.current = commit
+                // Measure card before React re-renders (QR panel empties on approval)
+                setCardRect(cardRef.current?.getBoundingClientRect() ?? null)
+                setIsApproving(true)
+              }}
+            />
           )}
         </>
       )}
@@ -463,5 +520,6 @@ export function LoginCard() {
         </div>
       )}
     </div>
+    </>
   )
 }

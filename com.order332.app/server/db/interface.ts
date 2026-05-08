@@ -64,6 +64,7 @@ export interface CreateSessionData {
   expiresAt: Date
   ipAddress?: string
   userAgent?: string
+  location?: string
 }
 
 export interface CreateMagicTokenData {
@@ -178,6 +179,8 @@ export interface DBAdapter {
   ): Promise<Session | null>
   deleteSession(id: string): Promise<void>
   deleteUserSessions(userId: string): Promise<void>
+  getUserSessions(userId: string): Promise<Session[]>
+  deleteOtherUserSessions(userId: string, exceptSessionId: string): Promise<void>
 
   // Magic tokens
   getMagicToken(tokenHash: string): Promise<MagicToken | null>
@@ -194,6 +197,8 @@ export interface DBAdapter {
     status: QRSessionStatus,
     data?: {
       mobileUserId?: string
+      otp?: string
+      mobileAcknowledged?: boolean
       scannedAt?: Date
       resolvedAt?: Date
     }

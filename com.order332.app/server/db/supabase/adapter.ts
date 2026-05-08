@@ -102,6 +102,7 @@ function mapSession(row: Record<string, unknown>): Session {
     lastUsedAt: new Date(row.last_used_at as string),
     ipAddress: (row.ip_address as string | null) ?? undefined,
     userAgent: (row.user_agent as string | null) ?? undefined,
+    location: (row.location as string | null) ?? undefined,
   }
 }
 
@@ -127,6 +128,8 @@ function mapQRSession(row: Record<string, unknown>): QRLoginSession {
     desktopUserAgent: (row.desktop_user_agent as string | null) ?? undefined,
     desktopLocation: (row.desktop_location as string | null) ?? undefined,
     mobileUserId: (row.mobile_user_id as string | null) ?? undefined,
+    otp: (row.otp as string | null) ?? undefined,
+    mobileAcknowledged: (row.mobile_acknowledged as boolean | null) ?? false,
     expiresAt: new Date(row.expires_at as string),
     createdAt: new Date(row.created_at as string),
     scannedAt: row.scanned_at ? new Date(row.scanned_at as string) : undefined,
@@ -552,6 +555,7 @@ export class SupabaseAdapter implements DBAdapter {
         expires_at: data.expiresAt.toISOString(),
         ip_address: data.ipAddress ?? null,
         user_agent: data.userAgent ?? null,
+        location: data.location ?? null,
       })
       .select()
       .single()
@@ -620,6 +624,28 @@ export class SupabaseAdapter implements DBAdapter {
       .delete()
       .eq("user_id", userId)
     if (error) dbErr("deleteUserSessions", error)
+  }
+
+  async getUserSessions(userId: string): Promise<Session[]> {
+    const { data, error } = await supabase
+      .from("sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("last_used_at", { ascending: false })
+    if (error) dbErr("getUserSessions", error)
+    return (data as Record<string, unknown>[]).map(mapSession)
+  }
+
+  async deleteOtherUserSessions(
+    userId: string,
+    exceptSessionId: string
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("sessions")
+      .delete()
+      .eq("user_id", userId)
+      .neq("id", exceptSessionId)
+    if (error) dbErr("deleteOtherUserSessions", error)
   }
 
   // ── Magic tokens ───────────────────────────────────────────────────────────
@@ -730,10 +756,12 @@ export class SupabaseAdapter implements DBAdapter {
   async updateQRSessionStatus(
     id: string,
     status: QRSessionStatus,
-    data?: { mobileUserId?: string; scannedAt?: Date; resolvedAt?: Date }
+    data?: { mobileUserId?: string; otp?: string; mobileAcknowledged?: boolean; scannedAt?: Date; resolvedAt?: Date }
   ): Promise<void> {
     const update: Record<string, unknown> = { status }
     if (data?.mobileUserId) update.mobile_user_id = data.mobileUserId
+    if (data?.otp) update.otp = data.otp
+    if (data?.mobileAcknowledged) update.mobile_acknowledged = true
     if (data?.scannedAt) update.scanned_at = data.scannedAt.toISOString()
     if (data?.resolvedAt) update.resolved_at = data.resolvedAt.toISOString()
     const { error } = await supabase

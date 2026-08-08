@@ -17,6 +17,7 @@ export const ADMIN_PERMISSION_PICKLIST_ROWS: { perm: string; label: string }[] =
   { perm: PERMISSIONS.APP_MUSIC_UPLOAD, label: 'Music: upload tracks' },
   { perm: PERMISSIONS.APP_ROOM, label: 'Virtual Room' },
   { perm: PERMISSIONS.APP_WEBPC, label: 'Web PC' },
+  { perm: PERMISSIONS.APP_PERKS, label: 'Member Perks' },
   { perm: PERMISSIONS.ADMIN_INVITES_MANAGE, label: 'Admin: invite codes' },
   { perm: PERMISSIONS.ADMIN_SYSTEM_CLEANUP, label: 'Admin: system cleanup' },
   { perm: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE, label: 'Admin: manage user permissions' },

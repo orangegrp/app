@@ -7,6 +7,7 @@ export const LEGACY_PERMISSION_ALIASES: Record<string, string> = {
 
 /** Ordered rows for admin pickers (every canonical permission). */
 export const ADMIN_PERMISSION_PICKLIST_ROWS: { perm: string; label: string }[] = [
+  { perm: PERMISSIONS.APP_MAIL, label: 'Mail' },
   { perm: PERMISSIONS.APP_BLOG, label: 'Blog Admin' },
   { perm: PERMISSIONS.APP_BLOG_AI, label: 'Blog: AI assist' },
   { perm: PERMISSIONS.APP_CONTENT, label: 'Content Hub' },
@@ -20,6 +21,7 @@ export const ADMIN_PERMISSION_PICKLIST_ROWS: { perm: string; label: string }[] =
   { perm: PERMISSIONS.ADMIN_INVITES_MANAGE, label: 'Admin: invite codes' },
   { perm: PERMISSIONS.ADMIN_SYSTEM_CLEANUP, label: 'Admin: system cleanup' },
   { perm: PERMISSIONS.ADMIN_PERMISSIONS_MANAGE, label: 'Admin: manage user permissions' },
+  { perm: PERMISSIONS.ADMIN_MAIL_MANAGE, label: 'Admin: manage mailboxes' },
 ]
 
 export const ADMIN_PICKLIST_PERM_KEYS = new Set(

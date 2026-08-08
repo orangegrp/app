@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, BarChart2, KeyRound, Shield, Sparkles } from 'lucide-react'
+import { ArrowLeft, BarChart2, Inbox, KeyRound, Shield, Sparkles } from 'lucide-react'
 import { PageBackground } from '@/components/layout/PageBackground'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -26,10 +26,12 @@ export default function AdminHubPage() {
     PERMISSIONS.ADMIN_INVITES_MANAGE,
     PERMISSIONS.ADMIN_SYSTEM_CLEANUP,
     PERMISSIONS.ADMIN_PERMISSIONS_MANAGE,
+    PERMISSIONS.ADMIN_MAIL_MANAGE,
   ])
   const canInvites = usePermission(PERMISSIONS.ADMIN_INVITES_MANAGE)
   const canCleanup = usePermission(PERMISSIONS.ADMIN_SYSTEM_CLEANUP)
   const canManagePermissions = usePermission(PERMISSIONS.ADMIN_PERMISSIONS_MANAGE)
+  const canManageMail = usePermission(PERMISSIONS.ADMIN_MAIL_MANAGE)
 
   const [cleanupOpen, setCleanupOpen] = useState(false)
   const [cleanupLoading, setCleanupLoading] = useState(false)
@@ -136,6 +138,20 @@ export default function AdminHubPage() {
                 Remove expired sessions, challenges, and tokens
               </p>
             </button>
+          )}
+
+          {canManageMail && (
+            <Link
+              href="/admin/mail"
+              className="glass-card rounded-2xl p-6 hover:-translate-y-0.5 transition-transform"
+              style={{ background: 'oklch(1 0 0 / 5%)' }}
+            >
+              <Inbox className="mb-3 text-muted-foreground" size={22} strokeWidth={1.5} />
+              <p className="text-sm tracking-widest text-foreground mb-1">Mail inbox setup</p>
+              <p className="text-xs text-muted-foreground tracking-wider">
+                Configure user mailboxes and inbound aliases
+              </p>
+            </Link>
           )}
         </div>
 

@@ -527,7 +527,7 @@ export const VisualEditor = forwardRef<VisualEditorHandle, Props>(
           openOnClick: false,
           HTMLAttributes: { class: "underline" },
         }),
-        Placeholder.configure({ placeholder: "Start writing your post..." }),
+        Placeholder.configure({ placeholder: "Start writing..." }),
         Table.configure({ resizable: false }),
         TableRow,
         TableHeader,

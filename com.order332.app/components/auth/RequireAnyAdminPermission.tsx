@@ -11,6 +11,7 @@ const ADMIN_PERMS = [
   PERMISSIONS.ADMIN_INVITES_MANAGE,
   PERMISSIONS.ADMIN_SYSTEM_CLEANUP,
   PERMISSIONS.ADMIN_PERMISSIONS_MANAGE,
+  PERMISSIONS.ADMIN_MAIL_MANAGE,
 ]
 
 export function RequireAnyAdminPermission({ children }: { children: ReactNode }): ReactNode {

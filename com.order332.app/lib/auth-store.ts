@@ -15,6 +15,8 @@ export interface AuthUser {
   passkeyCount?: number
   /** False until first-login welcome wizard is completed (from GET /api/me). */
   welcomeWizardCompleted?: boolean
+  /** False until first-time Mail setup wizard is completed (from GET /api/me). */
+  mailSetupCompleted?: boolean
 }
 
 interface AuthStore {

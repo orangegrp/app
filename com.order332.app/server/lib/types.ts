@@ -42,6 +42,8 @@ export interface User {
   loginQrEnabled: boolean
   /** Set when the user finishes the first-login welcome wizard. */
   welcomeWizardCompletedAt?: Date
+  /** Set when the user completes the first-time mail setup wizard. */
+  mailSetupCompletedAt?: Date
 }
 
 export interface InviteCode {

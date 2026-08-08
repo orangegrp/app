@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { applyProductImprovementConsent, capture, reset } from "@/lib/analytics"
 import { isProductImprovementConsentAllowedSync } from "@/lib/product-improvement-consent"
-import { Key, Trash2, ArrowLeft, ExternalLink, Monitor, Smartphone, Tablet } from "lucide-react"
+import { Key, Trash2, ArrowLeft, ExternalLink, Monitor, Smartphone, Tablet, Mail } from "lucide-react"
 import { PageBackground } from "@/components/layout/PageBackground"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,8 @@ import {
   apiPatch,
   apiPost,
 } from "@/lib/api-client"
+import { getMailSetupState, updateMailAliases, type MailAliasRow, type MailSetupState } from "@/lib/mail-api"
+import { PERMISSIONS } from "@/lib/permissions"
 import { useSettingsStore } from "@/lib/settings-store"
 import { hardNavigateTo } from "@/lib/hard-navigation"
 import { isPWAContext } from "@/lib/pwa"
@@ -129,6 +131,13 @@ export default function SettingsPage() {
   const [productImprovementAllowed, setProductImprovementAllowed] =
     useState(true)
 
+  // Mail aliases state
+  const [mailSetup, setMailSetup] = useState<MailSetupState | null>(null)
+  const [mailLoading, setMailLoading] = useState(false)
+  const [mailAliasInput, setMailAliasInput] = useState("")
+  const [mailAliasError, setMailAliasError] = useState<string | null>(null)
+  const [mailAliasSaving, setMailAliasSaving] = useState(false)
+
   const loadMe = useCallback(async () => {
     try {
       const data = await apiGet<MeProfile>("/me")
@@ -186,6 +195,20 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadMe()
   }, [loadMe])
+
+  // Load mail setup when user has APP_MAIL permission
+  useEffect(() => {
+    if (!user?.permissions) return
+    const hasMail =
+      user.permissions === "*" ||
+      user.permissions.split(",").some((p) => p.trim() === PERMISSIONS.APP_MAIL)
+    if (!hasMail) return
+    setMailLoading(true)
+    getMailSetupState()
+      .then((s) => setMailSetup(s))
+      .catch(() => {})
+      .finally(() => setMailLoading(false))
+  }, [user?.permissions])
 
   useEffect(() => {
     setProductImprovementAllowed(isProductImprovementConsentAllowedSync())
@@ -388,6 +411,58 @@ export default function SettingsPage() {
 
   const displayName = userDisplayName(user)
 
+  async function addMailAlias(): Promise<void> {
+    if (!mailSetup) return
+    const raw = mailAliasInput.trim().toLowerCase()
+    if (!raw) return
+    // Compose full address: append domain if no @ provided
+    const domain = mailSetup.primaryEmail?.split("@")[1] ?? ""
+    const fullAlias = raw.includes("@") ? raw : domain ? `${raw}@${domain}` : raw
+
+    if (mailSetup.aliases.some((a) => a.aliasEmail === fullAlias)) {
+      setMailAliasError("That alias is already configured.")
+      return
+    }
+    if (mailSetup.aliases.length >= mailSetup.aliasMax) {
+      setMailAliasError(`You can only have ${mailSetup.aliasMax} aliases.`)
+      return
+    }
+    setMailAliasSaving(true)
+    setMailAliasError(null)
+    try {
+      const res = await updateMailAliases([
+        ...mailSetup.aliases.map((a) => a.aliasEmail),
+        fullAlias,
+      ])
+      setMailSetup((prev) =>
+        prev ? { ...prev, aliases: res.aliases, aliasCount: res.aliases.length } : prev
+      )
+      setMailAliasInput("")
+    } catch (e) {
+      setMailAliasError(e instanceof Error ? e.message : "Could not add alias")
+    } finally {
+      setMailAliasSaving(false)
+    }
+  }
+
+  async function removeMailAlias(aliasEmail: string): Promise<void> {
+    if (!mailSetup) return
+    setMailAliasSaving(true)
+    setMailAliasError(null)
+    try {
+      const res = await updateMailAliases(
+        mailSetup.aliases.filter((a) => a.aliasEmail !== aliasEmail).map((a) => a.aliasEmail)
+      )
+      setMailSetup((prev) =>
+        prev ? { ...prev, aliases: res.aliases, aliasCount: res.aliases.length } : prev
+      )
+    } catch (e) {
+      setMailAliasError(e instanceof Error ? e.message : "Could not remove alias")
+    } finally {
+      setMailAliasSaving(false)
+    }
+  }
+
   return (
     <div className="page-root relative min-h-screen px-6 pt-8 pb-32 sm:pt-10">
       <PageBackground />
@@ -457,6 +532,97 @@ export default function SettingsPage() {
             </p>
           )}
         </div>
+
+        {/* Mail aliases */}
+        {mailSetup && (
+          <div id="mail" className="glass-card mb-6 rounded-2xl p-6">
+            <p className="card-label mb-1 flex items-center gap-1.5">
+              <Mail size={12} />
+              Mail
+            </p>
+
+            <div className="mb-4">
+              <p className="mb-1 text-xs tracking-wider text-muted-foreground">Primary address</p>
+              <p className="select-all font-mono text-sm text-foreground/80 break-all">
+                {mailSetup.primaryEmail ?? "—"}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Derived from your account ID and cannot be changed.
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs tracking-wider text-muted-foreground">
+                Aliases ({mailSetup.aliasCount}/{mailSetup.aliasMax})
+              </p>
+
+              {mailSetup.aliases.length === 0 && (
+                <p className="mb-3 text-xs text-muted-foreground/70">No aliases configured.</p>
+              )}
+
+              <ul className="mb-3 space-y-2">
+                {mailSetup.aliases.map((alias: MailAliasRow) => (
+                  <li
+                    key={alias.id}
+                    className="flex items-center justify-between rounded-lg border border-white/8 bg-white/3 px-3 py-2"
+                  >
+                    <span className="select-all font-mono text-sm text-foreground/80">
+                      {alias.aliasEmail}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={mailAliasSaving}
+                      onClick={() => void removeMailAlias(alias.aliasEmail)}
+                      className="glass-button glass-button-ghost ml-3 shrink-0 rounded-lg p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                      aria-label={`Remove alias ${alias.aliasEmail}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {mailSetup.aliasCount < mailSetup.aliasMax && (
+                <div className="flex gap-2">
+                  <Input
+                    value={mailAliasInput}
+                    onChange={(e) => {
+                      setMailAliasInput(e.target.value)
+                      setMailAliasError(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void addMailAlias()
+                    }}
+                    placeholder={
+                      mailSetup.primaryEmail
+                        ? `alias@${mailSetup.primaryEmail.split("@")[1] ?? "domain"}`
+                        : "alias@domain"
+                    }
+                    className="flex-1 font-mono text-sm"
+                    disabled={mailAliasSaving}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => void addMailAlias()}
+                    disabled={mailAliasSaving || !mailAliasInput.trim()}
+                    className="glass-button glass-button-default shrink-0 rounded-xl"
+                  >
+                    {mailAliasSaving ? <Spinner size="sm" /> : "Add"}
+                  </Button>
+                </div>
+              )}
+
+              {mailAliasError && (
+                <p className="mt-2 text-xs" style={{ color: "oklch(0.7 0.19 22)" }}>
+                  {mailAliasError}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* App version */}
         <div className="glass-card mb-6 rounded-2xl p-6">

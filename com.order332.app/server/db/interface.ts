@@ -36,6 +36,7 @@ export interface UpdateUserData {
   loginMagicEnabled?: boolean
   loginQrEnabled?: boolean
   welcomeWizardCompletedAt?: Date | null
+  mailSetupCompletedAt?: Date | null
 }
 
 export interface CreateInviteCodeData {

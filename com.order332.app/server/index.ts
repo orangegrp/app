@@ -18,6 +18,7 @@ import { devLoginRoutes } from "@/server/routes/auth/dev-login"
 import { adminInviteRoutes } from "@/server/routes/admin/invites"
 import { adminUserRoutes } from "@/server/routes/admin/users"
 import { adminAiUsageRoutes } from "@/server/routes/admin/ai-usage"
+import { adminMailRoutes } from "@/server/routes/admin/mail"
 import { blogPostRoutes } from "@/server/routes/blog/posts"
 import { blogImageRoutes } from "@/server/routes/blog/images"
 import { blogAiAssistRoutes } from "@/server/routes/blog/ai-assist"
@@ -35,8 +36,14 @@ import {
   musicSharePublicRoutes,
 } from "@/server/routes/music/share"
 import { musicPlaylistRoutes } from "@/server/routes/music/playlists"
+import {
+  mailRoutes,
+  mailWebhookRoutes,
+} from "@/server/routes/mail/messages"
+import { mailSetupRoutes } from "@/server/routes/mail/setup"
 import { normalizeDisplayName } from "@/lib/display-name"
 import { isWelcomeWizardCompletedForUser } from "@/lib/welcome-wizard"
+import { isMailSetupCompletedForUser } from "@/lib/mail-setup"
 import { PERMISSIONS } from "@/lib/permissions"
 import { safeCompare } from "@/server/lib/crypto"
 import type { HonoEnv } from "@/server/lib/types"
@@ -64,6 +71,7 @@ function isBotIdAllowlisted(method: string, pathname: string): boolean {
     /^\/api\/content\/share\/[A-Za-z0-9_-]{43}$/.test(pathname)
   )
     return true
+  if (m === "POST" && pathname === "/api/mail/webhook/resend") return true
   return false
 }
 
@@ -122,6 +130,9 @@ app.get("/status/summary", async (c) => {
 
 // GET /webpc/disk-url — presigned R2 GET for VM disk images (requires app.webpc)
 app.route("/webpc", webpcDiskUrlRoutes)
+
+// POST /mail/webhook/resend — inbound email webhook (signature-verified; no bearer auth)
+app.route("/mail/webhook", mailWebhookRoutes)
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
@@ -216,6 +227,7 @@ app.get("/me", requireAuth, async (c) => {
     loginQrEnabled: user.loginQrEnabled,
     passkeyCount: passkeys.length,
     welcomeWizardCompleted: isWelcomeWizardCompletedForUser(user),
+    mailSetupCompleted: isMailSetupCompletedForUser(user),
   })
 })
 
@@ -260,6 +272,7 @@ app.patch("/me/login-methods", requireAuth, async (c) => {
     loginQrEnabled: updated.loginQrEnabled,
     passkeyCount: passkeys.length,
     welcomeWizardCompleted: isWelcomeWizardCompletedForUser(updated),
+    mailSetupCompleted: isMailSetupCompletedForUser(updated),
   })
 })
 
@@ -296,6 +309,7 @@ app.patch("/me/profile", requireAuth, async (c) => {
     loginQrEnabled: updated.loginQrEnabled,
     passkeyCount: passkeys.length,
     welcomeWizardCompleted: isWelcomeWizardCompletedForUser(updated),
+    mailSetupCompleted: isMailSetupCompletedForUser(updated),
   })
 })
 
@@ -313,6 +327,7 @@ app.post("/me/welcome-wizard/complete", requireAuth, async (c) => {
   const passkeys = await db.getPasskeysByUserId(updated.id)
   return c.json({
     welcomeWizardCompleted: isWelcomeWizardCompletedForUser(updated),
+    mailSetupCompleted: isMailSetupCompletedForUser(updated),
     id: updated.id,
     permissions: updated.permissions,
     isPwa: authUser.isPwa,
@@ -341,6 +356,8 @@ app.route("/admin/users", adminUserRoutes)
 
 // GET /admin/ai-usage      — AI usage log + stats (requires admin.permissions.manage)
 app.route("/admin/ai-usage", adminAiUsageRoutes)
+// GET /admin/mail         — mail management routes (requires admin.mail.manage)
+app.route("/admin/mail", adminMailRoutes)
 
 // ── Content Library routes ────────────────────────────────────────────────────
 
@@ -391,6 +408,19 @@ app.route("/music/share", musicSharePublicRoutes)
 // POST   /music/playlists/:id/tracks      — add track (any app.music)
 // DELETE /music/playlists/:id/tracks/:tid — remove track (any app.music)
 app.route("/music/playlists", musicPlaylistRoutes)
+
+// ── Mail routes ───────────────────────────────────────────────────────────────
+
+// GET    /mail/messages            — inbox/sent list (requires app.mail)
+// GET    /mail/messages/:id        — message detail + signed attachment access
+// POST   /mail/messages/:id/read   — toggle read state
+// POST   /mail/send                — outbound send (server-enforced from address)
+app.route("/mail", mailRoutes)
+
+// GET  /mail/setup           — current setup state (requires app.mail)
+// POST /mail/setup/complete  — onboarding completion + mailbox creation
+// PUT  /mail/setup/aliases   — alias management (max 2)
+app.route("/mail/setup", mailSetupRoutes)
 
 // ── Blog routes ───────────────────────────────────────────────────────────────
 

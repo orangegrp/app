@@ -7,6 +7,7 @@ import {
   Tv,
   FlaskConical,
   Terminal,
+  Mail,
 } from 'lucide-react'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 
@@ -25,6 +26,15 @@ export type DashboardNavItem = {
 /** Sidebar + home Apps. Settings / Admin are profile-only. */
 export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { href: '/home', icon: House, label: 'Home', soon: false, hardNav: false, desc: 'Dashboard', permission: null },
+  {
+    href: '/mail',
+    icon: Mail,
+    label: 'Mail',
+    soon: false,
+    hardNav: false,
+    desc: 'Your own 332 email account',
+    permission: PERMISSIONS.APP_MAIL,
+  },
   {
     href: '/blog',
     icon: Newspaper,

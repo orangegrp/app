@@ -18,6 +18,7 @@ export async function fetchAndMergeUserProfile(accessToken: string): Promise<boo
     loginQrEnabled?: boolean
     passkeyCount?: number
     welcomeWizardCompleted?: boolean
+    mailSetupCompleted?: boolean
   }
   useAuthStore.getState().mergeAuthUser({
     discordUsername: data.discordUsername,
@@ -30,6 +31,7 @@ export async function fetchAndMergeUserProfile(accessToken: string): Promise<boo
     loginQrEnabled: data.loginQrEnabled,
     passkeyCount: data.passkeyCount,
     welcomeWizardCompleted: data.welcomeWizardCompleted,
+    mailSetupCompleted: data.mailSetupCompleted,
   })
   return true
 }

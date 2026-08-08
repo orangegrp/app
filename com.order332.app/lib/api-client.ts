@@ -107,6 +107,19 @@ export async function apiPatch<T>(path: string, body?: unknown, options?: FetchO
   return res.json() as Promise<T>
 }
 
+export async function apiPut<T>(path: string, body?: unknown, options?: FetchOptions): Promise<T> {
+  const res = await apiFetch(path, {
+    ...options,
+    method: 'PUT',
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Request failed' })) as { error: string }
+    throw new Error(err.error)
+  }
+  return res.json() as Promise<T>
+}
+
 export async function apiDelete<T>(path: string, body?: unknown, options?: FetchOptions): Promise<T> {
   const res = await apiFetch(path, {
     ...options,

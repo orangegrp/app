@@ -21,6 +21,7 @@ import { MusicPlayerBar } from "@/components/music/MusicPlayerBar"
 import { NowPlayingSheet } from "@/components/music/NowPlayingSheet"
 import { MediaSessionSync } from "@/components/music/MediaSessionSync"
 import { SidebarMusicMini } from "@/components/layout/SidebarMusicMini"
+import { MailFloatingComposer } from "@/components/mail/MailFloatingComposer"
 
 /**
  * Inner shell — must be a child of AudioPlayerProvider + MusicProvider so it can
@@ -70,6 +71,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
       <MobileTabBar />
       <InstallPrompt />
+      {/* Mail compose window: persists across all dashboard navigation */}
+      <MailFloatingComposer />
     </div>
   )
 }

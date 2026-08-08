@@ -56,6 +56,9 @@ function mapUser(row: Record<string, unknown>): User {
     welcomeWizardCompletedAt: row.welcome_wizard_completed_at
       ? new Date(row.welcome_wizard_completed_at as string)
       : undefined,
+    mailSetupCompletedAt: row.mail_setup_completed_at
+      ? new Date(row.mail_setup_completed_at as string)
+      : undefined,
   }
 }
 
@@ -324,6 +327,12 @@ export class SupabaseAdapter implements DBAdapter {
         data.welcomeWizardCompletedAt === null
           ? null
           : data.welcomeWizardCompletedAt.toISOString()
+    }
+    if (data.mailSetupCompletedAt !== undefined) {
+      update.mail_setup_completed_at =
+        data.mailSetupCompletedAt === null
+          ? null
+          : data.mailSetupCompletedAt.toISOString()
     }
     const { data: row, error } = await supabase
       .from("users")

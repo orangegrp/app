@@ -1,5 +1,6 @@
 /** Canonical permission strings (JWT + DB CSV). `*` alone grants all checks. */
 export const PERMISSIONS = {
+  APP_MAIL: 'app.mail',
   /** @deprecated Legacy DB value; not granted on signup. Does not imply mini-app access. */
   APP_HOME: 'app.home',
   APP_BLOG: 'app.blog',
@@ -18,12 +19,15 @@ export const PERMISSIONS = {
   ADMIN_SYSTEM_CLEANUP: 'admin.system.cleanup',
   /** Assign app and admin permissions to users (user list + edit). */
   ADMIN_PERMISSIONS_MANAGE: 'admin.permissions.manage',
+  /** Configure user mailboxes and inbound aliases. */
+  ADMIN_MAIL_MANAGE: 'admin.mail.manage',
   /** Hard-delete blog posts from GitHub (superuser-only in practice; constant kept for UI display). */
   ADMIN_BLOG_MANAGE: 'admin.blog.manage',
 } as const
 
 /** All mini-app route permissions (for deny-by-default checks). */
 export const MINI_APP_PERMISSIONS: string[] = [
+  PERMISSIONS.APP_MAIL,
   PERMISSIONS.APP_BLOG,
   PERMISSIONS.APP_CONTENT,
   PERMISSIONS.APP_MUSIC,

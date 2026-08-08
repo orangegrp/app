@@ -21,6 +21,7 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       "login_magic_enabled",
       "login_qr_enabled",
       "welcome_wizard_completed_at",
+      "mail_setup_completed_at",
     ],
     sql: `
       CREATE TABLE IF NOT EXISTS users (
@@ -37,7 +38,8 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
         login_discord_enabled BOOLEAN NOT NULL DEFAULT true,
         login_magic_enabled BOOLEAN NOT NULL DEFAULT true,
         login_qr_enabled BOOLEAN NOT NULL DEFAULT true,
-        welcome_wizard_completed_at TIMESTAMPTZ
+        welcome_wizard_completed_at TIMESTAMPTZ,
+        mail_setup_completed_at TIMESTAMPTZ
       );
       CREATE INDEX IF NOT EXISTS users_discord_id_idx ON users(discord_id);
     `,
@@ -426,6 +428,225 @@ const REQUIRED_TABLES: Record<string, { sql: string; columns: string[] }> = {
       CREATE INDEX IF NOT EXISTS content_share_links_content_item_id_idx ON content_share_links (content_item_id);
     `,
   },
+  mailboxes: {
+    columns: [
+      "id",
+      "owner_user_id",
+      "primary_email",
+      "display_name",
+      "is_active",
+      "created_at",
+      "updated_at",
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS mailboxes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        primary_email TEXT NOT NULL,
+        display_name TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(owner_user_id, primary_email)
+      );
+      CREATE INDEX IF NOT EXISTS mailboxes_owner_user_id_idx ON mailboxes(owner_user_id);
+      CREATE INDEX IF NOT EXISTS mailboxes_primary_email_idx ON mailboxes(primary_email);
+    `,
+  },
+  mail_aliases: {
+    columns: [
+      "id",
+      "mailbox_id",
+      "owner_user_id",
+      "alias_email",
+      "created_at",
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS mail_aliases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        mailbox_id UUID NOT NULL REFERENCES mailboxes(id) ON DELETE CASCADE,
+        owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        alias_email TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(alias_email),
+        UNIQUE(mailbox_id, alias_email)
+      );
+      CREATE INDEX IF NOT EXISTS mail_aliases_mailbox_id_idx ON mail_aliases(mailbox_id);
+      CREATE INDEX IF NOT EXISTS mail_aliases_owner_user_id_idx ON mail_aliases(owner_user_id);
+    `,
+  },
+  mail_messages: {
+    columns: [
+      "id",
+      "owner_user_id",
+      "mailbox_id",
+      "direction",
+      "folder",
+      "resend_message_id",
+      "resend_inbound_message_id",
+      "thread_ref",
+      "subject",
+      "from_address",
+      "to_addresses",
+      "cc_addresses",
+      "bcc_addresses",
+      "body_text",
+      "body_html",
+      "snippet",
+      "received_at",
+      "sent_at",
+      "is_read",
+      "has_attachments",
+      "delivery_status",
+      "last_delivery_event_at",
+      "last_delivery_event_type",
+      "last_delivery_error",
+      "complained_at",
+      "suppressed_at",
+      "open_count",
+      "click_count",
+      "created_at",
+      "updated_at",
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS mail_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mailbox_id UUID NOT NULL REFERENCES mailboxes(id) ON DELETE CASCADE,
+        direction TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
+        folder TEXT NOT NULL CHECK (folder IN ('inbox', 'sent')),
+        resend_message_id TEXT,
+        resend_inbound_message_id TEXT,
+        thread_ref TEXT,
+        subject TEXT NOT NULL DEFAULT '',
+        from_address TEXT NOT NULL,
+        to_addresses JSONB NOT NULL DEFAULT '[]'::jsonb,
+        cc_addresses JSONB NOT NULL DEFAULT '[]'::jsonb,
+        bcc_addresses JSONB NOT NULL DEFAULT '[]'::jsonb,
+        body_text TEXT,
+        body_html TEXT,
+        snippet TEXT,
+        received_at TIMESTAMPTZ,
+        sent_at TIMESTAMPTZ,
+        is_read BOOLEAN NOT NULL DEFAULT false,
+        has_attachments BOOLEAN NOT NULL DEFAULT false,
+        delivery_status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (delivery_status IN ('pending', 'scheduled', 'sent', 'delivered', 'delivery_delayed', 'failed', 'bounced', 'suppressed')),
+        last_delivery_event_at TIMESTAMPTZ,
+        last_delivery_event_type TEXT,
+        last_delivery_error TEXT,
+        complained_at TIMESTAMPTZ,
+        suppressed_at TIMESTAMPTZ,
+        open_count INTEGER NOT NULL DEFAULT 0,
+        click_count INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(owner_user_id, resend_message_id),
+        UNIQUE(owner_user_id, resend_inbound_message_id)
+      );
+      CREATE INDEX IF NOT EXISTS mail_messages_owner_folder_created_idx
+        ON mail_messages(owner_user_id, folder, created_at DESC);
+      CREATE INDEX IF NOT EXISTS mail_messages_owner_read_created_idx
+        ON mail_messages(owner_user_id, is_read, created_at DESC);
+      CREATE INDEX IF NOT EXISTS mail_messages_mailbox_id_idx ON mail_messages(mailbox_id);
+      CREATE INDEX IF NOT EXISTS mail_messages_thread_ref_idx ON mail_messages(thread_ref);
+      CREATE INDEX IF NOT EXISTS mail_messages_delivery_status_idx ON mail_messages(delivery_status);
+      CREATE INDEX IF NOT EXISTS mail_messages_last_delivery_event_at_idx ON mail_messages(last_delivery_event_at DESC);
+    `,
+  },
+  mail_attachments: {
+    columns: [
+      "id",
+      "owner_user_id",
+      "message_id",
+      "storage_key",
+      "file_name",
+      "mime_type",
+      "size_bytes",
+      "content_id",
+      "is_inline",
+      "created_at",
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS mail_attachments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message_id UUID NOT NULL REFERENCES mail_messages(id) ON DELETE CASCADE,
+        storage_key TEXT NOT NULL UNIQUE,
+        file_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
+        content_id TEXT,
+        is_inline BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS mail_attachments_owner_user_id_idx ON mail_attachments(owner_user_id);
+      CREATE INDEX IF NOT EXISTS mail_attachments_message_id_idx ON mail_attachments(message_id);
+    `,
+  },
+  mail_webhook_events: {
+    columns: [
+      "id",
+      "provider",
+      "event_id",
+      "event_type",
+      "received_at",
+      "processed_at",
+      "payload_sha256",
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS mail_webhook_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        event_type TEXT,
+        received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        processed_at TIMESTAMPTZ,
+        payload_sha256 TEXT,
+        UNIQUE(provider, event_id)
+      );
+      CREATE INDEX IF NOT EXISTS mail_webhook_events_event_type_idx ON mail_webhook_events(event_type);
+    `,
+  },
+  mail_message_events: {
+    columns: [
+      "id",
+      "owner_user_id",
+      "message_id",
+      "resend_message_id",
+      "event_type",
+      "event_at",
+      "recipient",
+      "url",
+      "user_agent",
+      "ip_address",
+      "details",
+      "webhook_event_id",
+      "created_at",
+    ],
+    sql: `
+      CREATE TABLE IF NOT EXISTS mail_message_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message_id UUID NOT NULL REFERENCES mail_messages(id) ON DELETE CASCADE,
+        resend_message_id TEXT,
+        event_type TEXT NOT NULL,
+        event_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        recipient TEXT,
+        url TEXT,
+        user_agent TEXT,
+        ip_address TEXT,
+        details JSONB NOT NULL DEFAULT '{}'::jsonb,
+        webhook_event_id UUID REFERENCES mail_webhook_events(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS mail_message_events_owner_user_id_idx ON mail_message_events(owner_user_id);
+      CREATE INDEX IF NOT EXISTS mail_message_events_message_id_idx ON mail_message_events(message_id);
+      CREATE INDEX IF NOT EXISTS mail_message_events_event_type_idx ON mail_message_events(event_type);
+      CREATE INDEX IF NOT EXISTS mail_message_events_event_at_idx ON mail_message_events(event_at DESC);
+      CREATE INDEX IF NOT EXISTS mail_message_events_resend_message_id_idx ON mail_message_events(resend_message_id);
+    `,
+  },
 }
 
 export async function validateAndMigrateSchema(): Promise<void> {
@@ -486,6 +707,7 @@ export async function validateAndMigrateSchema(): Promise<void> {
     await ensureQrOtpColumn(sql)
     await ensureQrMobileAcknowledgedColumn(sql)
     await ensureSessionLocationColumn(sql)
+    await ensureMailSecurity(sql)
 
     console.log("[DB] Schema validation complete")
   } finally {
@@ -637,4 +859,211 @@ async function ensureSessionLocationColumn(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location TEXT"
   )
+}
+
+async function ensureMailSecurity(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE OR REPLACE FUNCTION public.current_request_user_id()
+    RETURNS uuid
+    LANGUAGE sql
+    STABLE
+    AS $$
+      SELECT CASE
+        WHEN current_setting('request.jwt.claim.sub', true) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          THEN current_setting('request.jwt.claim.sub', true)::uuid
+        ELSE NULL
+      END
+    $$
+  `)
+
+  await sql.unsafe("ALTER TABLE mailboxes ENABLE ROW LEVEL SECURITY")
+  await sql.unsafe("ALTER TABLE mail_aliases ENABLE ROW LEVEL SECURITY")
+  await sql.unsafe("ALTER TABLE mail_messages ENABLE ROW LEVEL SECURITY")
+  await sql.unsafe("ALTER TABLE mail_attachments ENABLE ROW LEVEL SECURITY")
+  await sql.unsafe("ALTER TABLE mail_webhook_events ENABLE ROW LEVEL SECURITY")
+  await sql.unsafe("ALTER TABLE mail_message_events ENABLE ROW LEVEL SECURITY")
+
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mailboxes' AND policyname = 'mailboxes_owner_select'
+      ) THEN
+        CREATE POLICY mailboxes_owner_select ON mailboxes
+          FOR SELECT USING (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mailboxes' AND policyname = 'mailboxes_owner_insert'
+      ) THEN
+        CREATE POLICY mailboxes_owner_insert ON mailboxes
+          FOR INSERT WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mailboxes' AND policyname = 'mailboxes_owner_update'
+      ) THEN
+        CREATE POLICY mailboxes_owner_update ON mailboxes
+          FOR UPDATE USING (owner_user_id = public.current_request_user_id())
+          WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mailboxes' AND policyname = 'mailboxes_owner_delete'
+      ) THEN
+        CREATE POLICY mailboxes_owner_delete ON mailboxes
+          FOR DELETE USING (owner_user_id = public.current_request_user_id());
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_aliases' AND policyname = 'mail_aliases_owner_select'
+      ) THEN
+        CREATE POLICY mail_aliases_owner_select ON mail_aliases
+          FOR SELECT USING (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_aliases' AND policyname = 'mail_aliases_owner_insert'
+      ) THEN
+        CREATE POLICY mail_aliases_owner_insert ON mail_aliases
+          FOR INSERT WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_aliases' AND policyname = 'mail_aliases_owner_update'
+      ) THEN
+        CREATE POLICY mail_aliases_owner_update ON mail_aliases
+          FOR UPDATE USING (owner_user_id = public.current_request_user_id())
+          WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_aliases' AND policyname = 'mail_aliases_owner_delete'
+      ) THEN
+        CREATE POLICY mail_aliases_owner_delete ON mail_aliases
+          FOR DELETE USING (owner_user_id = public.current_request_user_id());
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_messages' AND policyname = 'mail_messages_owner_select'
+      ) THEN
+        CREATE POLICY mail_messages_owner_select ON mail_messages
+          FOR SELECT USING (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_messages' AND policyname = 'mail_messages_owner_insert'
+      ) THEN
+        CREATE POLICY mail_messages_owner_insert ON mail_messages
+          FOR INSERT WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_messages' AND policyname = 'mail_messages_owner_update'
+      ) THEN
+        CREATE POLICY mail_messages_owner_update ON mail_messages
+          FOR UPDATE USING (owner_user_id = public.current_request_user_id())
+          WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_messages' AND policyname = 'mail_messages_owner_delete'
+      ) THEN
+        CREATE POLICY mail_messages_owner_delete ON mail_messages
+          FOR DELETE USING (owner_user_id = public.current_request_user_id());
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_attachments' AND policyname = 'mail_attachments_owner_select'
+      ) THEN
+        CREATE POLICY mail_attachments_owner_select ON mail_attachments
+          FOR SELECT USING (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_attachments' AND policyname = 'mail_attachments_owner_insert'
+      ) THEN
+        CREATE POLICY mail_attachments_owner_insert ON mail_attachments
+          FOR INSERT WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_attachments' AND policyname = 'mail_attachments_owner_update'
+      ) THEN
+        CREATE POLICY mail_attachments_owner_update ON mail_attachments
+          FOR UPDATE USING (owner_user_id = public.current_request_user_id())
+          WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_attachments' AND policyname = 'mail_attachments_owner_delete'
+      ) THEN
+        CREATE POLICY mail_attachments_owner_delete ON mail_attachments
+          FOR DELETE USING (owner_user_id = public.current_request_user_id());
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_message_events' AND policyname = 'mail_message_events_owner_select'
+      ) THEN
+        CREATE POLICY mail_message_events_owner_select ON mail_message_events
+          FOR SELECT USING (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_message_events' AND policyname = 'mail_message_events_owner_insert'
+      ) THEN
+        CREATE POLICY mail_message_events_owner_insert ON mail_message_events
+          FOR INSERT WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_message_events' AND policyname = 'mail_message_events_owner_update'
+      ) THEN
+        CREATE POLICY mail_message_events_owner_update ON mail_message_events
+          FOR UPDATE USING (owner_user_id = public.current_request_user_id())
+          WITH CHECK (owner_user_id = public.current_request_user_id());
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'mail_message_events' AND policyname = 'mail_message_events_owner_delete'
+      ) THEN
+        CREATE POLICY mail_message_events_owner_delete ON mail_message_events
+          FOR DELETE USING (owner_user_id = public.current_request_user_id());
+      END IF;
+    END
+    $$
+  `)
+
+  await sql.unsafe(`
+    CREATE OR REPLACE FUNCTION public.mail_increment_open_count(message_id_in UUID, increment_by INTEGER DEFAULT 1)
+    RETURNS VOID
+    LANGUAGE sql
+    SECURITY DEFINER
+    AS $$
+      UPDATE mail_messages
+      SET open_count = GREATEST(0, open_count + GREATEST(1, increment_by)),
+          updated_at = now()
+      WHERE id = message_id_in;
+    $$
+  `)
+
+  await sql.unsafe(`
+    CREATE OR REPLACE FUNCTION public.mail_increment_click_count(message_id_in UUID, increment_by INTEGER DEFAULT 1)
+    RETURNS VOID
+    LANGUAGE sql
+    SECURITY DEFINER
+    AS $$
+      UPDATE mail_messages
+      SET click_count = GREATEST(0, click_count + GREATEST(1, increment_by)),
+          updated_at = now()
+      WHERE id = message_id_in;
+    $$
+  `)
+
+  await sql.unsafe("REVOKE ALL ON FUNCTION public.mail_increment_open_count(UUID, INTEGER) FROM PUBLIC")
+  await sql.unsafe("REVOKE ALL ON FUNCTION public.mail_increment_click_count(UUID, INTEGER) FROM PUBLIC")
+  await sql.unsafe("GRANT EXECUTE ON FUNCTION public.mail_increment_open_count(UUID, INTEGER) TO authenticated, service_role")
+  await sql.unsafe("GRANT EXECUTE ON FUNCTION public.mail_increment_click_count(UUID, INTEGER) TO authenticated, service_role")
+
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = 'mail_messages'
+      ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.mail_messages;
+      END IF;
+    END
+    $$
+  `)
 }

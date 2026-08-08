@@ -7,6 +7,7 @@ import {
   Tv,
   FlaskConical,
   Terminal,
+  ShoppingCart,
 } from 'lucide-react'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 
@@ -61,6 +62,15 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
     hardNav: true,
     desc: 'Virtual Linux in the browser',
     permission: PERMISSIONS.APP_WEBPC,
+  },
+  {
+    href: '/perks',
+    icon: ShoppingCart,
+    label: 'Perks',
+    soon: false,
+    hardNav: false,
+    desc: 'Exclusive offers',
+    permission: PERMISSIONS.APP_PERKS,
   },
   {
     href: '/room',

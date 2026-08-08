@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   APP_ROOM: 'app.room',
   APP_LABS: 'app.labs',
   APP_WEBPC: 'app.webpc',
+  APP_PERKS: 'app.perks',
   ADMIN_INVITES_MANAGE: 'admin.invites.manage',
   ADMIN_SYSTEM_CLEANUP: 'admin.system.cleanup',
   /** Assign app and admin permissions to users (user list + edit). */
